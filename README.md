@@ -2,7 +2,7 @@
 
 **Write in Jupyter Notebooks. Publish on Substack.**
 
-`nb2wb` converts a Jupyter Notebook into a self-contained HTML file you can
+`nb2wb` (short for *notebook to web*) converts a Jupyter Notebook into a self-contained HTML file you can
 paste directly into a Substack draft — with LaTeX, code, and outputs all
 rendered faithfully.
 

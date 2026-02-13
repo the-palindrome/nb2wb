@@ -12,6 +12,8 @@ Quarto format summary
     #| tags: [tag1, tag2] → arbitrary tags
 - The special language ``{latex-preamble}`` marks a preamble block (the
   source is attached to a markdown cell with the ``latex-preamble`` tag).
+- The special language ``{output}`` attaches pre-computed stdout to the
+  immediately preceding code cell (no markdown may appear between them).
 - Everything outside code chunks is treated as a markdown cell.
 """
 from __future__ import annotations
@@ -38,9 +40,11 @@ def read_qmd(path: Path) -> nbformat.NotebookNode:
     """
     Parse a ``.qmd`` file and return an ``nbformat`` notebook.
 
-    Code cells contain only source (no outputs), since ``.qmd`` files do not
-    store execution results.  Quarto cell options (``#|`` lines) are
-    translated to Jupyter-compatible cell tags.
+    Code cells contain only source by default, since ``.qmd`` files do not
+    store execution results.  Pre-computed outputs can be embedded using
+    ``{output}`` chunks immediately after the corresponding code chunk.
+    Quarto cell options (``#|`` lines) are translated to Jupyter-compatible
+    cell tags.
     """
     text = path.read_text(encoding="utf-8")
     front_matter, text = _split_front_matter(text)
@@ -79,10 +83,10 @@ def _detect_language(fm: dict[str, Any], text: str) -> str:
     if isinstance(jupyter, dict) and "kernel" in jupyter:
         return str(jupyter["kernel"])
     # Infer from the first code chunk language
-    m = _CHUNK_RE.search(text)
-    if m:
+    _PSEUDO_LANGS = {"latex-preamble", "output"}
+    for m in _CHUNK_RE.finditer(text):
         lang = m.group(1)
-        if lang not in ("latex-preamble",):
+        if lang not in _PSEUDO_LANGS:
             return lang
     return "python"
 
@@ -94,15 +98,33 @@ def _detect_language(fm: dict[str, Any], text: str) -> str:
 def _extract_cells(text: str, default_lang: str) -> list[nbformat.NotebookNode]:
     cells: list[nbformat.NotebookNode] = []
     pos = 0
+    last_code_cell: nbformat.NotebookNode | None = None
 
     for m in _CHUNK_RE.finditer(text):
         # Markdown before this chunk
         md = text[pos : m.start()].strip()
         if md:
             cells.append(nbformat.v4.new_markdown_cell(md))
+            last_code_cell = None  # prose breaks output attachment
 
         lang = m.group(1)
         body = m.group(3)
+
+        if lang == "output":
+            # Attach pre-computed stdout to the immediately preceding code cell.
+            # Use the raw chunk body so that lines starting with #| are preserved.
+            if last_code_cell is not None and body.strip():
+                text_out = body if body.endswith("\n") else body + "\n"
+                last_code_cell["outputs"].append(
+                    nbformat.from_dict({
+                        "output_type": "stream",
+                        "name": "stdout",
+                        "text": text_out,
+                    })
+                )
+            pos = m.end()
+            continue
+
         tags, source = _parse_chunk(body)
 
         if lang == "latex-preamble":
@@ -110,8 +132,10 @@ def _extract_cells(text: str, default_lang: str) -> list[nbformat.NotebookNode]:
             if "latex-preamble" not in tags:
                 tags = ["latex-preamble"] + tags
             cell = nbformat.v4.new_markdown_cell(source)
+            last_code_cell = None
         else:
             cell = nbformat.v4.new_code_cell(source)
+            last_code_cell = cell
 
         if tags:
             cell.metadata["tags"] = tags

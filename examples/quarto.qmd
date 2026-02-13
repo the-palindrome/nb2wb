@@ -210,3 +210,8 @@ is injected verbatim into every formula's LaTeX document and the chunk itself is
 hidden from the output.  This is the recommended way to define custom colours
 and macros in `.qmd` files — see the chunk at the very top of this document
 for a full example.
+
+```{python}
+#| label: labelled-chunk
+print("Chunk label is stripped from the rendered image.")
+```

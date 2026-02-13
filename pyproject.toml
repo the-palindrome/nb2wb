@@ -12,6 +12,7 @@ license = {text = "MIT"}
 keywords = ["jupyter", "substack", "latex", "converter", "technical-writing"]
 dependencies = [
     "nbformat>=5.0",
+    "nbconvert>=6.0",
     "matplotlib>=3.5",
     "Pillow>=9.0",
     "Pygments>=2.10",
