@@ -95,6 +95,16 @@ _HEAD = """\
     th, td { border: 1px solid #ddd; padding: 0.4em 0.8em; }
     th { background: #f4f4f4; }
     hr { border: none; border-top: 1px solid #ddd; margin: 2em 0; }
+    .nb2wb-footer {
+      margin-top: 3em;
+      padding-top: 1em;
+      border-top: 1px solid #eee;
+      text-align: center;
+      font-size: 0.8em;
+      color: #aaa;
+    }
+    .nb2wb-footer a { color: #aaa; text-decoration: none; }
+    .nb2wb-footer a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
@@ -106,6 +116,9 @@ _HEAD = """\
 """
 
 _TAIL = """\
+  <div class="nb2wb-footer">
+    Made with <a href="https://github.com/the-palindrome/nb2wb">nb2wb</a>
+  </div>
   </div><!-- #content -->
 
   <script>
