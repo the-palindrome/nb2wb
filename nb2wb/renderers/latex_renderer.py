@@ -66,7 +66,9 @@ def extract_display_math(text: str) -> list[tuple[int, int, str]]:
         text,
         re.DOTALL,
     ):
-        raw.append((m.start(), m.end(), m.group(3).strip()))
+        # Keep the full \begin{...}...\end{...} block so the renderer can
+        # reconstruct the correct environment (not wrap it in \[...\]).
+        raw.append((m.start(), m.end(), m.group(0).strip()))
 
     # Sort and remove overlaps
     raw.sort(key=lambda x: x[0])
@@ -175,7 +177,14 @@ def _trim_and_pad(png_bytes: bytes, config: LatexConfig, tag: int | None = None)
 
 def _render_mathtext(latex: str, config: LatexConfig, tag: int | None = None) -> str:
     """Use matplotlib's built-in mathtext (no LaTeX installation required)."""
-    expr = f"${latex}$"
+    if latex.lstrip().startswith(r"\begin{"):
+        # mathtext has no multi-line environment support: strip tags and join rows
+        inner = re.sub(r"\\(?:begin|end)\{[^}]+\}", "", latex)
+        inner = re.sub(r"&", "", inner)
+        rows = [r.strip() for r in re.split(r"\\\\(?:\[[^\]]*\])?", inner) if r.strip()]
+        expr = "$" + r" \quad ".join(rows) + "$"
+    else:
+        expr = f"${latex}$"
 
     fig = plt.figure(dpi=config.dpi)
     fig.patch.set_facecolor(config.background)
@@ -254,7 +263,7 @@ def _render_usetex(latex: str, config: LatexConfig, preamble: str = "", tag: int
         r"\pagestyle{empty}",
         r"\begin{document}",
         f"\\fontsize{{{size}}}{{{baselineskip}}}\\selectfont",
-        f"\\[{latex}\\]",
+        latex if latex.lstrip().startswith(r"\begin{") else f"\\[{latex}\\]",
         r"\end{document}",
     ]))
 

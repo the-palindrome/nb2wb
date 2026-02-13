@@ -66,6 +66,17 @@ $$
 \sum_{n=1}^{\infty} \frac{1}{n^2} = \frac{\pi^2}{6}.
 $$
 
+The Gaussian integral, derived by switching to polar coordinates:
+
+\begin{align*}
+I   &= \int_{-\infty}^{\infty} e^{-x^2}\,dx \\[4pt]
+I^2 &= \int_{-\infty}^{\infty}\!\int_{-\infty}^{\infty} e^{-(x^2+y^2)}\,dx\,dy \\[4pt]
+    &= \int_0^{2\pi}\!\int_0^{\infty} e^{-r^2}\,r\,dr\,d\theta \\[4pt]
+    &= 2\pi \cdot \Bigl[-\tfrac{1}{2}e^{-r^2}\Bigr]_0^{\infty} \\[4pt]
+    &= \pi \\[4pt]
+\therefore\quad I &= \sqrt{\pi}
+\end{align*}
+
 ## 3  Code Blocks → Image
 
 Code cells and their outputs are rendered as syntax-highlighted images,
