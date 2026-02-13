@@ -1,0 +1,212 @@
+---
+title: "From Quarto to Substack"
+author: "Your Name"
+date: today
+format: html
+execute:
+  echo: true    # show code by default (overridable per-chunk with #| echo: false)
+  output: true  # show output by default
+---
+
+```{latex-preamble}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{xcolor}
+
+\definecolor{ashBlack}{HTML}{111111}
+\definecolor{matrixGreen}{HTML}{03A062}
+\definecolor{matrixBlue}{HTML}{03A0C2}
+\definecolor{maizeCrayola}{HTML}{E8C547}
+\definecolor{blueGray}{HTML}{6290C3}
+\definecolor{ruby}{HTML}{D81E5B}
+```
+
+# From Quarto to Substack
+
+This document demonstrates the `nb2wb` converter with a Quarto (`.qmd`) source
+file. It covers the same three pillars as the Jupyter example: prose,
+mathematics, and code.
+
+Here's a nice image for illustration.
+
+![The parallelogram rule](image.png)
+
+## 1  Inline LaTeX → Unicode
+
+Inline expressions like $\alpha + \beta = \gamma$ or $E = mc^2$ are converted
+to Unicode so they render as plain readable text in Substack's editor.
+
+Other examples: the golden ratio $\phi = \frac{1+\sqrt{5}}{2}$, and Euler's
+identity $e^{i\pi} + 1 = 0$.
+
+## 2  Display Math → Image
+
+Block equations are rendered to crisp PNG images.
+
+The quadratic formula:
+
+$$x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}$$
+
+Bayes' theorem with colour:
+
+$$P({\color{maizeCrayola} A} \mid {\color{blueGray} B}) = \frac{P({\color{blueGray} B} \mid {\color{maizeCrayola} A})\, P({\color{maizeCrayola} A})}{P({\color{blueGray} B})}.$$
+
+A matrix equation:
+
+\[
+  \mathbf{y} = \mathbf{X}\boldsymbol{\beta} + \boldsymbol{\varepsilon}.
+\]
+
+The Basel formula:
+
+$$
+\sum_{n=1}^{\infty} \frac{1}{n^2} = \frac{\pi^2}{6}.
+$$
+
+## 3  Code Blocks → Image
+
+Code cells and their outputs are rendered as syntax-highlighted images,
+so formatting and colours are perfectly preserved.
+
+```{python}
+#| label: fibonacci
+def fibonacci(n):
+    """Yield the first n Fibonacci numbers."""
+    a, b = 0, 1
+    for _ in range(n):
+        yield a
+        a, b = b, a + b
+
+print("Fibonacci sequence (first 10 terms):")
+print(*fibonacci(10))
+```
+
+```{python}
+#| label: numpy-squares
+import numpy as np
+
+x = np.arange(10)
+print(x ** 2)
+```
+
+## 4  Mixed: equation in context
+
+The softmax function maps a vector $\mathbf{z} \in \mathbb{R}^K$ to a
+probability distribution:
+
+$$\sigma(\mathbf{z})_j = \frac{e^{z_j}}{\sum_{k=1}^{K} e^{z_k}}$$
+
+Here $j = 1, \ldots, K$ indexes the classes.  Note that $\sum_j \sigma_j = 1$
+by construction.
+
+```{python}
+#| label: softmax
+import numpy as np
+
+def softmax(z):
+    e = np.exp(z - z.max())   # numerical stability
+    return e / e.sum()
+
+z = np.array([1.0, 2.0, 3.0])
+probs = softmax(z)
+print(f"softmax({z.tolist()}) = {np.array2string(probs, precision=4)}")
+```
+
+## 5  Figures
+
+```{python}
+#| label: fig-parabola
+import matplotlib.pyplot as plt
+import numpy as np
+
+with plt.style.context("seaborn-v0_8-white"):
+    fig = plt.figure(figsize=(19.2/2, 10.8/2))
+
+    X = np.linspace(-1, 1, 100)
+    y = X**2
+    plt.plot(X, y, color="red")
+
+    plt.tight_layout()
+    plt.show()
+```
+
+## 6  Cell Tags
+
+Quarto cell options (`#|` lines) map directly to nb2wb cell tags:
+
+| Quarto option | nb2wb tag | Effect |
+|---|---|---|
+| `#\| echo: false` | `hide-input` | Source hidden; output shown |
+| `#\| output: false` | `hide-output` | Output hidden; source shown |
+| `#\| include: false` | `hide-cell` | Entire cell omitted |
+
+The next cell uses `#| echo: false` — only its output is rendered.
+
+```{python}
+#| echo: false
+result = sum(i**2 for i in range(1, 11))
+print(f"Sum of squares 1..10 = {result}")
+```
+
+The next cell uses `#| output: false` — only its source code is rendered.
+
+```{python}
+#| output: false
+import sys
+print(f"Python {sys.version}")
+print("(This output is hidden in the published post.)")
+```
+
+The next cell uses `#| include: false` — the entire cell is omitted from output.
+
+```{python}
+#| include: false
+# This cell is completely hidden — useful for setup or configuration code.
+HIDDEN_CONSTANT = 42
+```
+
+The preamble chunk at the top of this document uses the `{latex-preamble}`
+chunk type and is likewise invisible in the output.
+
+## 7  Quarto-specific Features
+
+### YAML Front Matter
+
+Quarto documents begin with YAML front matter that sets document metadata and
+global chunk defaults.  The `execute` block lets you set `echo` and `output`
+for the whole document, which individual chunks can override with `#|` options:
+
+    ---
+    title: "My Post"
+    author: "Your Name"
+    date: today
+    execute:
+      echo: true
+      output: true
+    ---
+
+### Chunk Labels
+
+Every code chunk can carry a `#| label:` option.  Labels are a native Quarto
+feature used for cross-references and figure captions.  nb2wb strips the `#|`
+line cleanly so it never appears in the rendered output — see the chunks in
+sections 3–5 above for examples.
+
+### Arbitrary Tags
+
+The `#| tags:` option passes arbitrary nb2wb tags, just like Jupyter cell
+metadata.  Multiple tags are specified as a YAML list:
+
+```{python}
+#| tags: [hide-output]
+print("Source is visible; this line is not rendered.")
+```
+
+### LaTeX Preamble Chunk
+
+The `{latex-preamble}` chunk type is an nb2wb extension for Quarto.  Its source
+is injected verbatim into every formula's LaTeX document and the chunk itself is
+hidden from the output.  This is the recommended way to define custom colours
+and macros in `.qmd` files — see the chunk at the very top of this document
+for a full example.
