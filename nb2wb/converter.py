@@ -50,10 +50,13 @@ class Converter:
 
         parts: list[str] = []
         for cell in nb.cells:
+            tags = _cell_tags(cell)
+            if "hide-cell" in tags:
+                continue
             if cell.cell_type == "markdown":
                 parts.append(self._markdown_cell(cell))
             elif cell.cell_type == "code":
-                html = self._code_cell(cell)
+                html = self._code_cell(cell, tags)
                 if html:
                     parts.append(html)
             # raw cells are skipped
@@ -91,24 +94,25 @@ class Converter:
         html = markdown.markdown(src, extensions=_MD_EXTENSIONS)
         return f'<div class="md-cell">{html}</div>\n'
 
-    def _code_cell(self, cell) -> str:
+    def _code_cell(self, cell, tags: frozenset[str] = frozenset()) -> str:
         png_parts: list[bytes] = []
         rich_parts: list[str] = []
 
-        if cell.source.strip():
+        if cell.source.strip() and "hide-input" not in tags:
             png_parts.append(
                 render_code(cell.source, self._lang, self.config.code,
                             apply_padding=False)
             )
 
-        for output in cell.get("outputs", []):
-            png = self._output_as_png(output)
-            if png is not None:
-                png_parts.append(png)
-            else:
-                fragment = self._render_output(output)
-                if fragment:
-                    rich_parts.append(fragment)
+        if "hide-output" not in tags:
+            for output in cell.get("outputs", []):
+                png = self._output_as_png(output)
+                if png is not None:
+                    png_parts.append(png)
+                else:
+                    fragment = self._render_output(output)
+                    if fragment:
+                        rich_parts.append(fragment)
 
         if not png_parts and not rich_parts:
             return ""
@@ -187,6 +191,14 @@ class Converter:
 
 def _png_uri(png_bytes: bytes) -> str:
     return "data:image/png;base64," + base64.b64encode(png_bytes).decode("ascii")
+
+
+def _cell_tags(cell) -> frozenset[str]:
+    """Return the set of tags on a cell (from cell.metadata.tags)."""
+    try:
+        return frozenset(cell.metadata.get("tags", []))
+    except Exception:
+        return frozenset()
 
 
 def _notebook_language(nb) -> str:
