@@ -98,12 +98,28 @@ def vstack_and_pad(png_list: list[bytes], config: CodeConfig) -> bytes:
         png = buf.getvalue()
     if config.padding_x or config.padding_y:
         png = _outer_pad(png, config.padding_x, config.padding_y, sep_color)
+    if config.border_radius:
+        img = Image.open(io.BytesIO(png)).convert("RGB")
+        img = _round_corners(img, config.border_radius)
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        png = buf.getvalue()
     return png
 
 
 # ---------------------------------------------------------------------------
 # Rendering internals
 # ---------------------------------------------------------------------------
+
+def _round_corners(img: Image.Image, radius: int) -> Image.Image:
+    """Apply transparent rounded corners via an alpha-channel mask."""
+    rgba = img.convert("RGBA")
+    mask = Image.new("L", rgba.size, 0)
+    draw = ImageDraw.Draw(mask)
+    draw.rounded_rectangle([0, 0, rgba.width - 1, rgba.height - 1], radius=radius, fill=255)
+    rgba.putalpha(mask)
+    return rgba
+
 
 def _outer_pad(png_bytes: bytes, padding_x: int, padding_y: int, background: str) -> bytes:
     """Wrap a PNG image with outer padding of the given background colour."""

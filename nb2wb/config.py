@@ -17,6 +17,7 @@ class CodeConfig:
     padding_y: int = 0       # outer vertical padding in pixels
     separator: int = 0       # gap in pixels between merged input/output blocks
     background: str = ""     # outer padding background colour; empty = use theme background
+    border_radius: int = 0   # corner radius in pixels (0 = square corners)
 
 
 @dataclass
@@ -28,11 +29,14 @@ class LatexConfig:
     padding: int = 68        # vertical padding in pixels around the expression
     image_width: int = 1920  # canvas width in pixels for rendered images
     try_usetex: bool = True  # try full LaTeX installation first
+    preamble: str = ""       # extra LaTeX preamble (appended after builtins)
+    border_radius: int = 0   # corner radius in pixels (0 = square corners)
 
 
 @dataclass
 class Config:
     image_width: int = 1920  # default canvas width for all rendered images
+    border_radius: int = 0   # corner radius in pixels for all rendered images
     code: CodeConfig = field(default_factory=CodeConfig)
     latex: LatexConfig = field(default_factory=LatexConfig)
 
@@ -45,6 +49,7 @@ def load_config(path: Optional[Path]) -> Config:
         data = yaml.safe_load(f) or {}
 
     top_width = data.get("image_width", 1920)
+    top_radius = data.get("border_radius", 0)
 
     code_fields = {
         k: v
@@ -57,12 +62,15 @@ def load_config(path: Optional[Path]) -> Config:
         if k in LatexConfig.__dataclass_fields__
     }
 
-    # Sub-configs inherit the top-level image_width unless explicitly overridden
+    # Sub-configs inherit top-level image_width / border_radius unless overridden
     code_fields.setdefault("image_width", top_width)
     latex_fields.setdefault("image_width", top_width)
+    code_fields.setdefault("border_radius", top_radius)
+    latex_fields.setdefault("border_radius", top_radius)
 
     return Config(
         image_width=top_width,
+        border_radius=top_radius,
         code=CodeConfig(**code_fields),
         latex=LatexConfig(**latex_fields),
     )
