@@ -24,7 +24,7 @@ import matplotlib.colors as mcolors
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from PIL import Image, ImageChops, ImageDraw
+from PIL import Image, ImageChops, ImageDraw, ImageFont
 
 from ..config import LatexConfig
 
@@ -66,7 +66,9 @@ def extract_display_math(text: str) -> list[tuple[int, int, str]]:
         text,
         re.DOTALL,
     ):
-        raw.append((m.start(), m.end(), m.group(3).strip()))
+        # Keep the full \begin{...}...\end{...} block so the renderer can
+        # reconstruct the correct environment (not wrap it in \[...\]).
+        raw.append((m.start(), m.end(), m.group(0).strip()))
 
     # Sort and remove overlaps
     raw.sort(key=lambda x: x[0])
@@ -80,7 +82,9 @@ def extract_display_math(text: str) -> list[tuple[int, int, str]]:
     return result
 
 
-def render_latex_block(latex: str, config: LatexConfig, preamble: str = "") -> str:
+def render_latex_block(
+    latex: str, config: LatexConfig, preamble: str = "", tag: int | None = None
+) -> str:
     """
     Render a display-math LaTeX string and return a ``data:image/png;base64,...``
     URI that can be used directly in an ``<img src="...">`` tag.
@@ -88,16 +92,18 @@ def render_latex_block(latex: str, config: LatexConfig, preamble: str = "") -> s
     *preamble* is extra LaTeX preamble collected from the notebook (via
     ``latex-preamble`` tagged cells).  It is concatenated with
     ``config.preamble`` and the built-in preamble when using usetex.
+
+    *tag*, if given, is drawn as ``(N)`` at the right edge of the canvas.
     """
     combined_preamble = "\n".join(filter(None, [config.preamble, preamble]))
 
     if config.try_usetex:
         try:
-            return _render_usetex(latex, config, combined_preamble)
+            return _render_usetex(latex, config, combined_preamble, tag=tag)
         except Exception:
             pass  # fall through to mathtext
 
-    return _render_mathtext(latex, config)
+    return _render_mathtext(latex, config, tag=tag)
 
 
 # ---------------------------------------------------------------------------
@@ -114,7 +120,35 @@ def _round_corners(img: Image.Image, radius: int) -> Image.Image:
     return rgba
 
 
-def _trim_and_pad(png_bytes: bytes, config: LatexConfig) -> bytes:
+def _draw_tag(canvas: Image.Image, tag: int, config: LatexConfig) -> None:
+    """Draw the equation number (N) at the right edge of the canvas, vertically centered."""
+    draw = ImageDraw.Draw(canvas)
+    text = f"({tag})"
+
+    # Font: Computer Modern Roman from matplotlib's bundled fonts — matches LaTeX
+    font_size_px = round(config.font_size / 72.27 * config.dpi)
+    font: ImageFont.ImageFont | ImageFont.FreeTypeFont
+    font_dir = _Path(matplotlib.__file__).parent / "mpl-data" / "fonts" / "ttf"
+    try:
+        font = ImageFont.truetype(str(font_dir / "cmr10.ttf"), font_size_px)
+    except (IOError, OSError):
+        try:
+            font = ImageFont.truetype(str(font_dir / "DejaVuSans.ttf"), font_size_px)
+        except (IOError, OSError):
+            font = ImageFont.load_default()
+
+    bbox = draw.textbbox((0, 0), text, font=font)
+    text_w = bbox[2] - bbox[0]
+    text_h = bbox[3] - bbox[1]
+
+    x = canvas.width - text_w - config.padding
+    y = (canvas.height - text_h) // 2
+
+    r, g, b = (round(c * 255) for c in mcolors.to_rgb(config.color))
+    draw.text((x, y), text, font=font, fill=(r, g, b))
+
+
+def _trim_and_pad(png_bytes: bytes, config: LatexConfig, tag: int | None = None) -> bytes:
     """Trim background whitespace, add vertical padding, and center on a fixed-width canvas."""
     img = Image.open(io.BytesIO(png_bytes)).convert("RGB")
     bg = Image.new("RGB", img.size, config.background)
@@ -128,6 +162,8 @@ def _trim_and_pad(png_bytes: bytes, config: LatexConfig) -> bytes:
         config.background,
     )
     canvas.paste(img, ((config.image_width - img.width) // 2, pad_px))
+    if tag is not None:
+        _draw_tag(canvas, tag, config)
     if config.border_radius:
         canvas = _round_corners(canvas, config.border_radius)
     out = io.BytesIO()
@@ -139,9 +175,16 @@ def _trim_and_pad(png_bytes: bytes, config: LatexConfig) -> bytes:
 # Rendering back-ends
 # ---------------------------------------------------------------------------
 
-def _render_mathtext(latex: str, config: LatexConfig) -> str:
+def _render_mathtext(latex: str, config: LatexConfig, tag: int | None = None) -> str:
     """Use matplotlib's built-in mathtext (no LaTeX installation required)."""
-    expr = f"${latex}$"
+    if latex.lstrip().startswith(r"\begin{"):
+        # mathtext has no multi-line environment support: strip tags and join rows
+        inner = re.sub(r"\\(?:begin|end)\{[^}]+\}", "", latex)
+        inner = re.sub(r"&", "", inner)
+        rows = [r.strip() for r in re.split(r"\\\\(?:\[[^\]]*\])?", inner) if r.strip()]
+        expr = "$" + r" \quad ".join(rows) + "$"
+    else:
+        expr = f"${latex}$"
 
     fig = plt.figure(dpi=config.dpi)
     fig.patch.set_facecolor(config.background)
@@ -171,7 +214,7 @@ def _render_mathtext(latex: str, config: LatexConfig) -> str:
             facecolor=config.background,
         )
         buf.seek(0)
-        data = base64.b64encode(_trim_and_pad(buf.read(), config)).decode("ascii")
+        data = base64.b64encode(_trim_and_pad(buf.read(), config, tag=tag)).decode("ascii")
         return f"data:image/png;base64,{data}"
     finally:
         plt.close(fig)
@@ -189,7 +232,7 @@ def _color_to_dvipng(color: str) -> str:
     return f"rgb {r:.6f} {g:.6f} {b:.6f}"
 
 
-def _render_usetex(latex: str, config: LatexConfig, preamble: str = "") -> str:
+def _render_usetex(latex: str, config: LatexConfig, preamble: str = "", tag: int | None = None) -> str:
     """
     Direct latex + dvipng pipeline.
 
@@ -220,7 +263,7 @@ def _render_usetex(latex: str, config: LatexConfig, preamble: str = "") -> str:
         r"\pagestyle{empty}",
         r"\begin{document}",
         f"\\fontsize{{{size}}}{{{baselineskip}}}\\selectfont",
-        f"\\[{latex}\\]",
+        latex if latex.lstrip().startswith(r"\begin{") else f"\\[{latex}\\]",
         r"\end{document}",
     ]))
 
@@ -255,5 +298,5 @@ def _render_usetex(latex: str, config: LatexConfig, preamble: str = "") -> str:
 
         png_bytes = png_path.read_bytes()
 
-    data = base64.b64encode(_trim_and_pad(png_bytes, config)).decode("ascii")
+    data = base64.b64encode(_trim_and_pad(png_bytes, config, tag=tag)).decode("ascii")
     return f"data:image/png;base64,{data}"

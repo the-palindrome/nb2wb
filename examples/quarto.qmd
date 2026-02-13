@@ -46,13 +46,27 @@ Block equations are rendered to crisp PNG images.
 
 The quadratic formula:
 
-$$x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}$$
+```latex
+x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a} \label{eq:quadratic}
+```
+
+$$x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a} \label{eq:quadratic}$$
+
+Equation \eqref{eq:quadratic} gives both roots of $ax^2 + bx + c = 0$ simultaneously.
 
 Bayes' theorem with colour:
+
+```latex
+P({\color{maizeCrayola} A} \mid {\color{blueGray} B}) = \frac{P({\color{blueGray} B} \mid {\color{maizeCrayola} A})\, P({\color{maizeCrayola} A})}{P({\color{blueGray} B})}.
+```
 
 $$P({\color{maizeCrayola} A} \mid {\color{blueGray} B}) = \frac{P({\color{blueGray} B} \mid {\color{maizeCrayola} A})\, P({\color{maizeCrayola} A})}{P({\color{blueGray} B})}.$$
 
 A matrix equation:
+
+```latex
+\mathbf{y} = \mathbf{X}\boldsymbol{\beta} + \boldsymbol{\varepsilon}.
+```
 
 \[
   \mathbf{y} = \mathbf{X}\boldsymbol{\beta} + \boldsymbol{\varepsilon}.
@@ -60,9 +74,35 @@ A matrix equation:
 
 The Basel formula:
 
+```latex
+\sum_{n=1}^{\infty} \frac{1}{n^2} = \frac{\pi^2}{6}.
+```
+
 $$
 \sum_{n=1}^{\infty} \frac{1}{n^2} = \frac{\pi^2}{6}.
 $$
+
+The Gaussian integral, derived by switching to polar coordinates:
+
+```latex
+\begin{align*}
+I   &= \int_{-\infty}^{\infty} e^{-x^2}\,dx \\[4pt]
+I^2 &= \int_{-\infty}^{\infty}\!\int_{-\infty}^{\infty} e^{-(x^2+y^2)}\,dx\,dy \\[4pt]
+    &= \int_0^{2\pi}\!\int_0^{\infty} e^{-r^2}\,r\,dr\,d\theta \\[4pt]
+    &= 2\pi \cdot \Bigl[-\tfrac{1}{2}e^{-r^2}\Bigr]_0^{\infty} \\[4pt]
+    &= \pi \\[4pt]
+\therefore\quad I &= \sqrt{\pi}
+\end{align*}
+```
+
+\begin{align*}
+I   &= \int_{-\infty}^{\infty} e^{-x^2}\,dx \\[4pt]
+I^2 &= \int_{-\infty}^{\infty}\!\int_{-\infty}^{\infty} e^{-(x^2+y^2)}\,dx\,dy \\[4pt]
+    &= \int_0^{2\pi}\!\int_0^{\infty} e^{-r^2}\,r\,dr\,d\theta \\[4pt]
+    &= 2\pi \cdot \Bigl[-\tfrac{1}{2}e^{-r^2}\Bigr]_0^{\infty} \\[4pt]
+    &= \pi \\[4pt]
+\therefore\quad I &= \sqrt{\pi}
+\end{align*}
 
 ## 3  Code Blocks → Image
 
