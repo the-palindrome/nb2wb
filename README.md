@@ -31,8 +31,14 @@ git clone https://github.com/yourname/nb2wb.git
 cd nb2wb
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
 pip install -e .
+```
+
+To run the bundled example notebooks (which use NumPy), install the optional
+`examples` extra:
+
+```bash
+pip install -e ".[examples]"
 ```
 
 ---
@@ -176,14 +182,24 @@ assets, no server required.
 
 ## Requirements
 
+### Core (installed automatically)
+
 - Python ≥ 3.9
-- [Pillow](https://pillow.readthedocs.io/) — image rendering
-- [Pygments](https://pygments.org/) — syntax highlighting
-- [matplotlib](https://matplotlib.org/) — LaTeX / mathtext rendering
 - [nbformat](https://nbformat.readthedocs.io/) — notebook parsing
-- [unicodeit](https://github.com/svenkreiss/unicodeit) — inline LaTeX → Unicode
+- [nbconvert](https://nbconvert.readthedocs.io/) + [ipykernel](https://ipykernel.readthedocs.io/) — `.qmd` cell execution
+- [matplotlib](https://matplotlib.org/) — LaTeX / mathtext rendering
+- [Pillow](https://pillow.readthedocs.io/) — image compositing
+- [Pygments](https://pygments.org/) — syntax highlighting
+- [PyYAML](https://pyyaml.org/) — config and `.qmd` front matter parsing
 - [Markdown](https://python-markdown.github.io/) — prose conversion
-- [PyYAML](https://pyyaml.org/) — config file parsing
+- [unicodeit](https://github.com/svenkreiss/unicodeit) — inline LaTeX → Unicode
+
+### Optional
+
+| Extra | Install | What it adds |
+|---|---|---|
+| `examples` | `pip install -e ".[examples]"` | NumPy — required by the bundled example notebooks |
+| `dev` | `pip install -e ".[dev]"` | pytest, black, isort |
 
 For the best LaTeX rendering, also install a LaTeX distribution
 ([TeX Live](https://tug.org/texlive/) or [MiKTeX](https://miktex.org/)) plus
