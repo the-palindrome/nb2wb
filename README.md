@@ -99,8 +99,36 @@ In JupyterLab open **View → Cell Toolbar → Tags**; in Jupyter Notebook use
 | `hide-cell` | Entire cell omitted (input + output) |
 | `hide-input` | Source code hidden; output shown |
 | `hide-output` | Output hidden; source code shown |
+| `latex-preamble` | Cell source used as LaTeX preamble; cell itself is hidden |
 
 `hide-cell` also works on Markdown cells.
+
+### LaTeX preamble
+
+Custom LaTeX packages and macros can be supplied in two ways (both are
+combined when rendering):
+
+**1. Notebook cell (recommended for per-notebook customisation)**
+
+Tag any Markdown cell with `latex-preamble`. Its raw source is injected into
+every formula's LaTeX document. The cell is invisible in the output.
+
+```
+\usepackage{xcolor}
+\definecolor{accent}{HTML}{E8C547}
+```
+
+**2. Config file (for project-wide defaults)**
+
+```yaml
+latex:
+  preamble: |
+    \usepackage{xcolor}
+    \definecolor{accent}{HTML}{E8C547}
+```
+
+> The preamble is only used when `try_usetex: true` and a LaTeX installation
+> is found. The mathtext fallback ignores it.
 
 ---
 

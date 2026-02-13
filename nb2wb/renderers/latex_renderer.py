@@ -3,18 +3,24 @@ Render display-math LaTeX blocks to base64-encoded PNG data URIs.
 
 Strategy
 --------
-1. Try matplotlib with usetex=True (requires a LaTeX installation + dvipng/dvisvgm).
+1. Try a direct latex + dvipng subprocess pipeline (requires a LaTeX installation
+   and dvipng).  This preserves DVI color specials so \\color{} commands in
+   formulas render correctly.
 2. Fall back to matplotlib's built-in mathtext renderer (no LaTeX needed,
-   supports a large subset of LaTeX).
+   supports a large subset of LaTeX, but ignores color commands).
 """
 from __future__ import annotations
 
 import base64
 import io
 import re
+import subprocess
+import tempfile
+from pathlib import Path as _Path
 from typing import Optional
 
 import matplotlib
+import matplotlib.colors as mcolors
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -74,14 +80,20 @@ def extract_display_math(text: str) -> list[tuple[int, int, str]]:
     return result
 
 
-def render_latex_block(latex: str, config: LatexConfig) -> str:
+def render_latex_block(latex: str, config: LatexConfig, preamble: str = "") -> str:
     """
     Render a display-math LaTeX string and return a ``data:image/png;base64,...``
     URI that can be used directly in an ``<img src="...">`` tag.
+
+    *preamble* is extra LaTeX preamble collected from the notebook (via
+    ``latex-preamble`` tagged cells).  It is concatenated with
+    ``config.preamble`` and the built-in preamble when using usetex.
     """
+    combined_preamble = "\n".join(filter(None, [config.preamble, preamble]))
+
     if config.try_usetex:
         try:
-            return _render_usetex(latex, config)
+            return _render_usetex(latex, config, combined_preamble)
         except Exception:
             pass  # fall through to mathtext
 
@@ -153,49 +165,83 @@ def _render_mathtext(latex: str, config: LatexConfig) -> str:
         plt.close(fig)
 
 
-def _render_usetex(latex: str, config: LatexConfig) -> str:
-    """Use a full LaTeX installation via matplotlib's usetex mode."""
-    prev_usetex = plt.rcParams.get("text.usetex", False)
-    prev_preamble = plt.rcParams.get("text.latex.preamble", "")
+def _color_to_html(color: str) -> str:
+    """Convert a matplotlib color spec to a 6-digit uppercase HTML hex (no '#')."""
+    r, g, b = mcolors.to_rgb(color)
+    return f"{round(r * 255):02X}{round(g * 255):02X}{round(b * 255):02X}"
 
-    plt.rcParams["text.usetex"] = True
-    plt.rcParams["text.latex.preamble"] = (
-        r"\usepackage{amsmath}" r"\usepackage{amssymb}" r"\usepackage{bm}"
-    )
 
-    expr = rf"\[{latex}\]"
+def _color_to_dvipng(color: str) -> str:
+    """Convert a matplotlib color spec to dvipng 'rgb R G B' format."""
+    r, g, b = mcolors.to_rgb(color)
+    return f"rgb {r:.6f} {g:.6f} {b:.6f}"
 
-    fig = plt.figure(dpi=config.dpi)
-    fig.patch.set_facecolor(config.background)
-    ax = fig.add_axes([0, 0, 1, 1])
-    ax.set_axis_off()
-    ax.patch.set_facecolor(config.background)
 
-    try:
-        ax.text(
-            0.5,
-            0.5,
-            expr,
-            fontsize=config.font_size,
-            color=config.color,
-            ha="center",
-            va="center",
-            transform=ax.transAxes,
+def _render_usetex(latex: str, config: LatexConfig, preamble: str = "") -> str:
+    """
+    Direct latex + dvipng pipeline.
+
+    Unlike matplotlib's usetex mode (which remaps all DVI colors to the text
+    color before compositing), dvipng --truecolor renders DVI color specials
+    faithfully, so \\color{} commands in formulas produce correctly colored output.
+    """
+    fg_html = _color_to_html(config.color)
+    bg_html = _color_to_html(config.background)
+    bg_dvipng = _color_to_dvipng(config.background)
+
+    size = config.font_size
+    baselineskip = round(size * 1.2)
+
+    doc = "\n".join(filter(None, [
+        r"\documentclass{article}",
+        r"\usepackage{type1cm}",   # scalable CM fonts at any size
+        r"\usepackage[utf8]{inputenc}",
+        r"\usepackage{amsmath}",
+        r"\usepackage{amssymb}",
+        r"\usepackage{bm}",
+        r"\usepackage{xcolor}",
+        f"\\definecolor{{nbTextColor}}{{HTML}}{{{fg_html}}}",
+        f"\\definecolor{{nbBgColor}}{{HTML}}{{{bg_html}}}",
+        preamble,
+        r"\pagecolor{nbBgColor}",
+        r"\color{nbTextColor}",
+        r"\pagestyle{empty}",
+        r"\begin{document}",
+        f"\\fontsize{{{size}}}{{{baselineskip}}}\\selectfont",
+        f"\\[{latex}\\]",
+        r"\end{document}",
+    ]))
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tex_path = _Path(tmpdir) / "formula.tex"
+        dvi_path = _Path(tmpdir) / "formula.dvi"
+        png_path = _Path(tmpdir) / "formula.png"
+
+        tex_path.write_text(doc, encoding="utf-8")
+
+        # Step 1: LaTeX → DVI
+        result = subprocess.run(
+            ["latex", "-interaction=nonstopmode", "-output-directory", tmpdir,
+             str(tex_path)],
+            capture_output=True, timeout=30,
         )
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"latex failed:\n{result.stdout.decode(errors='replace')}"
+            )
 
-        buf = io.BytesIO()
-        fig.savefig(
-            buf,
-            format="png",
-            dpi=config.dpi,
-            bbox_inches="tight",
-            pad_inches=0,
-            facecolor=config.background,
+        # Step 2: DVI → PNG  (--truecolor preserves xcolor specials)
+        result = subprocess.run(
+            ["dvipng", "--truecolor", f"-D{config.dpi}", "-T", "tight",
+             "-bg", bg_dvipng, "-o", str(png_path), str(dvi_path)],
+            capture_output=True, timeout=30,
         )
-        buf.seek(0)
-        data = base64.b64encode(_trim_and_pad(buf.read(), config)).decode("ascii")
-        return f"data:image/png;base64,{data}"
-    finally:
-        plt.close(fig)
-        plt.rcParams["text.usetex"] = prev_usetex
-        plt.rcParams["text.latex.preamble"] = prev_preamble
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"dvipng failed:\n{result.stderr.decode(errors='replace')}"
+            )
+
+        png_bytes = png_path.read_bytes()
+
+    data = base64.b64encode(_trim_and_pad(png_bytes, config)).decode("ascii")
+    return f"data:image/png;base64,{data}"

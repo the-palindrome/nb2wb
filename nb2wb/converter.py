@@ -48,10 +48,19 @@ class Converter:
         nb = nbformat.read(str(notebook_path), as_version=4)
         self._lang = _notebook_language(nb)
 
+        # First pass: collect LaTeX preamble from tagged cells
+        preamble_parts: list[str] = []
+        for cell in nb.cells:
+            if "latex-preamble" in _cell_tags(cell):
+                src = cell.source if isinstance(cell.source, str) else "".join(cell.source)
+                if src.strip():
+                    preamble_parts.append(src.strip())
+        self._latex_preamble = "\n".join(preamble_parts)
+
         parts: list[str] = []
         for cell in nb.cells:
             tags = _cell_tags(cell)
-            if "hide-cell" in tags:
+            if "hide-cell" in tags or "latex-preamble" in tags:
                 continue
             if cell.cell_type == "markdown":
                 parts.append(self._markdown_cell(cell))
@@ -77,7 +86,7 @@ class Converter:
         for start, end, latex in blocks:
             chunks.append(src[prev:start])
             try:
-                uri = render_latex_block(latex, self.config.latex)
+                uri = render_latex_block(latex, self.config.latex, self._latex_preamble)
                 # Blank lines around the image so Markdown treats it as a block
                 chunks.append(f"\n\n![math]({uri})\n\n")
             except Exception as exc:

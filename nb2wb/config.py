@@ -28,6 +28,7 @@ class LatexConfig:
     padding: int = 68        # vertical padding in pixels around the expression
     image_width: int = 1920  # canvas width in pixels for rendered images
     try_usetex: bool = True  # try full LaTeX installation first
+    preamble: str = ""       # extra LaTeX preamble (appended after builtins)
 
 
 @dataclass
