@@ -10,9 +10,9 @@ from .config import load_config
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="nb2wb",
-        description="Convert Jupyter Notebooks to Substack-ready HTML",
+        description="Convert Jupyter Notebooks or Quarto documents to Substack-ready HTML",
     )
-    parser.add_argument("notebook", type=Path, help="Path to the .ipynb notebook file")
+    parser.add_argument("notebook", type=Path, help="Path to the .ipynb or .qmd file")
     parser.add_argument(
         "-c", "--config", type=Path, default=None, help="Path to config.yaml (optional)"
     )

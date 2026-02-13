@@ -28,6 +28,7 @@ import markdown
 import nbformat
 
 from .config import Config
+from .qmd_reader import read_qmd
 from .html_builder import build_page
 from .renderers.code_renderer import render_code, render_output_text, vstack_and_pad
 from .renderers.inline_latex import convert_inline_math
@@ -45,7 +46,10 @@ class Converter:
         self.config = config
 
     def convert(self, notebook_path: Path) -> str:
-        nb = nbformat.read(str(notebook_path), as_version=4)
+        if notebook_path.suffix.lower() == ".qmd":
+            nb = read_qmd(notebook_path)
+        else:
+            nb = nbformat.read(str(notebook_path), as_version=4)
         self._lang = _notebook_language(nb)
 
         # First pass: collect LaTeX preamble from tagged cells
