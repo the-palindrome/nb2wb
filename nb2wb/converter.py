@@ -29,7 +29,7 @@ import nbformat
 
 from .config import Config
 from .html_builder import build_page
-from .renderers.code_renderer import render_code, render_output_text
+from .renderers.code_renderer import render_code, render_output_text, vstack_and_pad
 from .renderers.inline_latex import convert_inline_math
 from .renderers.latex_renderer import extract_display_math, render_latex_block
 
@@ -92,34 +92,68 @@ class Converter:
         return f'<div class="md-cell">{html}</div>\n'
 
     def _code_cell(self, cell) -> str:
-        parts: list[str] = []
+        png_parts: list[bytes] = []
+        rich_parts: list[str] = []
 
         if cell.source.strip():
-            png = render_code(cell.source, self._lang, self.config.code)
-            uri = _png_uri(png)
-            parts.append(f'<img class="code-img" src="{uri}" alt="code">\n')
+            png_parts.append(
+                render_code(cell.source, self._lang, self.config.code,
+                            apply_padding=False)
+            )
 
         for output in cell.get("outputs", []):
-            fragment = self._render_output(output)
-            if fragment:
-                parts.append(fragment)
+            png = self._output_as_png(output)
+            if png is not None:
+                png_parts.append(png)
+            else:
+                fragment = self._render_output(output)
+                if fragment:
+                    rich_parts.append(fragment)
 
-        if not parts:
+        if not png_parts and not rich_parts:
             return ""
+
+        parts: list[str] = []
+        if png_parts:
+            merged = vstack_and_pad(png_parts, self.config.code)
+            parts.append(f'<img class="code-img" src="{_png_uri(merged)}" alt="code">\n')
+        parts.extend(rich_parts)
+
         return '<div class="code-cell">\n' + "".join(parts) + "</div>\n"
 
-    def _render_output(self, output) -> str:
+    def _output_as_png(self, output) -> bytes | None:
+        """Render text-based outputs to PNG for merging; return None for rich outputs."""
         otype = output.get("output_type", "")
 
-        # ---- stream (stdout / stderr) ----
         if otype == "stream":
             text = "".join(output.get("text", []))
-            if not text.strip():
-                return ""
-            png = render_output_text(text, self.config.code)
-            return f'<img class="output-img" src="{_png_uri(png)}" alt="output">\n'
+            if text.strip():
+                return render_output_text(text, self.config.code, apply_padding=False)
+            return None
 
-        # ---- rich display / execute_result ----
+        if otype in ("execute_result", "display_data"):
+            data = output.get("data", {})
+            if "image/png" in data or "image/svg+xml" in data or "text/html" in data:
+                return None  # handled as a rich fragment
+            if "text/plain" in data:
+                text = data["text/plain"]
+                if isinstance(text, list):
+                    text = "".join(text)
+                if text.strip():
+                    return render_output_text(text, self.config.code, apply_padding=False)
+
+        if otype == "error":
+            tb = "\n".join(output.get("traceback", []))
+            tb = _ANSI.sub("", tb)
+            if tb.strip():
+                return render_output_text(tb, self.config.code, apply_padding=False)
+
+        return None
+
+    def _render_output(self, output) -> str:
+        """Return HTML fragment for rich outputs (notebook PNG, SVG, HTML)."""
+        otype = output.get("output_type", "")
+
         if otype in ("execute_result", "display_data"):
             data = output.get("data", {})
 
@@ -143,22 +177,6 @@ class Converter:
                 if isinstance(html, list):
                     html = "".join(html)
                 return f'<div class="html-output">{html}</div>\n'
-
-            if "text/plain" in data:
-                text = data["text/plain"]
-                if isinstance(text, list):
-                    text = "".join(text)
-                if text.strip():
-                    png = render_output_text(text, self.config.code)
-                    return f'<img class="output-img" src="{_png_uri(png)}" alt="output">\n'
-
-        # ---- error / traceback ----
-        if otype == "error":
-            tb = "\n".join(output.get("traceback", []))
-            tb = _ANSI.sub("", tb)
-            if tb.strip():
-                png = render_output_text(tb, self.config.code)
-                return f'<img class="output-img error-img" src="{_png_uri(png)}" alt="error">\n'
 
         return ""
 

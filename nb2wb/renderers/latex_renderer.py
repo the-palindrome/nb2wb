@@ -18,6 +18,7 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from PIL import Image, ImageChops
 
 from ..config import LatexConfig
 
@@ -88,6 +89,29 @@ def render_latex_block(latex: str, config: LatexConfig) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Post-processing helpers
+# ---------------------------------------------------------------------------
+
+def _trim_and_pad(png_bytes: bytes, config: LatexConfig) -> bytes:
+    """Trim background whitespace, add vertical padding, and center on a fixed-width canvas."""
+    img = Image.open(io.BytesIO(png_bytes)).convert("RGB")
+    bg = Image.new("RGB", img.size, config.background)
+    bbox = ImageChops.difference(img, bg).getbbox()
+    if bbox:
+        img = img.crop(bbox)
+    pad_px = config.padding
+    canvas = Image.new(
+        "RGB",
+        (config.image_width, img.height + 2 * pad_px),
+        config.background,
+    )
+    canvas.paste(img, ((config.image_width - img.width) // 2, pad_px))
+    out = io.BytesIO()
+    canvas.save(out, format="PNG")
+    return out.getvalue()
+
+
+# ---------------------------------------------------------------------------
 # Rendering back-ends
 # ---------------------------------------------------------------------------
 
@@ -119,11 +143,11 @@ def _render_mathtext(latex: str, config: LatexConfig) -> str:
             format="png",
             dpi=config.dpi,
             bbox_inches="tight",
-            pad_inches=config.padding,
+            pad_inches=0,
             facecolor=config.background,
         )
         buf.seek(0)
-        data = base64.b64encode(buf.read()).decode("ascii")
+        data = base64.b64encode(_trim_and_pad(buf.read(), config)).decode("ascii")
         return f"data:image/png;base64,{data}"
     finally:
         plt.close(fig)
@@ -165,11 +189,11 @@ def _render_usetex(latex: str, config: LatexConfig) -> str:
             format="png",
             dpi=config.dpi,
             bbox_inches="tight",
-            pad_inches=config.padding,
+            pad_inches=0,
             facecolor=config.background,
         )
         buf.seek(0)
-        data = base64.b64encode(buf.read()).decode("ascii")
+        data = base64.b64encode(_trim_and_pad(buf.read(), config)).decode("ascii")
         return f"data:image/png;base64,{data}"
     finally:
         plt.close(fig)

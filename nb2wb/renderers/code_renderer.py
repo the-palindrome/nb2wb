@@ -49,31 +49,82 @@ _LINE_GAP = 4   # extra vertical space between lines
 # Public API
 # ---------------------------------------------------------------------------
 
-def render_code(source: str, language: str, config: CodeConfig) -> bytes:
+def render_code(source: str, language: str, config: CodeConfig, *,
+                apply_padding: bool = True) -> bytes:
     """Render *source* with syntax highlighting to PNG bytes."""
     font = _load_font(config.font_size)
     style_cls = get_style_by_name(config.theme)
     lines = _tokenize(source, language, style_cls)
-    return _paint(lines, font, style_cls, show_line_numbers=config.line_numbers)
+    png = _paint(lines, font, style_cls, show_line_numbers=config.line_numbers,
+                 min_width=config.image_width)
+    if apply_padding and (config.padding_x or config.padding_y):
+        bg = config.background or style_cls.background_color
+        png = _outer_pad(png, config.padding_x, config.padding_y, bg)
+    return png
 
 
-def render_output_text(text: str, config: CodeConfig) -> bytes:
+def render_output_text(text: str, config: CodeConfig, *,
+                       apply_padding: bool = True) -> bytes:
     """Render plain-text output (stdout, repr, error) to PNG bytes."""
     font = _load_font(config.font_size)
     style_cls = get_style_by_name(config.theme)
     lines = _tokenize(text, "text", style_cls)
-    return _paint(lines, font, style_cls, show_line_numbers=False)
+    png = _paint(lines, font, style_cls, show_line_numbers=config.line_numbers,
+                 min_width=config.image_width)
+    if apply_padding and (config.padding_x or config.padding_y):
+        bg = config.background or style_cls.background_color
+        png = _outer_pad(png, config.padding_x, config.padding_y, bg)
+    return png
+
+
+def vstack_and_pad(png_list: list[bytes], config: CodeConfig) -> bytes:
+    """Stack PNG images vertically with separator gaps, then apply outer padding once."""
+    theme_bg = get_style_by_name(config.theme).background_color
+    sep_color = config.background or theme_bg
+    if len(png_list) == 1:
+        png = png_list[0]
+    else:
+        imgs = [Image.open(io.BytesIO(b)).convert("RGB") for b in png_list]
+        sep = config.separator
+        w = max(img.width for img in imgs)
+        h = sum(img.height for img in imgs) + sep * (len(imgs) - 1)
+        combined = Image.new("RGB", (w, h), sep_color)
+        y = 0
+        for i, img in enumerate(imgs):
+            combined.paste(img, (0, y))
+            y += img.height + (sep if i < len(imgs) - 1 else 0)
+        buf = io.BytesIO()
+        combined.save(buf, format="PNG")
+        png = buf.getvalue()
+    if config.padding_x or config.padding_y:
+        png = _outer_pad(png, config.padding_x, config.padding_y, sep_color)
+    return png
 
 
 # ---------------------------------------------------------------------------
 # Rendering internals
 # ---------------------------------------------------------------------------
 
+def _outer_pad(png_bytes: bytes, padding_x: int, padding_y: int, background: str) -> bytes:
+    """Wrap a PNG image with outer padding of the given background colour."""
+    img = Image.open(io.BytesIO(png_bytes)).convert("RGB")
+    canvas = Image.new(
+        "RGB",
+        (img.width + 2 * padding_x, img.height + 2 * padding_y),
+        background,
+    )
+    canvas.paste(img, (padding_x, padding_y))
+    out = io.BytesIO()
+    canvas.save(out, format="PNG")
+    return out.getvalue()
+
+
 def _paint(
     lines: list[list[tuple[tuple[int, int, int], str]]],
     font: ImageFont.FreeTypeFont,
     style_cls,
     show_line_numbers: bool,
+    min_width: int = 0,
 ) -> bytes:
     if not lines:
         lines = [[(200, 200, 200), ""]]
@@ -96,7 +147,7 @@ def _paint(
     width = int(max_content_w) + ln_w + 2 * _PAD
     height = lh * len(lines) + 2 * _PAD
 
-    img = Image.new("RGB", (max(width, 120), max(height, lh + _PAD)), color=bg)
+    img = Image.new("RGB", (max(width, 120, min_width), max(height, lh + _PAD)), color=bg)
     draw = ImageDraw.Draw(img)
 
     # Line-number gutter

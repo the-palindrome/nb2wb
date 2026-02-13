@@ -1,0 +1,23 @@
+# nb2wb configuration
+# All fields are optional; shown values are the defaults.
+
+image_width: 1920       # canvas width in pixels for all rendered images
+
+code:
+  font_size: 48           # font size for code images
+  theme: "monokai"        # any Pygments style name (monokai, dracula, vs, solarized-dark, …)
+  line_numbers: true      # show line numbers in code images
+  font: "DejaVu Sans Mono"  # hint for font lookup (system fonts searched automatically)
+  padding_x: 100            # outer horizontal padding in pixels around code images
+  padding_y: 100          # outer vertical padding in pixels around code images
+  separator: 100            # gap in pixels between merged input/output blocks
+  background: "#271828"          # outer padding background colour; empty = use theme background
+
+latex:
+  font_size: 48           # font size for rendered LaTeX
+  dpi: 150                # resolution of LaTeX images
+  color: "black"          # LaTeX text colour
+  background: "white"     # LaTeX image background
+  padding: 68             # vertical padding in pixels above and below each expression
+  # image_width: 1920     # override the top-level image_width for LaTeX images only
+  try_usetex: true        # use a full LaTeX install when available; falls back to mathtext
