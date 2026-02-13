@@ -37,6 +37,10 @@ from .renderers.latex_renderer import extract_display_math, render_latex_block
 # Strip ANSI colour codes from tracebacks
 _ANSI = re.compile(r"\x1b\[[0-9;]*[mGKFHJ]")
 
+# Equation label / cross-reference patterns
+_LABEL_RE = re.compile(r"\\label\{([^}]+)\}")
+_EQREF_RE = re.compile(r"\\eqref\{([^}]+)\}")
+
 # Markdown extensions used for cell conversion
 _MD_EXTENSIONS = ["extra", "sane_lists", "nl2br"]
 
@@ -62,6 +66,21 @@ class Converter:
                     preamble_parts.append(src.strip())
         self._latex_preamble = "\n".join(preamble_parts)
 
+        # Second pass: collect equation labels for document-wide numbering
+        self._eq_labels: dict[str, int] = {}
+        _eq_counter = 1
+        for cell in nb.cells:
+            tags = _cell_tags(cell)
+            if "hide-cell" in tags or "latex-preamble" in tags:
+                continue
+            if cell.cell_type == "markdown":
+                for _, _, latex in extract_display_math(cell.source):
+                    for lm in _LABEL_RE.finditer(latex):
+                        label = lm.group(1)
+                        if label not in self._eq_labels:
+                            self._eq_labels[label] = _eq_counter
+                            _eq_counter += 1
+
         parts: list[str] = []
         for cell in nb.cells:
             tags = _cell_tags(cell)
@@ -84,6 +103,12 @@ class Converter:
     def _markdown_cell(self, cell) -> str:
         src = cell.source
 
+        # 0. Substitute \eqref{label} → (N) throughout
+        def _eqref_sub(m: re.Match) -> str:
+            n = self._eq_labels.get(m.group(1))
+            return f"({n})" if n is not None else m.group(0)
+        src = _EQREF_RE.sub(_eqref_sub, src)
+
         # 1. Replace display-math blocks with inline Markdown images
         blocks = extract_display_math(src)
         chunks: list[str] = []
@@ -91,7 +116,8 @@ class Converter:
         for start, end, latex in blocks:
             chunks.append(src[prev:start])
             try:
-                uri = render_latex_block(latex, self.config.latex, self._latex_preamble)
+                latex, tag_num = _apply_eq_tag(latex, self._eq_labels)
+                uri = render_latex_block(latex, self.config.latex, self._latex_preamble, tag=tag_num)
                 # Blank lines around the image so Markdown treats it as a block
                 chunks.append(f"\n\n![math]({uri})\n\n")
             except Exception as exc:
@@ -205,6 +231,21 @@ class Converter:
 
 def _png_uri(png_bytes: bytes) -> str:
     return "data:image/png;base64," + base64.b64encode(png_bytes).decode("ascii")
+
+
+def _apply_eq_tag(latex: str, eq_labels: dict[str, int]) -> tuple[str, int | None]:
+    """Strip \\label{...} from latex; return (clean_latex, tag_number_or_None)."""
+    tag_num = None
+
+    def _sub(m: re.Match) -> str:
+        nonlocal tag_num
+        n = eq_labels.get(m.group(1))
+        if n is not None:
+            tag_num = n
+        return ""
+
+    clean = _LABEL_RE.sub(_sub, latex).strip()
+    return clean, tag_num
 
 
 def _cell_tags(cell) -> frozenset[str]:

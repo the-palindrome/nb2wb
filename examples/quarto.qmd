@@ -46,7 +46,9 @@ Block equations are rendered to crisp PNG images.
 
 The quadratic formula:
 
-$$x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}$$
+$$x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a} \label{eq:quadratic}$$
+
+Equation \eqref{eq:quadratic} gives both roots of $ax^2 + bx + c = 0$ simultaneously.
 
 Bayes' theorem with colour:
 
