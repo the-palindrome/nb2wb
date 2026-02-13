@@ -1,9 +1,13 @@
+# Core runtime — installed automatically by: pip install -e .
 nbformat>=5.0
+nbconvert>=6.0
+ipykernel>=6.0
 matplotlib>=3.5
-numpy>=1.23
 Pillow>=9.0
 Pygments>=2.10
 PyYAML>=6.0
 Markdown>=3.4
 unicodeit>=0.7
-ipykernel>=6.0
+
+# Examples extra (pip install -e ".[examples]")
+numpy>=1.23

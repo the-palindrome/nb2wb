@@ -11,16 +11,24 @@ requires-python = ">=3.9"
 license = {text = "MIT"}
 keywords = ["jupyter", "substack", "latex", "converter", "technical-writing"]
 dependencies = [
+    # Notebook I/O and execution
     "nbformat>=5.0",
+    "nbconvert>=6.0",
+    "ipykernel>=6.0",    # Jupyter kernel required for .qmd cell execution
+    # Rendering
     "matplotlib>=3.5",
     "Pillow>=9.0",
     "Pygments>=2.10",
+    # Parsing
     "PyYAML>=6.0",
     "markdown>=3.4",
     "unicodeit>=0.7",
 ]
 
 [project.optional-dependencies]
+examples = [
+    "numpy>=1.23",       # used in the example notebooks
+]
 dev = ["pytest>=7.0", "black", "isort"]
 
 [project.scripts]

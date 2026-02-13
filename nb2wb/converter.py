@@ -28,6 +28,7 @@ import markdown
 import nbformat
 
 from .config import Config
+from .qmd_reader import read_qmd
 from .html_builder import build_page
 from .renderers.code_renderer import render_code, render_output_text, vstack_and_pad
 from .renderers.inline_latex import convert_inline_math
@@ -45,7 +46,11 @@ class Converter:
         self.config = config
 
     def convert(self, notebook_path: Path) -> str:
-        nb = nbformat.read(str(notebook_path), as_version=4)
+        if notebook_path.suffix.lower() == ".qmd":
+            nb = read_qmd(notebook_path)
+            nb = _execute_cells(nb, notebook_path.parent)
+        else:
+            nb = nbformat.read(str(notebook_path), as_version=4)
         self._lang = _notebook_language(nb)
 
         # First pass: collect LaTeX preamble from tagged cells
@@ -219,3 +224,23 @@ def _notebook_language(nb) -> str:
         return lang or "python"
     except Exception:
         return "python"
+
+
+def _execute_cells(nb, cwd: Path):
+    """Execute all code cells in *nb* via a Jupyter kernel and return the notebook."""
+    try:
+        from nbconvert.preprocessors import ExecutePreprocessor
+    except ImportError:
+        print("  [warn] nbconvert not installed; skipping cell execution for .qmd.")
+        return nb
+
+    lang = nb.metadata.get("kernelspec", {}).get("language", "python")
+    # Map generic language names to installed kernel names
+    kernel_name = "python3" if lang in ("python", "py") else lang
+
+    ep = ExecutePreprocessor(timeout=300, kernel_name=kernel_name)
+    try:
+        ep.preprocess(nb, {"metadata": {"path": str(cwd)}})
+    except Exception as exc:
+        print(f"  [warn] Cell execution stopped early: {exc}")
+    return nb
