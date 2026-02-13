@@ -24,7 +24,7 @@ import matplotlib.colors as mcolors
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from PIL import Image, ImageChops
+from PIL import Image, ImageChops, ImageDraw
 
 from ..config import LatexConfig
 
@@ -104,6 +104,16 @@ def render_latex_block(latex: str, config: LatexConfig, preamble: str = "") -> s
 # Post-processing helpers
 # ---------------------------------------------------------------------------
 
+def _round_corners(img: Image.Image, radius: int) -> Image.Image:
+    """Apply transparent rounded corners via an alpha-channel mask."""
+    rgba = img.convert("RGBA")
+    mask = Image.new("L", rgba.size, 0)
+    draw = ImageDraw.Draw(mask)
+    draw.rounded_rectangle([0, 0, rgba.width - 1, rgba.height - 1], radius=radius, fill=255)
+    rgba.putalpha(mask)
+    return rgba
+
+
 def _trim_and_pad(png_bytes: bytes, config: LatexConfig) -> bytes:
     """Trim background whitespace, add vertical padding, and center on a fixed-width canvas."""
     img = Image.open(io.BytesIO(png_bytes)).convert("RGB")
@@ -118,6 +128,8 @@ def _trim_and_pad(png_bytes: bytes, config: LatexConfig) -> bytes:
         config.background,
     )
     canvas.paste(img, ((config.image_width - img.width) // 2, pad_px))
+    if config.border_radius:
+        canvas = _round_corners(canvas, config.border_radius)
     out = io.BytesIO()
     canvas.save(out, format="PNG")
     return out.getvalue()

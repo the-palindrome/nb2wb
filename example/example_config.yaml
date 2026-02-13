@@ -2,6 +2,7 @@
 # All fields are optional; shown values are the defaults.
 
 image_width: 1920       # canvas width in pixels for all rendered images
+border_radius: 8       # corner radius in pixels for all rendered images (0 = square)
 
 code:
   font_size: 48           # font size for code images
