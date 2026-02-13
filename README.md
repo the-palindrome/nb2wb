@@ -88,6 +88,22 @@ If `try_usetex: true` and a LaTeX installation is found, full LaTeX is used
 automatically. Otherwise `nb2wb` falls back to matplotlib's mathtext, which
 handles most common expressions without any extra dependencies.
 
+### Cell tags
+
+Attach tags to cells to control what appears in the output.
+In JupyterLab open **View → Cell Toolbar → Tags**; in Jupyter Notebook use
+**View → Cell Toolbar → Tags** or edit the cell metadata directly.
+
+| Tag | Effect |
+|---|---|
+| `hide-cell` | Entire cell omitted (input + output) |
+| `hide-input` | Source code hidden; output shown |
+| `hide-output` | Output hidden; source code shown |
+
+`hide-cell` also works on Markdown cells.
+
+---
+
 ### Code themes
 
 Any [Pygments style](https://pygments.org/styles/) works:
