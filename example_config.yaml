@@ -1,0 +1,16 @@
+# nb2wb configuration
+# All fields are optional; shown values are the defaults.
+
+code:
+  font_size: 14           # font size for code images
+  theme: "monokai"        # any Pygments style name (monokai, dracula, vs, solarized-dark, …)
+  line_numbers: true      # show line numbers in code images
+  font: "DejaVu Sans Mono"  # hint for font lookup (system fonts searched automatically)
+
+latex:
+  font_size: 16           # font size for rendered LaTeX
+  dpi: 150                # resolution of LaTeX images
+  color: "black"          # LaTeX text colour
+  background: "white"     # LaTeX image background
+  padding: 0.15           # whitespace (inches) around each expression
+  try_usetex: true        # use a full LaTeX install when available; falls back to mathtext

@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nb2wb"
+version = "0.1.0"
+description = "Convert Jupyter Notebooks to Substack-ready HTML"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+keywords = ["jupyter", "substack", "latex", "converter", "technical-writing"]
+dependencies = [
+    "nbformat>=5.0",
+    "matplotlib>=3.5",
+    "Pillow>=9.0",
+    "Pygments>=2.10",
+    "PyYAML>=6.0",
+    "markdown>=3.4",
+    "unicodeit>=0.7",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0", "black", "isort"]
+
+[project.scripts]
+nb2wb = "nb2wb.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["nb2wb*"]
