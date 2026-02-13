@@ -123,14 +123,17 @@ def _draw_tag(canvas: Image.Image, tag: int, config: LatexConfig) -> None:
     draw = ImageDraw.Draw(canvas)
     text = f"({tag})"
 
-    # Font: DejaVu Sans from matplotlib's bundled fonts (reliable cross-platform)
+    # Font: Computer Modern Roman from matplotlib's bundled fonts — matches LaTeX
     font_size_px = round(config.font_size / 72.27 * config.dpi)
     font: ImageFont.ImageFont | ImageFont.FreeTypeFont
+    font_dir = _Path(matplotlib.__file__).parent / "mpl-data" / "fonts" / "ttf"
     try:
-        font_dir = _Path(matplotlib.__file__).parent / "mpl-data" / "fonts" / "ttf"
-        font = ImageFont.truetype(str(font_dir / "DejaVuSans.ttf"), font_size_px)
+        font = ImageFont.truetype(str(font_dir / "cmr10.ttf"), font_size_px)
     except (IOError, OSError):
-        font = ImageFont.load_default()
+        try:
+            font = ImageFont.truetype(str(font_dir / "DejaVuSans.ttf"), font_size_px)
+        except (IOError, OSError):
+            font = ImageFont.load_default()
 
     bbox = draw.textbbox((0, 0), text, font=font)
     text_w = bbox[2] - bbox[0]
