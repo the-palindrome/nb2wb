@@ -8,6 +8,3 @@ Pygments>=2.10
 PyYAML>=6.0
 Markdown>=3.4
 unicodeit>=0.7
-
-# Examples extra (pip install -e ".[examples]")
-numpy>=1.23

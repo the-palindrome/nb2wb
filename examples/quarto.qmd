@@ -123,11 +123,10 @@ print(*fibonacci(10))
 ```
 
 ```{python}
-#| label: numpy-squares
-import numpy as np
-
-x = np.arange(10)
-print(x ** 2)
+#| label: list-squares
+# Simple list comprehension
+x = list(range(10))
+print([i ** 2 for i in x])
 ```
 
 ## 4  Mixed: equation in context
@@ -142,15 +141,18 @@ by construction.
 
 ```{python}
 #| label: softmax
-import numpy as np
+import math
 
 def softmax(z):
-    e = np.exp(z - z.max())   # numerical stability
-    return e / e.sum()
+    """Compute softmax values for a list of numbers."""
+    z_max = max(z)
+    e = [math.exp(x - z_max) for x in z]  # numerical stability
+    e_sum = sum(e)
+    return [x / e_sum for x in e]
 
-z = np.array([1.0, 2.0, 3.0])
+z = [1.0, 2.0, 3.0]
 probs = softmax(z)
-print(f"softmax({z.tolist()}) = {np.array2string(probs, precision=4)}")
+print(f"softmax({z}) = [{probs[0]:.4f} {probs[1]:.4f} {probs[2]:.4f}]")
 ```
 
 ## 5  Figures
@@ -158,13 +160,13 @@ print(f"softmax({z.tolist()}) = {np.array2string(probs, precision=4)}")
 ```{python}
 #| label: fig-parabola
 import matplotlib.pyplot as plt
-import numpy as np
 
 with plt.style.context("seaborn-v0_8-white"):
     fig = plt.figure(figsize=(19.2/2, 10.8/2))
 
-    X = np.linspace(-1, 1, 100)
-    y = X**2
+    # Generate points using list comprehension
+    X = [x / 50.0 - 1 for x in range(101)]  # 101 points from -1 to 1
+    y = [x**2 for x in X]
     plt.plot(X, y, color="red")
 
     plt.tight_layout()

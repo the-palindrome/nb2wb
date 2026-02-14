@@ -26,9 +26,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-examples = [
-    "numpy>=1.23",       # used in the example notebooks
-]
 dev = ["pytest>=7.0", "black", "isort"]
 
 [project.scripts]
@@ -37,3 +34,20 @@ nb2wb = "nb2wb.cli:main"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["nb2wb*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    "latex: tests requiring LaTeX and dvipng installed",
+    "slow: slow tests (e.g., full workflow tests)",
+    "integration: integration tests",
+    "unit: unit tests",
+]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",
+]
