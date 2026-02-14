@@ -106,7 +106,7 @@ def apply_platform_defaults(config: Config, platform: str) -> Config:
                 dpi=config.latex.dpi,
                 color=config.latex.color,
                 background=config.latex.background,
-                padding=20,
+                padding=50,
                 image_width=1200,
                 try_usetex=config.latex.try_usetex,
                 preamble=config.latex.preamble,
