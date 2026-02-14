@@ -83,7 +83,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <section id="nb2wb" class="level1">
 <h1>nb2wb</h1>
 <p><strong>Write in Jupyter Notebooks. Publish on Substack.</strong></p>
-<p><code>nb2wb</code> converts a Jupyter Notebook into a self-contained HTML file you can paste directly into a Substack draft — with LaTeX, code, and outputs all rendered faithfully.</p>
+<p><code>nb2wb</code> (short for <em>notebook to web</em>) converts a Jupyter Notebook into a self-contained HTML file you can paste directly into a Substack draft — with LaTeX, code, and outputs all rendered faithfully.</p>
 <hr>
 <section id="why" class="level2">
 <h2 class="anchored" data-anchor-id="why">Why</h2>
@@ -126,37 +126,38 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> nb2wb</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> venv .venv</span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="bu">source</span> .venv/bin/activate        <span class="co"># Windows: .venv\Scripts\activate</span></span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="ex">pip</span> install <span class="at">-r</span> requirements.txt</span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="ex">pip</span> install <span class="at">-e</span> .</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="ex">pip</span> install <span class="at">-e</span> .</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>To run the bundled example notebooks (which use NumPy), install the optional <code>examples</code> extra:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="ex">pip</span> install <span class="at">-e</span> <span class="st">".[examples]"</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <hr>
 </section>
 <section id="usage" class="level2">
 <h2 class="anchored" data-anchor-id="usage">Usage</h2>
-<div class="sourceCode" id="cb2"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="ex">nb2wb</span> notebook.ipynb                         <span class="co"># → notebook.html</span></span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="ex">nb2wb</span> notebook.ipynb <span class="at">-c</span> config.yaml          <span class="co"># with custom config</span></span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="ex">nb2wb</span> notebook.ipynb <span class="at">-o</span> out.html             <span class="co"># explicit output path</span></span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="ex">nb2wb</span> notebook.ipynb <span class="at">--open</span>                  <span class="co"># open in browser when done</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode" id="cb3"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ex">nb2wb</span> notebook.ipynb                         <span class="co"># → notebook.html</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="ex">nb2wb</span> notebook.ipynb <span class="at">-c</span> config.yaml          <span class="co"># with custom config</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="ex">nb2wb</span> notebook.ipynb <span class="at">-o</span> out.html             <span class="co"># explicit output path</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="ex">nb2wb</span> notebook.ipynb <span class="at">--open</span>                  <span class="co"># open in browser when done</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <p>Then open the HTML file in your browser, click <strong>Copy to clipboard</strong>, and paste into your Substack draft.</p>
 <hr>
 </section>
 <section id="configuration" class="level2">
 <h2 class="anchored" data-anchor-id="configuration">Configuration</h2>
 <p>All options are optional. Copy <code>example_config.yaml</code> and edit as needed:</p>
-<div class="sourceCode" id="cb3"><pre class="sourceCode yaml code-with-copy"><code class="sourceCode yaml"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">code</span><span class="kw">:</span></span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">font_size</span><span class="kw">:</span><span class="at"> </span><span class="dv">14</span><span class="co">           # font size for code images</span></span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">theme</span><span class="kw">:</span><span class="at"> </span><span class="st">"monokai"</span><span class="co">        # any Pygments style: monokai, dracula, vs, solarized-dark, …</span></span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">line_numbers</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span><span class="co">      # show line numbers</span></span>
-<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">font</span><span class="kw">:</span><span class="at"> </span><span class="st">"DejaVu Sans Mono"</span></span>
-<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="fu">latex</span><span class="kw">:</span></span>
-<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">font_size</span><span class="kw">:</span><span class="at"> </span><span class="dv">16</span><span class="co">           # font size for LaTeX images</span></span>
-<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">dpi</span><span class="kw">:</span><span class="at"> </span><span class="dv">150</span><span class="co">                # image resolution</span></span>
-<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">color</span><span class="kw">:</span><span class="at"> </span><span class="st">"black"</span></span>
-<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">background</span><span class="kw">:</span><span class="at"> </span><span class="st">"white"</span></span>
-<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">padding</span><span class="kw">:</span><span class="at"> </span><span class="fl">0.15</span><span class="co">           # whitespace around each expression (inches)</span></span>
-<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">try_usetex</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span><span class="co">        # use a full LaTeX install when available; falls back to mathtext</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode" id="cb4"><pre class="sourceCode yaml code-with-copy"><code class="sourceCode yaml"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">code</span><span class="kw">:</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">font_size</span><span class="kw">:</span><span class="at"> </span><span class="dv">14</span><span class="co">           # font size for code images</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">theme</span><span class="kw">:</span><span class="at"> </span><span class="st">"monokai"</span><span class="co">        # any Pygments style: monokai, dracula, vs, solarized-dark, …</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">line_numbers</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span><span class="co">      # show line numbers</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">font</span><span class="kw">:</span><span class="at"> </span><span class="st">"DejaVu Sans Mono"</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="fu">latex</span><span class="kw">:</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">font_size</span><span class="kw">:</span><span class="at"> </span><span class="dv">16</span><span class="co">           # font size for LaTeX images</span></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">dpi</span><span class="kw">:</span><span class="at"> </span><span class="dv">150</span><span class="co">                # image resolution</span></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">color</span><span class="kw">:</span><span class="at"> </span><span class="st">"black"</span></span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">background</span><span class="kw">:</span><span class="at"> </span><span class="st">"white"</span></span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">padding</span><span class="kw">:</span><span class="at"> </span><span class="fl">0.15</span><span class="co">           # whitespace around each expression (inches)</span></span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">try_usetex</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span><span class="co">        # use a full LaTeX install when available; falls back to mathtext</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <p>Pass it with <code>-c</code>:</p>
-<div class="sourceCode" id="cb4"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="ex">nb2wb</span> notebook.ipynb <span class="at">-c</span> config.yaml</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode" id="cb5"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="ex">nb2wb</span> notebook.ipynb <span class="at">-c</span> config.yaml</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <section id="latex-rendering-modes" class="level3">
 <h3 class="anchored" data-anchor-id="latex-rendering-modes">LaTeX rendering modes</h3>
 <table class="table">
@@ -191,6 +192,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h3 class="anchored" data-anchor-id="cell-tags">Cell tags</h3>
 <p>Attach tags to cells to control what appears in the output. In JupyterLab open <strong>View → Cell Toolbar → Tags</strong>; in Jupyter Notebook use <strong>View → Cell Toolbar → Tags</strong> or edit the cell metadata directly.</p>
 <table class="table">
+<colgroup>
+<col style="width: 50%">
+<col style="width: 50%">
+</colgroup>
 <thead>
 <tr class="header">
 <th>Tag</th>
@@ -210,15 +215,35 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <td><code>hide-output</code></td>
 <td>Output hidden; source code shown</td>
 </tr>
+<tr class="even">
+<td><code>latex-preamble</code></td>
+<td>Cell source used as LaTeX preamble; cell itself is hidden</td>
+</tr>
 </tbody>
 </table>
 <p><code>hide-cell</code> also works on Markdown cells.</p>
+</section>
+<section id="latex-preamble" class="level3">
+<h3 class="anchored" data-anchor-id="latex-preamble">LaTeX preamble</h3>
+<p>Custom LaTeX packages and macros can be supplied in two ways (both are combined when rendering):</p>
+<p><strong>1. Notebook cell (recommended for per-notebook customisation)</strong></p>
+<p>Tag any Markdown cell with <code>latex-preamble</code>. Its raw source is injected into every formula’s LaTeX document. The cell is invisible in the output.</p>
+<pre><code>\usepackage{xcolor}
+\definecolor{accent}{HTML}{E8C547}</code></pre>
+<p><strong>2. Config file (for project-wide defaults)</strong></p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode yaml code-with-copy"><code class="sourceCode yaml"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="fu">latex</span><span class="kw">:</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="fu">  preamble</span><span class="kw">: </span><span class="ch">|</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>    \usepackage{xcolor}</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>    \definecolor{accent}{HTML}{E8C547}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<blockquote class="blockquote">
+<p>The preamble is only used when <code>try_usetex: true</code> and a LaTeX installation is found. The mathtext fallback ignores it.</p>
+</blockquote>
 <hr>
 </section>
 <section id="code-themes" class="level3">
 <h3 class="anchored" data-anchor-id="code-themes">Code themes</h3>
 <p>Any <a href="https://pygments.org/styles/">Pygments style</a> works:</p>
-<div class="sourceCode" id="cb5"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-c</span> <span class="st">"from pygments.styles import get_all_styles; print(list(get_all_styles()))"</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode" id="cb8"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-c</span> <span class="st">"from pygments.styles import get_all_styles; print(list(get_all_styles()))"</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <p>Popular choices: <code>monokai</code>, <code>dracula</code>, <code>nord</code>, <code>solarized-dark</code>, <code>vs</code>, <code>github-dark</code>, <code>one-dark</code>.</p>
 <hr>
 </section>
@@ -249,18 +274,51 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="requirements" class="level2">
 <h2 class="anchored" data-anchor-id="requirements">Requirements</h2>
+<section id="core-installed-automatically" class="level3">
+<h3 class="anchored" data-anchor-id="core-installed-automatically">Core (installed automatically)</h3>
 <ul>
 <li>Python ≥ 3.9</li>
-<li><a href="https://pillow.readthedocs.io/">Pillow</a> — image rendering</li>
-<li><a href="https://pygments.org/">Pygments</a> — syntax highlighting</li>
-<li><a href="https://matplotlib.org/">matplotlib</a> — LaTeX / mathtext rendering</li>
 <li><a href="https://nbformat.readthedocs.io/">nbformat</a> — notebook parsing</li>
-<li><a href="https://github.com/svenkreiss/unicodeit">unicodeit</a> — inline LaTeX → Unicode</li>
+<li><a href="https://nbconvert.readthedocs.io/">nbconvert</a> + <a href="https://ipykernel.readthedocs.io/">ipykernel</a> — <code>.qmd</code> cell execution</li>
+<li><a href="https://matplotlib.org/">matplotlib</a> — LaTeX / mathtext rendering</li>
+<li><a href="https://pillow.readthedocs.io/">Pillow</a> — image compositing</li>
+<li><a href="https://pygments.org/">Pygments</a> — syntax highlighting</li>
+<li><a href="https://pyyaml.org/">PyYAML</a> — config and <code>.qmd</code> front matter parsing</li>
 <li><a href="https://python-markdown.github.io/">Markdown</a> — prose conversion</li>
-<li><a href="https://pyyaml.org/">PyYAML</a> — config file parsing</li>
+<li><a href="https://github.com/svenkreiss/unicodeit">unicodeit</a> — inline LaTeX → Unicode</li>
 </ul>
+</section>
+<section id="optional" class="level3">
+<h3 class="anchored" data-anchor-id="optional">Optional</h3>
+<table class="table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Extra</th>
+<th>Install</th>
+<th>What it adds</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>examples</code></td>
+<td><code>pip install -e ".[examples]"</code></td>
+<td>NumPy — required by the bundled example notebooks</td>
+</tr>
+<tr class="even">
+<td><code>dev</code></td>
+<td><code>pip install -e ".[dev]"</code></td>
+<td>pytest, black, isort</td>
+</tr>
+</tbody>
+</table>
 <p>For the best LaTeX rendering, also install a LaTeX distribution (<a href="https://tug.org/texlive/">TeX Live</a> or <a href="https://miktex.org/">MiKTeX</a>) plus <code>dvipng</code>.</p>
 <hr>
+</section>
 </section>
 <section id="license" class="level2">
 <h2 class="anchored" data-anchor-id="license">License</h2>

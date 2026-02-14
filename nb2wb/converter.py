@@ -29,7 +29,7 @@ import nbformat
 
 from .config import Config
 from .qmd_reader import read_qmd
-from .html_builder import build_page
+# Platform-specific HTML wrapping is now done in CLI
 from .renderers.code_renderer import render_code, render_output_text, vstack_and_pad
 from .renderers.inline_latex import convert_inline_math
 from .renderers.latex_renderer import extract_display_math, render_latex_block
@@ -100,7 +100,7 @@ class Converter:
                     parts.append(html)
             # raw cells are skipped
 
-        return build_page("\n".join(parts))
+        return "\n".join(parts)
 
     # ------------------------------------------------------------------
     # Cell processors

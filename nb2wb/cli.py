@@ -5,16 +5,26 @@ from pathlib import Path
 
 from .converter import Converter
 from .config import load_config
+from .platforms import get_builder, list_platforms
 
 
 def main() -> None:
+    platforms = list_platforms()
     parser = argparse.ArgumentParser(
         prog="nb2wb",
-        description="Convert Jupyter Notebooks or Quarto documents to Substack-ready HTML",
+        description="Convert Jupyter Notebooks or Quarto documents to web-ready HTML",
     )
     parser.add_argument("notebook", type=Path, help="Path to the .ipynb or .qmd file")
     parser.add_argument(
         "-c", "--config", type=Path, default=None, help="Path to config.yaml (optional)"
+    )
+    parser.add_argument(
+        "-t",
+        "--target",
+        type=str,
+        choices=platforms,
+        default="substack",
+        help=f"Target platform (choices: {', '.join(platforms)}; default: substack)",
     )
     parser.add_argument(
         "-o",
@@ -36,11 +46,13 @@ def main() -> None:
         sys.exit(1)
 
     config = load_config(args.config)
+    builder = get_builder(args.target)
     output_path = args.output or args.notebook.with_suffix(".html")
 
-    print(f"Converting '{args.notebook}' …")
+    print(f"Converting '{args.notebook}' for {builder.name} …")
     try:
-        html = Converter(config).convert(args.notebook)
+        content_html = Converter(config).convert(args.notebook)
+        html = builder.build_page(content_html)
     except Exception as exc:
         print(f"Conversion failed: {exc}", file=sys.stderr)
         sys.exit(1)
