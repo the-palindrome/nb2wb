@@ -65,14 +65,18 @@ def render_code(source: str, language: str, config: CodeConfig, *,
 
 def render_output_text(text: str, config: CodeConfig, *,
                        apply_padding: bool = True) -> bytes:
-    """Render plain-text output (stdout, repr, error) to PNG bytes."""
+    """Render plain-text output (stdout, repr, error) to PNG bytes with lighter styling."""
     font = _load_font(config.font_size)
     style_cls = get_style_by_name(config.theme)
     lines = _tokenize(text, "text", style_cls)
-    png = _paint(lines, font, style_cls, show_line_numbers=config.line_numbers,
+
+    # Create a lighter version of the style for outputs
+    output_style = _create_output_style(style_cls)
+
+    png = _paint(lines, font, output_style, show_line_numbers=False,
                  min_width=config.image_width)
     if apply_padding and (config.padding_x or config.padding_y):
-        bg = config.background or style_cls.background_color
+        bg = config.background or output_style.background_color
         png = _outer_pad(png, config.padding_x, config.padding_y, bg)
     return png
 
@@ -306,3 +310,35 @@ def _default_fg(style_cls) -> tuple[int, int, int]:
     # Infer from background brightness
     bg = _hex_to_rgb(style_cls.background_color)
     return (220, 220, 220) if sum(bg) / 3 < 128 else (40, 40, 40)
+
+
+def _create_output_style(base_style):
+    """Create a lighter, muted style for output cells."""
+    class OutputStyle:
+        def __init__(self, base):
+            self._base = base
+            base_bg = _hex_to_rgb(base.background_color)
+            # Lighten the background significantly
+            if sum(base_bg) / 3 < 128:  # Dark theme
+                self.background_color = _rgb_to_hex(_shift(base_bg, 25))
+            else:  # Light theme
+                self.background_color = _rgb_to_hex(_shift(base_bg, 20))
+
+        def style_for_token(self, ttype):
+            info = self._base.style_for_token(ttype)
+            # Make text more muted/grayed
+            if info.get("color"):
+                rgb = _hex_to_rgb(info["color"])
+                base_bg = _hex_to_rgb(self._base.background_color)
+                # Move color 40% towards gray
+                gray = sum(rgb) // 3
+                muted = tuple(int(c * 0.6 + gray * 0.4) for c in rgb)
+                return {"color": _rgb_to_hex(muted)}
+            return info
+
+    return OutputStyle(base_style)
+
+
+def _rgb_to_hex(rgb: tuple[int, int, int]) -> str:
+    """Convert RGB tuple to hex color string."""
+    return f"#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}"
