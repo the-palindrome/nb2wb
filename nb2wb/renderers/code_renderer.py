@@ -96,8 +96,9 @@ def render_output_text(text: str, config: CodeConfig, *,
 
 def vstack_and_pad(png_list: list[bytes], config: CodeConfig) -> bytes:
     """Stack PNG images vertically with separator gaps, then apply outer padding once."""
-    theme_bg = get_style_by_name(config.theme).background_color
-    sep_color = config.background or theme_bg
+    style_cls = get_style_by_name(config.theme)
+    output_bg = _create_output_style(style_cls).background_color
+    sep_color = config.background or output_bg
     if len(png_list) == 1:
         png = png_list[0]
     else:
