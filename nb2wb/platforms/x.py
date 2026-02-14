@@ -6,7 +6,11 @@ This builder creates an interactive HTML with "Copy image" buttons for each imag
 """
 from __future__ import annotations
 
+import base64
+import mimetypes
 import re
+import urllib.request
+from pathlib import Path
 from .base import PlatformBuilder
 
 # X Articles HTML template with interactive image copying
@@ -383,7 +387,7 @@ class XArticlesBuilder(PlatformBuilder):
         """
         Wrap each <img> tag in a container with a copy-to-clipboard button.
 
-        Handles both data URI images and externally linked images.
+        Converts external URLs and file paths to data URIs to avoid CORS issues.
         Returns modified HTML with interactive image containers.
         """
         # Pattern to match ALL img tags (data URIs, external URLs, self-closing or not)
@@ -397,6 +401,11 @@ class XArticlesBuilder(PlatformBuilder):
         def wrap_image(match: re.Match) -> str:
             image_counter[0] += 1
             img_src = match.group(1)
+
+            # Convert external URLs and file paths to data URIs
+            if not img_src.startswith('data:'):
+                img_src = self._to_data_uri(img_src)
+
             # Extract alt text if present, otherwise use default
             full_tag = match.group(0)
             alt_match = re.search(r'alt="([^"]*)"', full_tag)
@@ -410,3 +419,44 @@ class XArticlesBuilder(PlatformBuilder):
 
         modified_html = img_pattern.sub(wrap_image, html)
         return modified_html
+
+    def _to_data_uri(self, src: str) -> str:
+        """
+        Convert an image URL or file path to a base64 data URI.
+
+        Args:
+            src: Image URL or file path
+
+        Returns:
+            Base64 data URI string
+        """
+        try:
+            # Try as URL first (http://, https://)
+            if src.startswith(('http://', 'https://')):
+                with urllib.request.urlopen(src) as response:
+                    image_data = response.read()
+                    mime_type = response.headers.get_content_type()
+            else:
+                # Treat as file path
+                file_path = Path(src)
+                if not file_path.is_absolute():
+                    # Try relative to current directory
+                    file_path = Path.cwd() / src
+
+                with open(file_path, 'rb') as f:
+                    image_data = f.read()
+
+                # Guess MIME type from file extension
+                mime_type, _ = mimetypes.guess_type(str(file_path))
+                if not mime_type:
+                    mime_type = 'image/png'  # Default fallback
+
+            # Convert to base64 data URI
+            b64_data = base64.b64encode(image_data).decode('utf-8')
+            return f"data:{mime_type};base64,{b64_data}"
+
+        except Exception as e:
+            # If conversion fails, return original src
+            # The JavaScript will try to fetch it (may fail with CORS)
+            print(f"Warning: Could not convert image '{src}' to data URI: {e}")
+            return src

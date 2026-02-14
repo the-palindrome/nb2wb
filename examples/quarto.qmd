@@ -22,7 +22,7 @@ execute:
 \definecolor{ruby}{HTML}{D81E5B}
 ```
 
-# From Quarto to Substack
+# From Quarto to Web
 
 This document demonstrates the `nb2wb` converter with a Quarto (`.qmd`) source
 file. It covers the same three pillars as the Jupyter example: prose,
