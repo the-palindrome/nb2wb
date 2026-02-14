@@ -15,11 +15,9 @@ class CodeConfig:
     image_width: int = 1920  # minimum canvas width in pixels for rendered images
     padding_x: int = 100  # outer horizontal padding in pixels
     padding_y: int = 100  # outer vertical padding in pixels
-    separator: int = 100  # gap in pixels between merged input/output blocks
-    background: str = (
-        "yellow"  # outer padding background colour; empty = use theme background
-    )
-    border_radius: int = 0  # corner radius in pixels (0 = square corners)
+    separator: int = 0  # gap in pixels between merged input/output blocks
+    background: str = ""  # outer padding background colour; empty = use theme background
+    border_radius: int = 14  # corner radius in pixels (0 = square corners)
 
 
 @dataclass
@@ -38,7 +36,7 @@ class LatexConfig:
 @dataclass
 class Config:
     image_width: int = 1920  # default canvas width for all rendered images
-    border_radius: int = 0  # corner radius in pixels for all rendered images
+    border_radius: int = 14  # corner radius in pixels for all rendered images
     code: CodeConfig = field(default_factory=CodeConfig)
     latex: LatexConfig = field(default_factory=LatexConfig)
 
@@ -97,7 +95,7 @@ def apply_platform_defaults(config: Config, platform: str) -> Config:
                 image_width=1200,
                 padding_x=30,
                 padding_y=30,
-                separator=30,
+                separator=0,
                 background=config.code.background,
                 border_radius=config.code.border_radius,
             ),
