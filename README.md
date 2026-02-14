@@ -1,18 +1,18 @@
 # nb2wb
 
-**Write in Jupyter Notebooks. Publish on Substack.**
+**Write in Jupyter Notebooks. Publish anywhere.**
 
-`nb2wb` (short for *notebook to web*) converts a Jupyter Notebook into a self-contained HTML file you can
-paste directly into a Substack draft — with LaTeX, code, and outputs all
+`nb2wb` (short for *notebook to web*) converts Jupyter Notebooks into self-contained HTML files you can
+paste directly into publishing platforms like **Substack** and **X Articles** — with LaTeX, code, and outputs all
 rendered faithfully.
 
 ---
 
 ## Why
 
-Substack's editor strips MathJax and code-block formatting. `nb2wb` sidesteps
-this by turning the parts Substack can't handle into **images**, and converting
-simple inline math into **Unicode text** that pastes cleanly as prose.
+Most web publishing platforms strip MathJax and code-block formatting. `nb2wb` sidesteps
+this by turning complex content into **images**, and converting simple inline math into
+**Unicode text** that pastes cleanly as prose.
 
 | Notebook element | nb2wb output |
 |---|---|
@@ -46,14 +46,24 @@ pip install -e ".[examples]"
 ## Usage
 
 ```bash
-nb2wb notebook.ipynb                         # → notebook.html
+nb2wb notebook.ipynb                         # → notebook.html (Substack by default)
+nb2wb notebook.ipynb -t x                    # → X Articles format
 nb2wb notebook.ipynb -c config.yaml          # with custom config
 nb2wb notebook.ipynb -o out.html             # explicit output path
 nb2wb notebook.ipynb --open                  # open in browser when done
 ```
 
 Then open the HTML file in your browser, click **Copy to clipboard**, and
-paste into your Substack draft.
+paste into your platform's draft editor.
+
+### Supported platforms
+
+| Platform | Flag | How it works |
+|---|---|---|
+| **Substack** | `-t substack` (default) | Copy HTML and paste directly into Substack editor |
+| **X Articles** | `-t x` | Interactive HTML with "Copy image" buttons — click each button to copy images to clipboard, then paste into X editor |
+
+**Note for X Articles:** X's editor doesn't support embedded images, so nb2wb generates an interactive HTML page. Click the "Copy image" button for each image, paste it into your X draft at the right position, then copy-paste the text content around the images.
 
 ---
 
