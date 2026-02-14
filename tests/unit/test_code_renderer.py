@@ -180,8 +180,8 @@ class TestRenderOutputText:
         # The output image should be wider due to the label margin
         assert output_img.width > plain_img.width
 
-    def test_render_code_has_footer(self, minimal_config, mock_font_available):
-        """Code cells have a Jupyter-style footer bar."""
+    def test_render_code_has_footer_standalone(self, minimal_config, mock_font_available):
+        """Standalone code cells (apply_padding=True) include footer bar."""
         config = minimal_config.code
         config.line_numbers = False
         source = "x = 1"
@@ -196,34 +196,50 @@ class TestRenderOutputText:
                           min_width=config.image_width)
         base_img = Image.open(io.BytesIO(base_png))
 
-        # Render with footer
-        code_png = render_code(source, "python", config, apply_padding=False)
+        # Render standalone (has footer)
+        code_png = render_code(source, "python", config, apply_padding=True)
         code_img = Image.open(io.BytesIO(code_png))
 
-        # Code image should be taller (footer adds height)
+        # Standalone image is taller (footer + border + padding)
         assert code_img.height > base_img.height
 
-    def test_render_code_footer_shows_language(self, minimal_config, mock_font_available):
-        """Footer bar includes the language name."""
+    def test_render_code_no_footer_without_padding(self, minimal_config, mock_font_available):
+        """Stacking mode (apply_padding=False) omits footer (drawn by vstack)."""
         config = minimal_config.code
         config.line_numbers = False
         source = "x = 1"
-        png_bytes = render_code(source, "python", config, apply_padding=False)
 
-        img = Image.open(io.BytesIO(png_bytes))
-        # Footer region is at the bottom — its background should differ
-        # from the main code background (footer bg is shifted darker)
-        code_bg = img.getpixel((img.width // 2, _PAD))
-        footer_bg = img.getpixel((img.width // 2, img.height - 2))
-        assert code_bg != footer_bg, "footer should have different background"
+        from nb2wb.renderers.code_renderer import _paint, _tokenize
+        from pygments.styles import get_style_by_name as _gsbn
+        style = _gsbn(config.theme)
+        font = _load_font(config.font_size)
+        lines = _tokenize(source, "python", style)
+        base_png = _paint(lines, font, style, show_line_numbers=False,
+                          min_width=config.image_width)
+        base_img = Image.open(io.BytesIO(base_png))
 
-    def test_render_code_with_execution_count(self, minimal_config, mock_font_available):
-        """execution_count is accepted without error."""
+        code_png = render_code(source, "python", config, apply_padding=False)
+        code_img = Image.open(io.BytesIO(code_png))
+
+        # Without padding the image should match the raw paint output
+        assert code_img.height == base_img.height
+
+    def test_vstack_draws_footer(self, minimal_config, mock_font_available):
+        """vstack_and_pad draws the footer when code_footer params are given."""
         config = minimal_config.code
-        png = render_code("x = 1", "python", config, apply_padding=False,
-                          execution_count=42)
-        img = Image.open(io.BytesIO(png))
-        assert img.format == "PNG"
+        config.line_numbers = False
+        source = "x = 1"
+
+        code_png = render_code(source, "python", config, apply_padding=False)
+        base_img = Image.open(io.BytesIO(code_png))
+
+        result = vstack_and_pad([code_png], config,
+                                code_footer_left="[1]",
+                                code_footer_right="Python")
+        result_img = Image.open(io.BytesIO(result))
+
+        # After adding footer + padding the image should be taller
+        assert result_img.height > base_img.height
 
     def test_render_code_has_border_with_padding(self, minimal_config, mock_font_available):
         """Code cells have a thin border when rendered standalone (apply_padding=True)."""
@@ -766,6 +782,38 @@ class TestVStackCodeBorder:
         interior_right = combined.getpixel((combined.width - 2, 1))
         assert interior_left == interior_right, \
             "code background should be uniform across extended width"
+
+    def test_footer_extends_to_full_width(self, minimal_config, mock_font_available):
+        """Footer bar extends to the full combined width when code is narrower."""
+        config = minimal_config.code
+        config.theme = "monokai"
+        config.line_numbers = False
+        config.image_width = 200
+        config.padding_x = 0
+        config.padding_y = 0
+
+        code_png = render_code("x = 1", "python", config, apply_padding=False)
+        wide_output = "result: " + " ".join(["value"] * 30)
+        output_png = render_output_text(wide_output, config, apply_padding=False)
+
+        code_img = Image.open(io.BytesIO(code_png))
+        output_img = Image.open(io.BytesIO(output_png))
+        assert output_img.width > code_img.width, "precondition: output wider"
+
+        result = vstack_and_pad([code_png, output_png], config,
+                                draw_code_border=True,
+                                code_footer_left="[1]",
+                                code_footer_right="Python")
+        combined = Image.open(io.BytesIO(result))
+
+        # The footer is drawn after width normalisation, so its background
+        # must span the full combined width.  The code image without footer
+        # occupies the top rows; the footer sits just below that.
+        footer_y = code_img.height + 3  # a few pixels into the footer region
+        footer_left = combined.getpixel((1, footer_y))
+        footer_right = combined.getpixel((combined.width - 2, footer_y))
+        assert footer_left == footer_right, \
+            "footer background should extend to full combined width"
 
 
 class TestEdgeCases:

@@ -60,22 +60,19 @@ def render_code(source: str, language: str, config: CodeConfig, *,
     png = _paint(lines, font, style_cls, show_line_numbers=config.line_numbers,
                  min_width=config.image_width)
 
-    # Jupyter-style footer bar with execution count and language
-    ec_text = f"[{execution_count}]" if execution_count is not None else "[ ]"
-    lang_display = language.capitalize() if language else ""
-    png = _draw_footer(png, style_cls, config, left_text=ec_text,
-                       right_text=lang_display)
-
-    # Thin border around the code cell (input box).
-    # When apply_padding is False the image will be stacked with output
-    # images via vstack_and_pad, which normalises widths first and then
-    # draws the border so it spans the full combined width.
     if apply_padding:
+        # Standalone rendering: draw footer, border, and padding now.
+        ec_text = f"[{execution_count}]" if execution_count is not None else "[ ]"
+        lang_display = language.capitalize() if language else ""
+        png = _draw_footer(png, style_cls, config, left_text=ec_text,
+                           right_text=lang_display)
         png = _draw_border(png, style_cls)
-
-    if apply_padding and (config.padding_x or config.padding_y):
-        bg = config.background or style_cls.background_color
-        png = _outer_pad(png, config.padding_x, config.padding_y, bg)
+        if config.padding_x or config.padding_y:
+            bg = config.background or style_cls.background_color
+            png = _outer_pad(png, config.padding_x, config.padding_y, bg)
+    # When apply_padding is False the caller is expected to stack this image
+    # via vstack_and_pad which draws footer, border, and padding *after*
+    # normalising widths so that everything spans the full combined width.
     return png
 
 
@@ -99,35 +96,65 @@ def render_output_text(text: str, config: CodeConfig, *,
 
 
 def vstack_and_pad(png_list: list[bytes], config: CodeConfig, *,
-                   draw_code_border: bool = False) -> bytes:
+                   draw_code_border: bool = False,
+                   code_footer_left: str = "",
+                   code_footer_right: str = "") -> bytes:
     """Stack PNG images vertically with separator gaps, then apply outer padding once.
 
     When *draw_code_border* is True the first image in the stack is treated as
     a code cell and receives a thin border **after** all images have been
     normalised to the same width.  This ensures the border spans the full
     combined width even when a later output image is wider.
+
+    *code_footer_left* / *code_footer_right* are drawn as a Jupyter-style
+    footer bar on the code cell (first image) **after** width normalisation so
+    that the right-aligned text sits at the true right edge.
     """
     style_cls = get_style_by_name(config.theme)
     output_bg = _create_output_style(style_cls).background_color
     sep_color = config.background or output_bg
+    has_footer = bool(code_footer_left or code_footer_right)
+
     if len(png_list) == 1:
         png = png_list[0]
+        if has_footer:
+            png = _draw_footer(png, style_cls, config,
+                               left_text=code_footer_left,
+                               right_text=code_footer_right)
         if draw_code_border:
             png = _draw_border(png, style_cls)
     else:
         imgs = [Image.open(io.BytesIO(b)).convert("RGB") for b in png_list]
-        sep = config.separator
         w = max(img.width for img in imgs)
+
+        # Normalise widths ------------------------------------------------
+        for idx in range(len(imgs)):
+            if imgs[idx].width < w:
+                img = imgs[idx]
+                # Replicate the rightmost column so every horizontal
+                # band extends to the full width with the correct colour.
+                right_col = img.crop((img.width - 1, 0, img.width, img.height))
+                fill = right_col.resize((w - img.width, img.height), Image.NEAREST)
+                extended = Image.new("RGB", (w, img.height))
+                extended.paste(img, (0, 0))
+                extended.paste(fill, (img.width, 0))
+                imgs[idx] = extended
+
+        # Draw footer on code image at the normalised width ---------------
+        if has_footer:
+            buf = io.BytesIO()
+            imgs[0].save(buf, format="PNG")
+            footer_png = _draw_footer(buf.getvalue(), style_cls, config,
+                                      left_text=code_footer_left,
+                                      right_text=code_footer_right)
+            imgs[0] = Image.open(io.BytesIO(footer_png)).convert("RGB")
+
+        # Combine ----------------------------------------------------------
+        sep = config.separator
         h = sum(img.height for img in imgs) + sep * (len(imgs) - 1)
         combined = Image.new("RGB", (w, h), _hex_to_rgb(sep_color))
         y = 0
         for i, img in enumerate(imgs):
-            if img.width < w:
-                # Extend to full width using the image's own background
-                bg_color = img.getpixel((img.width - 1, 0))
-                extended = Image.new("RGB", (w, img.height), bg_color)
-                extended.paste(img, (0, 0))
-                img = extended
             combined.paste(img, (0, y))
             y += img.height
             if i < len(imgs) - 1:

@@ -161,13 +161,17 @@ class Converter:
         png_parts: list[bytes] = []
         rich_parts: list[str] = []
         has_code = False
+        footer_left = ""
+        footer_right = ""
 
         if cell.source.strip() and "hide-input" not in tags:
             has_code = True
+            ec = cell.get("execution_count")
+            footer_left = f"[{ec}]" if ec is not None else "[ ]"
+            footer_right = self._lang.capitalize() if self._lang else ""
             png_parts.append(
                 render_code(cell.source, self._lang, self.config.code,
-                            apply_padding=False,
-                            execution_count=cell.get("execution_count"))
+                            apply_padding=False)
             )
 
         if "hide-output" not in tags:
@@ -186,7 +190,9 @@ class Converter:
         parts: list[str] = []
         if png_parts:
             merged = vstack_and_pad(png_parts, self.config.code,
-                                    draw_code_border=has_code)
+                                    draw_code_border=has_code,
+                                    code_footer_left=footer_left,
+                                    code_footer_right=footer_right)
             parts.append(f'<img class="code-img" src="{_png_uri(merged)}" alt="code">\n')
         parts.extend(rich_parts)
 
