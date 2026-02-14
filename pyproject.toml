@@ -26,9 +26,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-examples = [
-    "numpy>=1.23",       # used in the example notebooks
-]
 dev = ["pytest>=7.0", "black", "isort"]
 
 [project.scripts]
