@@ -76,3 +76,42 @@ def load_config(path: Optional[Path]) -> Config:
         code=CodeConfig(**code_fields),
         latex=LatexConfig(**latex_fields),
     )
+
+
+def apply_platform_defaults(config: Config, platform: str) -> Config:
+    """
+    Apply platform-specific default adjustments to config.
+
+    Returns a new Config with platform-optimized settings.
+    """
+    if platform == "x":
+        # X Articles: much smaller images and fonts for 680px mobile-first content width
+        return Config(
+            image_width=480,
+            border_radius=config.border_radius,
+            code=CodeConfig(
+                font_size=16,
+                theme=config.code.theme,
+                line_numbers=config.code.line_numbers,
+                font=config.code.font,
+                image_width=480,
+                padding_x=30,
+                padding_y=30,
+                separator=30,
+                background=config.code.background,
+                border_radius=config.code.border_radius,
+            ),
+            latex=LatexConfig(
+                font_size=16,
+                dpi=config.latex.dpi,
+                color=config.latex.color,
+                background=config.latex.background,
+                padding=20,
+                image_width=480,
+                try_usetex=config.latex.try_usetex,
+                preamble=config.latex.preamble,
+                border_radius=config.latex.border_radius,
+            ),
+        )
+    # Default: return config unchanged (for Substack and others)
+    return config

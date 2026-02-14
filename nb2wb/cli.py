@@ -4,7 +4,7 @@ import webbrowser
 from pathlib import Path
 
 from .converter import Converter
-from .config import load_config
+from .config import load_config, apply_platform_defaults
 from .platforms import get_builder, list_platforms
 
 
@@ -46,6 +46,7 @@ def main() -> None:
         sys.exit(1)
 
     config = load_config(args.config)
+    config = apply_platform_defaults(config, args.target)
     builder = get_builder(args.target)
     output_path = args.output or args.notebook.with_suffix(".html")
 

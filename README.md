@@ -58,10 +58,12 @@ paste into your platform's draft editor.
 
 ### Supported platforms
 
-| Platform | Flag | Optimized for |
+| Platform | Flag | How it works |
 |---|---|---|
-| **Substack** | `-t substack` (default) | Substack newsletter editor |
-| **X Articles** | `-t x` | X (Twitter) long-form articles |
+| **Substack** | `-t substack` (default) | Copy HTML and paste directly into Substack editor |
+| **X Articles** | `-t x` | Interactive HTML with "Copy image" buttons — click each button to copy images to clipboard, then paste into X editor |
+
+**Note for X Articles:** X's editor doesn't support embedded images, so nb2wb generates an interactive HTML page. Click the "Copy image" button for each image, paste it into your X draft at the right position, then copy-paste the text content around the images.
 
 ---
 
