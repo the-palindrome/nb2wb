@@ -32,6 +32,26 @@
       font-size: 18px;
       font-weight: 700;
     }
+    #toolbar button {
+      background: #fff;
+      color: #1d9bf0;
+      border: none;
+      padding: 10px 20px;
+      font-size: 15px;
+      font-weight: 700;
+      border-radius: 20px;
+      cursor: pointer;
+      transition: background 0.2s;
+      margin: 8px 0;
+      font-family: inherit;
+    }
+    #toolbar button:hover {
+      background: #e8f5fe;
+    }
+    #toolbar button.copied {
+      background: #00ba7c;
+      color: #fff;
+    }
     #toolbar p {
       margin: 4px 0;
       font-size: 14px;
@@ -184,10 +204,11 @@
 <body>
   <div id="toolbar">
     <h2>📋 How to copy to X Articles</h2>
+    <button id="copy-text-btn" onclick="copyArticleText()">📄 Copy article text</button>
     <ol>
+      <li><strong>Click "Copy article text" above</strong> to copy all text content</li>
       <li><strong>Click each "Copy image" button below</strong> (they'll turn green)</li>
-      <li><strong>Paste into your X Article draft</strong> at the corresponding position</li>
-      <li><strong>Copy the text content</strong> (Ctrl+C / Cmd+C the text portions) and paste around the images</li>
+      <li><strong>Paste into your X Article draft</strong> interleaving text and images</li>
     </ol>
     <p style="margin-top: 12px; font-size: 13px; opacity: 0.85;">
       💡 <strong>Tip:</strong> X's editor will automatically upload images when you paste them from clipboard.
@@ -419,6 +440,47 @@ Tags are set via <strong>Edit → Cell Metadata</strong> (or the cell toolbar) i
         button.textContent = '❌ Copy failed (try right-click → Copy image)';
         setTimeout(() => {
           button.textContent = '📋 Copy this image';
+        }, 3000);
+      }
+    }
+
+    // Copy article text (without images) to clipboard
+    async function copyArticleText() {
+      const button = document.getElementById('copy-text-btn');
+      try {
+        // Clone the content div
+        const content = document.getElementById('content').cloneNode(true);
+
+        // Remove all image containers
+        const imageContainers = content.querySelectorAll('.image-container');
+        imageContainers.forEach(container => {
+          // Replace with a placeholder marker
+          const marker = document.createElement('p');
+          const imageNum = container.querySelector('.image-number').textContent;
+          marker.textContent = `[${imageNum} - insert here]`;
+          marker.style.color = '#1d9bf0';
+          marker.style.fontWeight = 'bold';
+          container.replaceWith(marker);
+        });
+
+        // Copy the modified HTML to clipboard
+        const html = content.innerHTML;
+        const blob = new Blob([html], { type: 'text/html' });
+        const item = new ClipboardItem({ 'text/html': blob });
+        await navigator.clipboard.write([item]);
+
+        // Update button state
+        button.textContent = '✓ Text copied!';
+        button.classList.add('copied');
+        setTimeout(() => {
+          button.textContent = '📄 Copy article text';
+          button.classList.remove('copied');
+        }, 3000);
+      } catch (err) {
+        console.error('Failed to copy text:', err);
+        button.textContent = '❌ Copy failed';
+        setTimeout(() => {
+          button.textContent = '📄 Copy article text';
         }, 3000);
       }
     }
