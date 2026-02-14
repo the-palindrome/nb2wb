@@ -324,34 +324,38 @@ def mock_latex_unavailable(monkeypatch):
 
 @pytest.fixture
 def mock_font_available(monkeypatch):
-    """Mock system font being available - returns default font."""
+    """Mock system font being available - returns mock font."""
     from PIL import ImageFont
+
+    class MockFont:
+        """Mock font object with minimal required interface."""
+        def __init__(self, size=12):
+            self.size = size
+            self.font = self  # Self-reference for compatibility
+
+        def getbbox(self, text, *args, **kwargs):
+            """Return bounding box for text."""
+            # Simple approximation: 10px width per char, height = size
+            width = len(text) * 10
+            return (0, 0, width, self.size)
+
+        def getmask(self, text, *args, **kwargs):
+            """Return mask for text rendering."""
+            # Return a simple mock image core
+            from PIL import Image
+            width = len(text) * 10
+            img = Image.new('L', (width, self.size), 255)
+            return img.im  # Return the underlying C image object
+
+        def getmask2(self, text, *args, **kwargs):
+            """Return mask and offset for text rendering."""
+            return self.getmask(text), (0, 0)
 
     def mock_truetype(path, size, *args, **kwargs):
-        """Mock ImageFont.truetype to return default font."""
-        return ImageFont.load_default()
+        """Mock ImageFont.truetype to return mock font."""
+        return MockFont(size)
 
     monkeypatch.setattr(ImageFont, "truetype", mock_truetype)
-
-
-@pytest.fixture
-def mock_font_unavailable(monkeypatch):
-    """Mock system font being unavailable."""
-    from PIL import ImageFont
-
-    def mock_truetype(path, size):
-        """Mock ImageFont.truetype to raise OSError."""
-        raise OSError(f"Font not found: {path}")
-
-    # Still need to return default font on failure
-    original_truetype = ImageFont.truetype
-    def mock_truetype_with_fallback(path, size):
-        try:
-            return original_truetype(path, size)
-        except:
-            return ImageFont.load_default()
-
-    monkeypatch.setattr(ImageFont, "truetype", mock_truetype_with_fallback)
 
 
 # ==============================================================================

@@ -505,10 +505,6 @@ class TestEdgeCases:
         for theme in ["default", "monokai", "github-dark"]:
             config = minimal_config.code
             config.theme = theme
-            try:
-                png_bytes = render_code(source, "python", config)
-                img = Image.open(io.BytesIO(png_bytes))
-                assert img.format == "PNG"
-            except:
-                # Some themes might not be available
-                pass
+            png_bytes = render_code(source, "python", config)
+            img = Image.open(io.BytesIO(png_bytes))
+            assert img.format == "PNG"

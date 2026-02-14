@@ -107,6 +107,8 @@ class TestMarkdownCellProcessing:
         # Code block should be preserved
         assert "```" not in html  # Converted to HTML
         assert "<code>" in html or "<pre>" in html
+        # Dollar sign content inside code block must be preserved literally
+        assert "$1" in html
 
     def test_multiple_markdown_cells(self, minimal_config, tmp_path):
         """Multiple markdown cells processed in order."""

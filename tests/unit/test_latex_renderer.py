@@ -310,46 +310,38 @@ class TestRenderLatexBlock:
         assert result.startswith("data:image/png;base64,")
 
 
-@pytest.mark.latex
 class TestUseTexRendering:
-    """Tests requiring LaTeX installation (marked with @pytest.mark.latex)."""
+    """Tests for the usetex rendering path (LaTeX is mocked)."""
 
     def test_render_usetex_simple(self, minimal_config, mock_latex_available):
         """Render with full LaTeX pipeline (mocked)."""
-        minimal_config.try_usetex = True
+        minimal_config.latex.try_usetex = True
         latex = "E = mc^2"
-        result = render_latex_block(latex, minimal_config)
+        result = render_latex_block(latex, minimal_config.latex)
         assert result.startswith("data:image/png;base64,")
 
     def test_render_usetex_with_color(self, minimal_config, mock_latex_available):
         """Render with custom colors using usetex (mocked)."""
-        config = LatexConfig(
-            font_size=24,
-            dpi=72,
-            color="red",
-            background="black",
-            padding=10,
-            image_width=800,
-            try_usetex=True,
-        )
-        latex = r"\color{blue} x = 1"
-        result = render_latex_block(latex, config)
+        minimal_config.latex.try_usetex = True
+        minimal_config.latex.color = "red"
+        latex = r"x = 1"
+        result = render_latex_block(latex, minimal_config.latex)
         assert result.startswith("data:image/png;base64,")
 
     def test_render_usetex_with_preamble(self, minimal_config, mock_latex_available):
         """Render with custom preamble using usetex (mocked)."""
-        minimal_config.try_usetex = True
-        latex = r"\customcolor x = 1"
+        minimal_config.latex.try_usetex = True
+        latex = r"x = 1"
         preamble = r"\definecolor{customcolor}{RGB}{100,200,50}"
-        result = render_latex_block(latex, minimal_config, preamble=preamble)
+        result = render_latex_block(latex, minimal_config.latex, preamble=preamble)
         assert result.startswith("data:image/png;base64,")
 
     def test_render_usetex_fallback_on_error(self, minimal_config, mock_latex_unavailable):
         """Falls back to mathtext when LaTeX unavailable."""
-        minimal_config.try_usetex = True
+        minimal_config.latex.try_usetex = True
         latex = "x = 1"
         # Should fall back to mathtext when LaTeX fails
-        result = render_latex_block(latex, minimal_config)
+        result = render_latex_block(latex, minimal_config.latex)
         assert result.startswith("data:image/png;base64,")
 
 
@@ -357,28 +349,22 @@ class TestEdgeCases:
     """Test edge cases and error handling."""
 
     def test_empty_latex(self, minimal_config):
-        """Empty LaTeX string handled."""
+        """Empty LaTeX string raises ValueError."""
         minimal_config.latex.try_usetex = False
-        result = render_latex_block("", minimal_config.latex)
-        assert result.startswith("data:image/png;base64,")
+        with pytest.raises(ValueError):
+            render_latex_block("", minimal_config.latex)
 
     def test_whitespace_only(self, minimal_config):
-        """Whitespace-only LaTeX handled."""
+        """Whitespace-only LaTeX raises ValueError."""
         minimal_config.latex.try_usetex = False
-        result = render_latex_block("   ", minimal_config.latex)
-        assert result.startswith("data:image/png;base64,")
+        with pytest.raises(ValueError):
+            render_latex_block("   ", minimal_config.latex)
 
     def test_invalid_latex(self, minimal_config):
-        """Invalid LaTeX handled gracefully."""
+        """Invalid LaTeX raises ValueError."""
         minimal_config.latex.try_usetex = False
-        # mathtext should handle this or fail gracefully
-        try:
-            result = render_latex_block(r"\invalid{command}", minimal_config.latex)
-            # If it succeeds, it should return valid data URI
-            assert result.startswith("data:image/png;base64,")
-        except:
-            # Or it might raise an exception, which is also acceptable
-            pass
+        with pytest.raises(ValueError):
+            render_latex_block(r"\invalid{command}", minimal_config.latex)
 
     def test_very_long_expression(self, minimal_config):
         """Very long expression handled."""
