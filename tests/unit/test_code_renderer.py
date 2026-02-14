@@ -225,18 +225,33 @@ class TestRenderOutputText:
         img = Image.open(io.BytesIO(png))
         assert img.format == "PNG"
 
-    def test_render_code_has_border(self, minimal_config, mock_font_available):
-        """Code cells have a thin border around the input box."""
+    def test_render_code_has_border_with_padding(self, minimal_config, mock_font_available):
+        """Code cells have a thin border when rendered standalone (apply_padding=True)."""
+        config = minimal_config.code
+        config.theme = "monokai"
+        config.padding_x = 10
+        config.padding_y = 10
+        source = "x = 1"
+        png_bytes = render_code(source, "python", config, apply_padding=True)
+        img = Image.open(io.BytesIO(png_bytes))
+
+        # Border sits at (padding_x, padding_y); interior is deeper inside
+        border_pixel = img.getpixel((config.padding_x, config.padding_y))
+        interior_pixel = img.getpixel((img.width // 2, config.padding_y + _PAD))
+        assert border_pixel != interior_pixel, "border should differ from interior"
+
+    def test_render_code_no_border_without_padding(self, minimal_config, mock_font_available):
+        """Code cells have no border when apply_padding=False (deferred to vstack)."""
         config = minimal_config.code
         config.theme = "monokai"
         source = "x = 1"
         png_bytes = render_code(source, "python", config, apply_padding=False)
         img = Image.open(io.BytesIO(png_bytes))
 
-        # The border pixels at the edges should differ from interior bg
-        interior_pixel = img.getpixel((img.width // 2, _PAD))
+        # Without padding the edge and one pixel inward should share the bg
         edge_pixel = img.getpixel((0, 0))
-        assert edge_pixel != interior_pixel, "border should differ from interior"
+        near_edge = img.getpixel((1, 0))
+        assert edge_pixel == near_edge, "no border when apply_padding=False"
 
     def test_output_has_no_border(self, minimal_config, mock_font_available):
         """Output cells have no border — edge matches interior bg."""
@@ -663,6 +678,94 @@ class TestVStackWidthConsistency:
                 strip = [combined.getpixel((x, sample_y)) for x in range(expected_w)]
                 assert strip[0] == strip[-1], f"image {i}: edges should match"
             y += img.height + (config.separator if i < len(imgs) - 1 else 0)
+
+
+class TestVStackCodeBorder:
+    """Verify that vstack_and_pad draws borders after width normalisation."""
+
+    def test_single_code_image_gets_border(self, minimal_config, mock_font_available):
+        """Single code image receives border via draw_code_border."""
+        config = minimal_config.code
+        config.theme = "monokai"
+        code_png = render_code("x = 1", "python", config, apply_padding=False)
+
+        result = vstack_and_pad([code_png], config, draw_code_border=True)
+        img = Image.open(io.BytesIO(result))
+
+        # After padding the border sits at (padding_x, padding_y)
+        border_pixel = img.getpixel((config.padding_x, config.padding_y))
+        interior_pixel = img.getpixel((img.width // 2, config.padding_y + _PAD))
+        assert border_pixel != interior_pixel, "border should differ from interior"
+
+    def test_border_spans_full_width_when_output_wider(self, minimal_config, mock_font_available):
+        """When output is wider than code, the border extends to the full width."""
+        config = minimal_config.code
+        config.theme = "monokai"
+        config.line_numbers = False
+        config.image_width = 200
+        config.padding_x = 0
+        config.padding_y = 0
+
+        code_png = render_code("x = 1", "python", config, apply_padding=False)
+        wide_output = "result: " + " ".join(["value"] * 30)
+        output_png = render_output_text(wide_output, config, apply_padding=False)
+
+        code_img = Image.open(io.BytesIO(code_png))
+        output_img = Image.open(io.BytesIO(output_png))
+        assert output_img.width > code_img.width, "precondition: output wider"
+
+        result = vstack_and_pad([code_png, output_png], config,
+                                draw_code_border=True)
+        combined = Image.open(io.BytesIO(result))
+
+        # Border top-left corner should equal top-right corner (border at full width)
+        top_left = combined.getpixel((0, 0))
+        top_right = combined.getpixel((combined.width - 1, 0))
+        assert top_left == top_right, "border should span full combined width"
+
+    def test_no_border_without_flag(self, minimal_config, mock_font_available):
+        """Without draw_code_border the code region has no border."""
+        config = minimal_config.code
+        config.theme = "monokai"
+        config.padding_x = 0
+        config.padding_y = 0
+
+        code_png = render_code("x = 1", "python", config, apply_padding=False)
+        result = vstack_and_pad([code_png], config, draw_code_border=False)
+        img = Image.open(io.BytesIO(result))
+
+        # Edge and one pixel inward should share the same background colour
+        edge = img.getpixel((0, 0))
+        near = img.getpixel((1, 0))
+        assert edge == near, "no border expected without draw_code_border"
+
+    def test_code_background_fills_extended_region(self, minimal_config, mock_font_available):
+        """Extended code region is filled with code background, not border color."""
+        config = minimal_config.code
+        config.theme = "monokai"
+        config.line_numbers = False
+        config.image_width = 200
+        config.padding_x = 0
+        config.padding_y = 0
+
+        code_png = render_code("x = 1", "python", config, apply_padding=False)
+        wide_output = "result: " + " ".join(["value"] * 30)
+        output_png = render_output_text(wide_output, config, apply_padding=False)
+
+        code_img = Image.open(io.BytesIO(code_png))
+        output_img = Image.open(io.BytesIO(output_png))
+        assert output_img.width > code_img.width, "precondition: output wider"
+
+        result = vstack_and_pad([code_png, output_png], config,
+                                draw_code_border=True)
+        combined = Image.open(io.BytesIO(result))
+
+        # Interior of the code region (row 1, past border) should be uniform
+        # across the full width — original area and extended area
+        interior_left = combined.getpixel((1, 1))
+        interior_right = combined.getpixel((combined.width - 2, 1))
+        assert interior_left == interior_right, \
+            "code background should be uniform across extended width"
 
 
 class TestEdgeCases:

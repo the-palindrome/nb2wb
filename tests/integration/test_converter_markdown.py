@@ -110,6 +110,70 @@ class TestMarkdownCellProcessing:
         # Dollar sign content inside code block must be preserved literally
         assert "$1" in html
 
+    def test_inline_code_protected_from_latex(self, minimal_config, tmp_path):
+        """Dollar signs inside backtick code spans are not processed as LaTeX."""
+        nb = nbformat.v4.new_notebook()
+        nb.cells = [
+            nbformat.v4.new_markdown_cell(
+                "Show `$E = mc^2$` as code."
+            )
+        ]
+
+        notebook_path = tmp_path / "test.ipynb"
+        with open(notebook_path, "w") as f:
+            nbformat.write(nb, f)
+
+        converter = Converter(minimal_config)
+        html = converter.convert(notebook_path)
+
+        # The dollar-sign expression should appear literally inside <code>
+        assert "<code>$E = mc^2$</code>" in html
+        # No stray HTML-escaped <em> tags from inline LaTeX conversion
+        assert "&lt;em&gt;" not in html
+
+    def test_inline_code_with_double_backticks_protected(self, minimal_config, tmp_path):
+        """Double-backtick code spans also protected from LaTeX."""
+        nb = nbformat.v4.new_notebook()
+        nb.cells = [
+            nbformat.v4.new_markdown_cell(
+                "Use ``$\\alpha$`` in your text."
+            )
+        ]
+
+        notebook_path = tmp_path / "test.ipynb"
+        with open(notebook_path, "w") as f:
+            nbformat.write(nb, f)
+
+        converter = Converter(minimal_config)
+        html = converter.convert(notebook_path)
+
+        # The LaTeX inside double backticks should be literal
+        assert "<code>" in html
+        assert "$\\alpha$" in html or "$" in html
+        assert "&lt;em&gt;" not in html
+
+    def test_inline_code_and_inline_math_coexist(self, minimal_config, tmp_path):
+        """Inline code and inline math in the same cell both handled correctly."""
+        nb = nbformat.v4.new_notebook()
+        nb.cells = [
+            nbformat.v4.new_markdown_cell(
+                "Code `$x$` is literal, but $x$ is math."
+            )
+        ]
+
+        notebook_path = tmp_path / "test.ipynb"
+        with open(notebook_path, "w") as f:
+            nbformat.write(nb, f)
+
+        converter = Converter(minimal_config)
+        html = converter.convert(notebook_path)
+
+        # Backtick-protected $x$ should appear literally
+        assert "<code>$x$</code>" in html
+        # The bare $x$ should be converted (no raw dollar signs outside code)
+        # The converted x is wrapped in <em> by the inline math converter
+        assert "<em>" in html
+
     def test_multiple_markdown_cells(self, minimal_config, tmp_path):
         """Multiple markdown cells processed in order."""
         nb = nbformat.v4.new_notebook()

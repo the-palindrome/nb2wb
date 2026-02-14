@@ -66,8 +66,12 @@ def render_code(source: str, language: str, config: CodeConfig, *,
     png = _draw_footer(png, style_cls, config, left_text=ec_text,
                        right_text=lang_display)
 
-    # Thin border around the code cell (input box)
-    png = _draw_border(png, style_cls)
+    # Thin border around the code cell (input box).
+    # When apply_padding is False the image will be stacked with output
+    # images via vstack_and_pad, which normalises widths first and then
+    # draws the border so it spans the full combined width.
+    if apply_padding:
+        png = _draw_border(png, style_cls)
 
     if apply_padding and (config.padding_x or config.padding_y):
         bg = config.background or style_cls.background_color
@@ -94,13 +98,22 @@ def render_output_text(text: str, config: CodeConfig, *,
     return png
 
 
-def vstack_and_pad(png_list: list[bytes], config: CodeConfig) -> bytes:
-    """Stack PNG images vertically with separator gaps, then apply outer padding once."""
+def vstack_and_pad(png_list: list[bytes], config: CodeConfig, *,
+                   draw_code_border: bool = False) -> bytes:
+    """Stack PNG images vertically with separator gaps, then apply outer padding once.
+
+    When *draw_code_border* is True the first image in the stack is treated as
+    a code cell and receives a thin border **after** all images have been
+    normalised to the same width.  This ensures the border spans the full
+    combined width even when a later output image is wider.
+    """
     style_cls = get_style_by_name(config.theme)
     output_bg = _create_output_style(style_cls).background_color
     sep_color = config.background or output_bg
     if len(png_list) == 1:
         png = png_list[0]
+        if draw_code_border:
+            png = _draw_border(png, style_cls)
     else:
         imgs = [Image.open(io.BytesIO(b)).convert("RGB") for b in png_list]
         sep = config.separator
@@ -119,6 +132,17 @@ def vstack_and_pad(png_list: list[bytes], config: CodeConfig) -> bytes:
             y += img.height
             if i < len(imgs) - 1:
                 y += sep
+
+        # Draw border on the code cell region after width normalisation
+        if draw_code_border:
+            first_h = imgs[0].height
+            draw = ImageDraw.Draw(combined)
+            bg = _hex_to_rgb(style_cls.background_color)
+            brightness = sum(bg) / 3
+            border_color = _shift(bg, 40 if brightness < 128 else -40)
+            draw.rectangle([0, 0, w - 1, first_h - 1],
+                           outline=border_color, width=1)
+
         buf = io.BytesIO()
         combined.save(buf, format="PNG")
         png = buf.getvalue()

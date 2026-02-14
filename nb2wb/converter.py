@@ -109,15 +109,18 @@ class Converter:
     def _markdown_cell(self, cell) -> str:
         src = cell.source
 
-        # Protect fenced code blocks from all LaTeX processing by replacing
-        # them with NUL-delimited placeholders, then restoring before parsing.
+        # Protect fenced code blocks and inline code spans from all LaTeX
+        # processing by replacing them with NUL-delimited placeholders,
+        # then restoring before the Markdown parser sees the source.
         _stash: list[str] = []
 
         def _protect(m: re.Match) -> str:
             _stash.append(m.group(0))
-            return f"\x00CODEBLOCK{len(_stash) - 1}\x00"
+            return f"\x00PROTECTED{len(_stash) - 1}\x00"
 
         src = _FENCED_CODE_RE.sub(_protect, src)
+        # Inline code spans: `...`, ``...``, etc.
+        src = re.sub(r"(`+)(.+?)\1", _protect, src)
 
         # 0. Substitute \eqref{label} → (N) throughout
         def _eqref_sub(m: re.Match) -> str:
@@ -146,9 +149,9 @@ class Converter:
         # 2. Convert inline LaTeX to Unicode
         src = convert_inline_math(src)
 
-        # Restore fenced code blocks before the markdown parser sees the source
+        # Restore fenced code blocks and inline code spans before markdown parsing
         for i, block in enumerate(_stash):
-            src = src.replace(f"\x00CODEBLOCK{i}\x00", block)
+            src = src.replace(f"\x00PROTECTED{i}\x00", block)
 
         # 3. Markdown → HTML
         html = markdown.markdown(src, extensions=_MD_EXTENSIONS)
@@ -157,8 +160,10 @@ class Converter:
     def _code_cell(self, cell, tags: frozenset[str] = frozenset()) -> str:
         png_parts: list[bytes] = []
         rich_parts: list[str] = []
+        has_code = False
 
         if cell.source.strip() and "hide-input" not in tags:
+            has_code = True
             png_parts.append(
                 render_code(cell.source, self._lang, self.config.code,
                             apply_padding=False,
@@ -180,7 +185,8 @@ class Converter:
 
         parts: list[str] = []
         if png_parts:
-            merged = vstack_and_pad(png_parts, self.config.code)
+            merged = vstack_and_pad(png_parts, self.config.code,
+                                    draw_code_border=has_code)
             parts.append(f'<img class="code-img" src="{_png_uri(merged)}" alt="code">\n')
         parts.extend(rich_parts)
 
