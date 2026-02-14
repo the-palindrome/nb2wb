@@ -41,8 +41,9 @@ _FONT_CANDIDATES: dict[str, list[str]] = {
     ],
 }
 
-_PAD = 14       # outer padding in pixels
+_PAD = 24       # inner padding in pixels around text content
 _LINE_GAP = 4   # extra vertical space between lines
+_ACCENT_BAR_W = 4  # width of the left accent bar on output cells
 
 
 # ---------------------------------------------------------------------------
@@ -73,8 +74,12 @@ def render_output_text(text: str, config: CodeConfig, *,
     # Create a lighter version of the style for outputs
     output_style = _create_output_style(style_cls)
 
+    # Accent bar: use the gutter border color from the base theme for consistency
+    base_bg = _hex_to_rgb(style_cls.background_color)
+    accent_color = _shift(base_bg, 30 if sum(base_bg) / 3 < 128 else -30)
+
     png = _paint(lines, font, output_style, show_line_numbers=False,
-                 min_width=config.image_width)
+                 min_width=config.image_width, accent_bar_color=accent_color)
     if apply_padding and (config.padding_x or config.padding_y):
         bg = config.background or output_style.background_color
         png = _outer_pad(png, config.padding_x, config.padding_y, bg)
@@ -92,7 +97,9 @@ def vstack_and_pad(png_list: list[bytes], config: CodeConfig) -> bytes:
         sep = config.separator
         w = max(img.width for img in imgs)
         h = sum(img.height for img in imgs) + sep * (len(imgs) - 1)
-        combined = Image.new("RGB", (w, h), sep_color)
+        theme_bg_rgb = _hex_to_rgb(theme_bg)
+        combined = Image.new("RGB", (w, h), _hex_to_rgb(sep_color))
+        draw = ImageDraw.Draw(combined)
         y = 0
         for i, img in enumerate(imgs):
             if img.width < w:
@@ -102,7 +109,14 @@ def vstack_and_pad(png_list: list[bytes], config: CodeConfig) -> bytes:
                 extended.paste(img, (0, 0))
                 img = extended
             combined.paste(img, (0, y))
-            y += img.height + (sep if i < len(imgs) - 1 else 0)
+            y += img.height
+            if i < len(imgs) - 1 and sep >= 2:
+                # Draw a thin separator line between stacked images
+                line_y = y + sep // 2
+                brightness = sum(theme_bg_rgb) / 3
+                line_color = _shift(theme_bg_rgb, 30 if brightness < 128 else -30)
+                draw.line([(0, line_y), (w - 1, line_y)], fill=line_color, width=1)
+                y += sep
         buf = io.BytesIO()
         combined.save(buf, format="PNG")
         png = buf.getvalue()
@@ -151,12 +165,16 @@ def _paint(
     style_cls,
     show_line_numbers: bool,
     min_width: int = 0,
+    accent_bar_color: Optional[tuple[int, int, int]] = None,
 ) -> bytes:
     if not lines:
         lines = [[(200, 200, 200), ""]]
 
     lh = _line_height(font)
     bg = _hex_to_rgb(style_cls.background_color)
+
+    # Left-edge accent bar width
+    bar_w = _ACCENT_BAR_W if accent_bar_color else 0
 
     # Line-number column width
     ln_w = 0
@@ -170,27 +188,32 @@ def _paint(
         default=0,
     )
 
-    width = int(max_content_w) + ln_w + 2 * _PAD
+    width = int(max_content_w) + ln_w + bar_w + 2 * _PAD
     height = lh * len(lines) + 2 * _PAD
 
     img = Image.new("RGB", (max(width, 120, min_width), max(height, lh + _PAD)), color=bg)
     draw = ImageDraw.Draw(img)
 
+    # Left accent bar (for output cells)
+    if accent_bar_color and bar_w:
+        draw.rectangle([0, 0, bar_w - 1, img.height], fill=accent_bar_color)
+
     # Line-number gutter
     if show_line_numbers and ln_w:
         gutter_bg = _shift(bg, -18)
-        draw.rectangle([0, 0, ln_w, img.height], fill=gutter_bg)
-        draw.line([(ln_w, 0), (ln_w, img.height)], fill=_shift(bg, -30), width=1)
+        draw.rectangle([bar_w, 0, bar_w + ln_w, img.height], fill=gutter_bg)
+        draw.line([(bar_w + ln_w, 0), (bar_w + ln_w, img.height)],
+                  fill=_shift(bg, -30), width=1)
 
     for i, line in enumerate(lines):
         y = _PAD + i * lh
 
         if show_line_numbers:
             num_str = str(i + 1)
-            nx = ln_w - int(_text_w(num_str, font)) - 4
+            nx = bar_w + ln_w - int(_text_w(num_str, font)) - 4
             draw.text((max(nx, 2), y), num_str, font=font, fill=(110, 110, 110))
 
-        x = _PAD + ln_w
+        x = _PAD + ln_w + bar_w
         for color, text in line:
             if text:
                 draw.text((x, y), text, font=font, fill=color)

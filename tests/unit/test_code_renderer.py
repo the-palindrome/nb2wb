@@ -23,6 +23,8 @@ from nb2wb.renderers.code_renderer import (
     _create_output_style,
     _outer_pad,
     _round_corners,
+    _ACCENT_BAR_W,
+    _PAD,
 )
 from nb2wb.config import CodeConfig
 from pygments.styles import get_style_by_name
@@ -152,6 +154,47 @@ class TestRenderOutputText:
         assert img.format == "PNG"
         # No line numbers for output (verified by not crashing)
 
+    def test_render_output_has_accent_bar(self, minimal_config, mock_font_available):
+        """Output cells have a left accent bar."""
+        config = minimal_config.code
+        text = "some output"
+        png_bytes = render_output_text(text, config, apply_padding=False)
+
+        img = Image.open(io.BytesIO(png_bytes))
+        # The leftmost column (accent bar) should have a different colour
+        # from the main output background (sampled further right)
+        bar_pixel = img.getpixel((0, img.height // 2))
+        bg_pixel = img.getpixel((img.width - 1, img.height // 2))
+        assert bar_pixel != bg_pixel, "accent bar should differ from output background"
+
+    def test_render_output_accent_bar_width(self, minimal_config, mock_font_available):
+        """Accent bar is _ACCENT_BAR_W pixels wide."""
+        config = minimal_config.code
+        text = "output"
+        png_bytes = render_output_text(text, config, apply_padding=False)
+
+        img = Image.open(io.BytesIO(png_bytes))
+        mid_y = img.height // 2
+        bar_color = img.getpixel((0, mid_y))
+        # All pixels within the bar width should match
+        for x in range(_ACCENT_BAR_W):
+            assert img.getpixel((x, mid_y)) == bar_color
+        # Pixel just past the bar should be the background
+        assert img.getpixel((_ACCENT_BAR_W, mid_y)) != bar_color
+
+    def test_render_code_no_accent_bar(self, minimal_config, mock_font_available):
+        """Code cells (input) do NOT have an accent bar."""
+        config = minimal_config.code
+        config.line_numbers = False
+        source = "x = 1"
+        png_bytes = render_code(source, "python", config, apply_padding=False)
+
+        img = Image.open(io.BytesIO(png_bytes))
+        # Left edge and right edge should both be the theme background
+        left = img.getpixel((0, img.height // 2))
+        right = img.getpixel((img.width - 1, img.height // 2))
+        assert left == right, "code cell should have uniform background at edges"
+
 
 class TestVStackAndPad:
     """Test vertical image stacking."""
@@ -195,6 +238,32 @@ class TestVStackAndPad:
         result = vstack_and_pad([png1, png2], config)
         img = Image.open(io.BytesIO(result))
         assert img.format == "PNG"
+
+    def test_vstack_separator_line_drawn(self, minimal_config, mock_font_available):
+        """A thin separator line is drawn between stacked images."""
+        config = minimal_config.code
+        config.separator = 4  # enough room for a visible line
+        config.padding_x = 0
+        config.padding_y = 0
+
+        source1 = "x = 1"
+        source2 = "y = 2"
+        png1 = render_code(source1, "python", config, apply_padding=False)
+        png2 = render_code(source2, "python", config, apply_padding=False)
+
+        result = vstack_and_pad([png1, png2], config)
+        combined = Image.open(io.BytesIO(result))
+
+        img1 = Image.open(io.BytesIO(png1))
+        # The separator line should be at y = img1.height + sep//2
+        line_y = img1.height + config.separator // 2
+        mid_x = combined.width // 2
+        line_pixel = combined.getpixel((mid_x, line_y))
+
+        # The line should differ from the theme background
+        from pygments.styles import get_style_by_name as _gsbn
+        theme_bg = _hex_to_rgb(_gsbn(config.theme).background_color)
+        assert line_pixel != theme_bg, "separator line should be visible against bg"
 
     def test_vstack_with_border_radius(self, minimal_config, mock_font_available):
         """Border radius applied after stacking."""
