@@ -95,6 +95,12 @@ def vstack_and_pad(png_list: list[bytes], config: CodeConfig) -> bytes:
         combined = Image.new("RGB", (w, h), sep_color)
         y = 0
         for i, img in enumerate(imgs):
+            if img.width < w:
+                # Extend to full width using the image's own background
+                bg_color = img.getpixel((img.width - 1, 0))
+                extended = Image.new("RGB", (w, img.height), bg_color)
+                extended.paste(img, (0, 0))
+                img = extended
             combined.paste(img, (0, y))
             y += img.height + (sep if i < len(imgs) - 1 else 0)
         buf = io.BytesIO()

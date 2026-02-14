@@ -466,6 +466,105 @@ class TestImageProcessing:
         assert rounded.mode == "RGBA"
 
 
+class TestVStackWidthConsistency:
+    """Verify that stacked code and output cells share the same width."""
+
+    def test_code_and_output_same_width_at_min(self, minimal_config, mock_font_available):
+        """Code and output cells match width when both fit within min_width."""
+        config = minimal_config.code
+        config.line_numbers = True
+        code_png = render_code("x = 1", "python", config, apply_padding=False)
+        output_png = render_output_text("2", config, apply_padding=False)
+
+        result = vstack_and_pad([code_png, output_png], config)
+        img = Image.open(io.BytesIO(result))
+
+        # Extract individual sub-images from the stack to check uniformity
+        code_img = Image.open(io.BytesIO(code_png))
+        output_img = Image.open(io.BytesIO(output_png))
+
+        # The combined image width must be consistent throughout
+        assert img.width >= max(code_img.width, output_img.width)
+
+    def test_code_wider_than_output_extends_output(self, minimal_config, mock_font_available):
+        """When code cell exceeds min_width, output cell is extended to match."""
+        config = minimal_config.code
+        config.line_numbers = True
+        # Long line that pushes the code cell beyond image_width
+        wide_source = "x = " + " + ".join(["variable"] * 20)
+        code_png = render_code(wide_source, "python", config, apply_padding=False)
+        output_png = render_output_text("42", config, apply_padding=False)
+
+        code_img = Image.open(io.BytesIO(code_png))
+        output_img = Image.open(io.BytesIO(output_png))
+        assert code_img.width > output_img.width, "precondition: code must be wider"
+
+        result = vstack_and_pad([code_png, output_png], config)
+        combined = Image.open(io.BytesIO(result))
+
+        # Sample a horizontal line in the output region — every pixel should
+        # belong to the output background, not the separator/padding color.
+        output_y = code_img.height + config.separator + 2  # inside the output region
+        strip = [combined.getpixel((x, output_y)) for x in range(combined.width)]
+        # The rightmost pixel of the output region must match the output bg,
+        # not the separator colour.
+        right_edge = strip[-1]
+        left_edge = strip[0]
+        # Both edges should be the same colour (the output background)
+        assert right_edge == left_edge
+
+    def test_output_wider_than_code_extends_code(self, minimal_config, mock_font_available):
+        """When output cell exceeds min_width, code cell is extended to match."""
+        config = minimal_config.code
+        config.line_numbers = False
+        config.image_width = 200  # low min so content width dominates
+        code_png = render_code("x = 1", "python", config, apply_padding=False)
+        wide_output = "result: " + " ".join(["value"] * 30)
+        output_png = render_output_text(wide_output, config, apply_padding=False)
+
+        code_img = Image.open(io.BytesIO(code_png))
+        output_img = Image.open(io.BytesIO(output_png))
+        assert output_img.width > code_img.width, "precondition: output must be wider"
+
+        result = vstack_and_pad([code_png, output_png], config)
+        combined = Image.open(io.BytesIO(result))
+
+        # Sample a horizontal line in the code region
+        code_y = 2  # inside the code region
+        strip = [combined.getpixel((x, code_y)) for x in range(combined.width)]
+        right_edge = strip[-1]
+        left_edge = strip[0]
+        assert right_edge == left_edge
+
+    def test_multiple_outputs_all_same_width(self, minimal_config, mock_font_available):
+        """Three images of different natural widths all get the same final width."""
+        config = minimal_config.code
+        config.line_numbers = True
+        config.image_width = 200
+
+        wide_code = "x = " + " + ".join(["variable"] * 20)
+        code_png = render_code(wide_code, "python", config, apply_padding=False)
+        out1_png = render_output_text("short", config, apply_padding=False)
+        out2_png = render_output_text("a slightly longer output line here", config, apply_padding=False)
+
+        imgs = [Image.open(io.BytesIO(b)) for b in [code_png, out1_png, out2_png]]
+        widths = {img.width for img in imgs}
+        assert len(widths) > 1, "precondition: inputs should have different widths"
+
+        result = vstack_and_pad([code_png, out1_png, out2_png], config)
+        combined = Image.open(io.BytesIO(result))
+
+        # Walk through each sub-image region and verify full-width fill
+        expected_w = combined.width
+        y = 0
+        for i, img in enumerate(imgs):
+            sample_y = y + 2
+            if sample_y < combined.height:
+                strip = [combined.getpixel((x, sample_y)) for x in range(expected_w)]
+                assert strip[0] == strip[-1], f"image {i}: edges should match"
+            y += img.height + (config.separator if i < len(imgs) - 1 else 0)
+
+
 class TestEdgeCases:
     """Test edge cases and error handling."""
 
