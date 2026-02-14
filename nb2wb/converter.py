@@ -161,7 +161,8 @@ class Converter:
         if cell.source.strip() and "hide-input" not in tags:
             png_parts.append(
                 render_code(cell.source, self._lang, self.config.code,
-                            apply_padding=False)
+                            apply_padding=False,
+                            execution_count=cell.get("execution_count"))
             )
 
         if "hide-output" not in tags:

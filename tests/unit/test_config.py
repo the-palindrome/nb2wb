@@ -36,7 +36,7 @@ class TestConfigDefaults:
         assert code.image_width == 1920
         assert code.padding_x == 100
         assert code.padding_y == 100
-        assert code.separator == 2
+        assert code.separator == 0
         assert code.background == ""
         assert code.border_radius == 14
 
@@ -233,7 +233,7 @@ class TestPlatformDefaults:
         assert result.code.image_width == 1200
         assert result.code.padding_x == 30
         assert result.code.padding_y == 30
-        assert result.code.separator == 2
+        assert result.code.separator == 0
         # LaTeX config should be adjusted
         assert result.latex.font_size == 35
         assert result.latex.image_width == 1200

@@ -23,8 +23,10 @@ from nb2wb.renderers.code_renderer import (
     _create_output_style,
     _outer_pad,
     _round_corners,
-    _ACCENT_BAR_W,
+    _draw_footer,
+    _draw_border,
     _PAD,
+    _FOOTER_FONT_RATIO,
 )
 from nb2wb.config import CodeConfig
 from pygments.styles import get_style_by_name
@@ -154,46 +156,101 @@ class TestRenderOutputText:
         assert img.format == "PNG"
         # No line numbers for output (verified by not crashing)
 
-    def test_render_output_has_accent_bar(self, minimal_config, mock_font_available):
-        """Output cells have a left accent bar."""
+    def test_render_output_has_margin_label(self, minimal_config, mock_font_available):
+        """Output cells with '...' label are wider than without."""
         config = minimal_config.code
-        text = "some output"
-        png_bytes = render_output_text(text, config, apply_padding=False)
-
-        img = Image.open(io.BytesIO(png_bytes))
-        # The leftmost column (accent bar) should have a different colour
-        # from the main output background (sampled further right)
-        bar_pixel = img.getpixel((0, img.height // 2))
-        bg_pixel = img.getpixel((img.width - 1, img.height // 2))
-        assert bar_pixel != bg_pixel, "accent bar should differ from output background"
-
-    def test_render_output_accent_bar_width(self, minimal_config, mock_font_available):
-        """Accent bar is _ACCENT_BAR_W pixels wide."""
-        config = minimal_config.code
+        config.image_width = 1  # tiny min so content width dominates
         text = "output"
-        png_bytes = render_output_text(text, config, apply_padding=False)
 
-        img = Image.open(io.BytesIO(png_bytes))
-        mid_y = img.height // 2
-        bar_color = img.getpixel((0, mid_y))
-        # All pixels within the bar width should match
-        for x in range(_ACCENT_BAR_W):
-            assert img.getpixel((x, mid_y)) == bar_color
-        # Pixel just past the bar should be the background
-        assert img.getpixel((_ACCENT_BAR_W, mid_y)) != bar_color
+        # Render output (has "..." label → wider)
+        output_png = render_output_text(text, config, apply_padding=False)
+        output_img = Image.open(io.BytesIO(output_png))
 
-    def test_render_code_no_accent_bar(self, minimal_config, mock_font_available):
-        """Code cells (input) do NOT have an accent bar."""
+        # Render plain code with same text (no label → narrower)
+        from nb2wb.renderers.code_renderer import _paint, _tokenize, _create_output_style
+        from pygments.styles import get_style_by_name as _gsbn
+        style = _gsbn(config.theme)
+        font = _load_font(config.font_size)
+        out_style = _create_output_style(style)
+        lines = _tokenize(text, "text", style)
+        plain_png = _paint(lines, font, out_style, show_line_numbers=False,
+                           min_width=config.image_width)
+        plain_img = Image.open(io.BytesIO(plain_png))
+
+        # The output image should be wider due to the label margin
+        assert output_img.width > plain_img.width
+
+    def test_render_code_has_footer(self, minimal_config, mock_font_available):
+        """Code cells have a Jupyter-style footer bar."""
+        config = minimal_config.code
+        config.line_numbers = False
+        source = "x = 1"
+
+        # Render without footer for baseline height
+        from nb2wb.renderers.code_renderer import _paint, _tokenize
+        from pygments.styles import get_style_by_name as _gsbn
+        style = _gsbn(config.theme)
+        font = _load_font(config.font_size)
+        lines = _tokenize(source, "python", style)
+        base_png = _paint(lines, font, style, show_line_numbers=False,
+                          min_width=config.image_width)
+        base_img = Image.open(io.BytesIO(base_png))
+
+        # Render with footer
+        code_png = render_code(source, "python", config, apply_padding=False)
+        code_img = Image.open(io.BytesIO(code_png))
+
+        # Code image should be taller (footer adds height)
+        assert code_img.height > base_img.height
+
+    def test_render_code_footer_shows_language(self, minimal_config, mock_font_available):
+        """Footer bar includes the language name."""
         config = minimal_config.code
         config.line_numbers = False
         source = "x = 1"
         png_bytes = render_code(source, "python", config, apply_padding=False)
 
         img = Image.open(io.BytesIO(png_bytes))
-        # Left edge and right edge should both be the theme background
-        left = img.getpixel((0, img.height // 2))
-        right = img.getpixel((img.width - 1, img.height // 2))
-        assert left == right, "code cell should have uniform background at edges"
+        # Footer region is at the bottom — its background should differ
+        # from the main code background (footer bg is shifted darker)
+        code_bg = img.getpixel((img.width // 2, _PAD))
+        footer_bg = img.getpixel((img.width // 2, img.height - 2))
+        assert code_bg != footer_bg, "footer should have different background"
+
+    def test_render_code_with_execution_count(self, minimal_config, mock_font_available):
+        """execution_count is accepted without error."""
+        config = minimal_config.code
+        png = render_code("x = 1", "python", config, apply_padding=False,
+                          execution_count=42)
+        img = Image.open(io.BytesIO(png))
+        assert img.format == "PNG"
+
+    def test_render_code_has_border(self, minimal_config, mock_font_available):
+        """Code cells have a thin border around the input box."""
+        config = minimal_config.code
+        config.theme = "monokai"
+        source = "x = 1"
+        png_bytes = render_code(source, "python", config, apply_padding=False)
+        img = Image.open(io.BytesIO(png_bytes))
+
+        # The border pixels at the edges should differ from interior bg
+        interior_pixel = img.getpixel((img.width // 2, _PAD))
+        edge_pixel = img.getpixel((0, 0))
+        assert edge_pixel != interior_pixel, "border should differ from interior"
+
+    def test_output_has_no_border(self, minimal_config, mock_font_available):
+        """Output cells have no border — edge matches interior bg."""
+        config = minimal_config.code
+        config.theme = "monokai"
+        text = "some output"
+        png_bytes = render_output_text(text, config, apply_padding=False)
+        img = Image.open(io.BytesIO(png_bytes))
+
+        # For output, the top-left pixel should be the output bg (no border)
+        top_left = img.getpixel((0, 0))
+        # Sample interior bg at top-right area (away from label)
+        top_right = img.getpixel((img.width - 1, 0))
+        assert top_left == top_right, "output should have uniform bg at edges"
 
 
 class TestVStackAndPad:
@@ -238,32 +295,6 @@ class TestVStackAndPad:
         result = vstack_and_pad([png1, png2], config)
         img = Image.open(io.BytesIO(result))
         assert img.format == "PNG"
-
-    def test_vstack_separator_line_drawn(self, minimal_config, mock_font_available):
-        """A thin separator line is drawn between stacked images."""
-        config = minimal_config.code
-        config.separator = 4  # enough room for a visible line
-        config.padding_x = 0
-        config.padding_y = 0
-
-        source1 = "x = 1"
-        source2 = "y = 2"
-        png1 = render_code(source1, "python", config, apply_padding=False)
-        png2 = render_code(source2, "python", config, apply_padding=False)
-
-        result = vstack_and_pad([png1, png2], config)
-        combined = Image.open(io.BytesIO(result))
-
-        img1 = Image.open(io.BytesIO(png1))
-        # The separator line should be at y = img1.height + sep//2
-        line_y = img1.height + config.separator // 2
-        mid_x = combined.width // 2
-        line_pixel = combined.getpixel((mid_x, line_y))
-
-        # The line should differ from the theme background
-        from pygments.styles import get_style_by_name as _gsbn
-        theme_bg = _hex_to_rgb(_gsbn(config.theme).background_color)
-        assert line_pixel != theme_bg, "separator line should be visible against bg"
 
     def test_vstack_with_border_radius(self, minimal_config, mock_font_available):
         """Border radius applied after stacking."""

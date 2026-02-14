@@ -43,7 +43,7 @@ _FONT_CANDIDATES: dict[str, list[str]] = {
 
 _PAD = 24       # inner padding in pixels around text content
 _LINE_GAP = 4   # extra vertical space between lines
-_ACCENT_BAR_W = 4  # width of the left accent bar on output cells
+_FOOTER_FONT_RATIO = 0.58  # footer/label font size relative to main font
 
 
 # ---------------------------------------------------------------------------
@@ -51,13 +51,24 @@ _ACCENT_BAR_W = 4  # width of the left accent bar on output cells
 # ---------------------------------------------------------------------------
 
 def render_code(source: str, language: str, config: CodeConfig, *,
-                apply_padding: bool = True) -> bytes:
+                apply_padding: bool = True,
+                execution_count: Optional[int] = None) -> bytes:
     """Render *source* with syntax highlighting to PNG bytes."""
     font = _load_font(config.font_size)
     style_cls = get_style_by_name(config.theme)
     lines = _tokenize(source, language, style_cls)
     png = _paint(lines, font, style_cls, show_line_numbers=config.line_numbers,
                  min_width=config.image_width)
+
+    # Jupyter-style footer bar with execution count and language
+    ec_text = f"[{execution_count}]" if execution_count is not None else "[ ]"
+    lang_display = language.capitalize() if language else ""
+    png = _draw_footer(png, style_cls, config, left_text=ec_text,
+                       right_text=lang_display)
+
+    # Thin border around the code cell (input box)
+    png = _draw_border(png, style_cls)
+
     if apply_padding and (config.padding_x or config.padding_y):
         bg = config.background or style_cls.background_color
         png = _outer_pad(png, config.padding_x, config.padding_y, bg)
@@ -74,12 +85,9 @@ def render_output_text(text: str, config: CodeConfig, *,
     # Create a lighter version of the style for outputs
     output_style = _create_output_style(style_cls)
 
-    # Accent bar: use the gutter border color from the base theme for consistency
-    base_bg = _hex_to_rgb(style_cls.background_color)
-    accent_color = _shift(base_bg, 30 if sum(base_bg) / 3 < 128 else -30)
-
     png = _paint(lines, font, output_style, show_line_numbers=False,
-                 min_width=config.image_width, accent_bar_color=accent_color)
+                 min_width=config.image_width,
+                 left_margin_label="...")
     if apply_padding and (config.padding_x or config.padding_y):
         bg = config.background or output_style.background_color
         png = _outer_pad(png, config.padding_x, config.padding_y, bg)
@@ -97,9 +105,7 @@ def vstack_and_pad(png_list: list[bytes], config: CodeConfig) -> bytes:
         sep = config.separator
         w = max(img.width for img in imgs)
         h = sum(img.height for img in imgs) + sep * (len(imgs) - 1)
-        theme_bg_rgb = _hex_to_rgb(theme_bg)
         combined = Image.new("RGB", (w, h), _hex_to_rgb(sep_color))
-        draw = ImageDraw.Draw(combined)
         y = 0
         for i, img in enumerate(imgs):
             if img.width < w:
@@ -110,12 +116,7 @@ def vstack_and_pad(png_list: list[bytes], config: CodeConfig) -> bytes:
                 img = extended
             combined.paste(img, (0, y))
             y += img.height
-            if i < len(imgs) - 1 and sep >= 2:
-                # Draw a thin separator line between stacked images
-                line_y = y + sep // 2
-                brightness = sum(theme_bg_rgb) / 3
-                line_color = _shift(theme_bg_rgb, 30 if brightness < 128 else -30)
-                draw.line([(0, line_y), (w - 1, line_y)], fill=line_color, width=1)
+            if i < len(imgs) - 1:
                 y += sep
         buf = io.BytesIO()
         combined.save(buf, format="PNG")
@@ -159,13 +160,62 @@ def _outer_pad(png_bytes: bytes, padding_x: int, padding_y: int, background: str
     return out.getvalue()
 
 
+def _draw_footer(png_bytes: bytes, style_cls, config: CodeConfig, *,
+                 left_text: str, right_text: str) -> bytes:
+    """Append a Jupyter-style footer bar to a code cell image."""
+    img = Image.open(io.BytesIO(png_bytes)).convert("RGB")
+    bg = _hex_to_rgb(style_cls.background_color)
+    footer_bg = _shift(bg, -12)
+
+    footer_font = _load_font(max(int(config.font_size * _FOOTER_FONT_RATIO), 12))
+    footer_lh = _line_height(footer_font, gap=0)
+    footer_h = footer_lh + _PAD
+    line_color = _shift(bg, -25)
+    text_color = _shift(bg, 50 if sum(bg) / 3 < 128 else -50)
+
+    # New canvas: original image + 1px separator + footer
+    new_h = img.height + 1 + footer_h
+    canvas = Image.new("RGB", (img.width, new_h), footer_bg)
+    canvas.paste(img, (0, 0))
+    draw = ImageDraw.Draw(canvas)
+
+    # Separator line at bottom of code area
+    draw.line([(0, img.height), (img.width, img.height)],
+              fill=line_color, width=1)
+
+    # Footer text
+    text_y = img.height + 1 + (footer_h - footer_lh) // 2
+    draw.text((_PAD, text_y), left_text, font=footer_font, fill=text_color)
+    right_w = int(_text_w(right_text, footer_font))
+    draw.text((img.width - right_w - _PAD, text_y), right_text,
+              font=footer_font, fill=text_color)
+
+    buf = io.BytesIO()
+    canvas.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def _draw_border(png_bytes: bytes, style_cls) -> bytes:
+    """Draw a thin border rectangle around the code cell image."""
+    img = Image.open(io.BytesIO(png_bytes)).convert("RGB")
+    draw = ImageDraw.Draw(img)
+    bg = _hex_to_rgb(style_cls.background_color)
+    brightness = sum(bg) / 3
+    border_color = _shift(bg, 40 if brightness < 128 else -40)
+    draw.rectangle([0, 0, img.width - 1, img.height - 1],
+                   outline=border_color, width=1)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
+
+
 def _paint(
     lines: list[list[tuple[tuple[int, int, int], str]]],
     font: ImageFont.FreeTypeFont,
     style_cls,
     show_line_numbers: bool,
     min_width: int = 0,
-    accent_bar_color: Optional[tuple[int, int, int]] = None,
+    left_margin_label: Optional[str] = None,
 ) -> bytes:
     if not lines:
         lines = [[(200, 200, 200), ""]]
@@ -173,8 +223,13 @@ def _paint(
     lh = _line_height(font)
     bg = _hex_to_rgb(style_cls.background_color)
 
-    # Left-edge accent bar width
-    bar_w = _ACCENT_BAR_W if accent_bar_color else 0
+    # Left margin label (e.g., "..." for output cells)
+    label_w = 0
+    label_font = None
+    if left_margin_label:
+        label_font_size = max(int(getattr(font, "size", 24) * _FOOTER_FONT_RATIO), 12)
+        label_font = _load_font(label_font_size)
+        label_w = int(_text_w(left_margin_label, label_font)) + _PAD // 2
 
     # Line-number column width
     ln_w = 0
@@ -188,21 +243,26 @@ def _paint(
         default=0,
     )
 
-    width = int(max_content_w) + ln_w + bar_w + 2 * _PAD
+    width = int(max_content_w) + ln_w + label_w + 2 * _PAD
     height = lh * len(lines) + 2 * _PAD
 
     img = Image.new("RGB", (max(width, 120, min_width), max(height, lh + _PAD)), color=bg)
     draw = ImageDraw.Draw(img)
 
-    # Left accent bar (for output cells)
-    if accent_bar_color and bar_w:
-        draw.rectangle([0, 0, bar_w - 1, img.height], fill=accent_bar_color)
+    # Draw left margin label
+    if left_margin_label and label_font:
+        brightness = sum(bg) / 3
+        label_color = _shift(bg, 45 if brightness < 128 else -45)
+        label_lh = _line_height(label_font, gap=0)
+        label_y = _PAD + (lh - label_lh) // 2  # vertically aligned with first text line
+        draw.text((_PAD // 4, label_y), left_margin_label,
+                  font=label_font, fill=label_color)
 
     # Line-number gutter
     if show_line_numbers and ln_w:
         gutter_bg = _shift(bg, -18)
-        draw.rectangle([bar_w, 0, bar_w + ln_w, img.height], fill=gutter_bg)
-        draw.line([(bar_w + ln_w, 0), (bar_w + ln_w, img.height)],
+        draw.rectangle([label_w, 0, label_w + ln_w, img.height], fill=gutter_bg)
+        draw.line([(label_w + ln_w, 0), (label_w + ln_w, img.height)],
                   fill=_shift(bg, -30), width=1)
 
     for i, line in enumerate(lines):
@@ -210,10 +270,10 @@ def _paint(
 
         if show_line_numbers:
             num_str = str(i + 1)
-            nx = bar_w + ln_w - int(_text_w(num_str, font)) - 4
+            nx = label_w + ln_w - int(_text_w(num_str, font)) - 4
             draw.text((max(nx, 2), y), num_str, font=font, fill=(110, 110, 110))
 
-        x = _PAD + ln_w + bar_w
+        x = _PAD + ln_w + label_w
         for color, text in line:
             if text:
                 draw.text((x, y), text, font=font, fill=color)
