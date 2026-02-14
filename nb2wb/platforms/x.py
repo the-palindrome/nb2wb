@@ -24,21 +24,29 @@ _HEAD = """\
       font-size: 19px;
       line-height: 1.6;
       color: #0f1419;
-      max-width: 680px;
-      margin: 0 auto;
-      padding: 24px 16px 60px;
+      margin: 0;
+      padding: 0;
       background: #f7f9f9;
+      display: flex;
     }
-    #toolbar {
-      position: sticky;
+    #sidebar {
+      position: fixed;
+      left: 0;
       top: 0;
-      z-index: 100;
+      width: 340px;
+      height: 100vh;
       background: #1d9bf0;
       color: #fff;
-      padding: 16px 20px;
-      border-radius: 12px;
-      margin-bottom: 28px;
-      box-shadow: 0 2px 8px rgba(29, 155, 240, 0.3);
+      padding: 20px;
+      overflow-y: auto;
+      z-index: 100;
+      box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+    }
+    #main-container {
+      margin-left: 340px;
+      display: flex;
+      justify-content: center;
+      padding: 40px 40px 60px;
     }
     #toolbar h2 {
       margin: 0 0 8px 0;
@@ -81,6 +89,8 @@ _HEAD = """\
       margin: 4px 0;
     }
     #content {
+      width: 100%;
+      max-width: 680px;
       background: #fff;
       padding: 40px 48px;
       border-radius: 16px;
@@ -215,7 +225,7 @@ _HEAD = """\
   </style>
 </head>
 <body>
-  <div id="toolbar">
+  <div id="sidebar">
     <h2>📋 How to copy to X Articles</h2>
     <button id="copy-text-btn" onclick="copyArticleText()">📄 Copy article text</button>
     <ol>
@@ -227,14 +237,16 @@ _HEAD = """\
       💡 <strong>Tip:</strong> X's editor will automatically upload images when you paste them from clipboard.
     </p>
   </div>
-  <div id="content">
+  <div id="main-container">
+    <div id="content">
 """
 
 _TAIL = """\
   <div class="nb2wb-footer">
     Made with <a href="https://github.com/the-palindrome/nb2wb">nb2wb</a>
   </div>
-  </div><!-- #content -->
+    </div><!-- #content -->
+  </div><!-- #main-container -->
 
   <script>
     // Copy image to clipboard when button is clicked
