@@ -82,6 +82,9 @@ target/
 *_files/
 *.html
 
+# nb2wb --serve extracted images
+images/
+
 # IPython
 profile_default/
 ipython_config.py
