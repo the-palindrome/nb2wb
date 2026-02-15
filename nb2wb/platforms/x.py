@@ -20,7 +20,7 @@ _HEAD = """\
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>nb2wb — X Article Interactive Preview</title>
+  <title>nb2wb — X Articles Preview</title>
   <style>
     * { box-sizing: border-box; }
     body {
@@ -28,129 +28,83 @@ _HEAD = """\
       font-size: 19px;
       line-height: 1.6;
       color: #0f1419;
-      margin: 0;
-      padding: 0;
-      background: #f7f9f9;
-      display: flex;
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 24px 20px 60px;
+      background: #fff;
     }
-    #sidebar {
-      position: fixed;
-      left: 0;
+    #toolbar {
+      position: sticky;
       top: 0;
-      width: 340px;
-      height: 100vh;
+      z-index: 100;
       background: #1d9bf0;
       color: #fff;
-      padding: 20px;
-      overflow-y: auto;
-      z-index: 100;
-      box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
-    }
-    #main-container {
-      margin-left: 340px;
+      padding: 10px 20px;
+      border-radius: 8px;
+      margin-bottom: 28px;
       display: flex;
-      justify-content: center;
-      padding: 40px 40px 60px;
-    }
-    #toolbar h2 {
-      margin: 0 0 8px 0;
-      font-size: 18px;
-      font-weight: 700;
+      align-items: center;
+      gap: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
     }
     #toolbar button {
       background: #fff;
       color: #1d9bf0;
       border: none;
-      padding: 10px 20px;
-      font-size: 15px;
-      font-weight: 700;
+      padding: 8px 18px;
+      font-size: 14px;
+      font-weight: 600;
       border-radius: 20px;
       cursor: pointer;
-      transition: background 0.2s;
-      margin: 8px 0;
-      font-family: inherit;
+      transition: background 0.15s;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
-    #toolbar button:hover {
-      background: #e8f5fe;
-    }
-    #toolbar button.copied {
-      background: #00ba7c;
-      color: #fff;
-    }
-    #toolbar p {
-      margin: 4px 0;
-      font-size: 14px;
-      opacity: 0.95;
-      line-height: 1.4;
-    }
-    #toolbar ol {
-      margin: 8px 0 0 0;
-      padding-left: 20px;
-      font-size: 13px;
-      opacity: 0.9;
-    }
-    #toolbar li {
-      margin: 4px 0;
-    }
+    #toolbar button:hover { background: #e8f5fe; }
+    #toolbar p { margin: 0; font-size: 13px; opacity: 0.9; }
     #content {
-      width: 100%;
-      max-width: 680px;
       background: #fff;
-      padding: 40px 48px;
-      border-radius: 16px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.12);
     }
-    /* Image containers with copy buttons */
+    /* Image containers with inline copy buttons */
     .image-container {
-      margin: 1.5em 0;
-      border: 2px solid #1d9bf0;
-      border-radius: 12px;
-      padding: 16px;
-      background: #f7f9f9;
+      position: relative;
+      margin: 0.5em 0;
     }
     .image-container img {
       max-width: 100%;
       height: auto;
       display: block;
-      border-radius: 8px;
-      margin-bottom: 12px;
-      border: 1px solid #eff3f4;
+      border-radius: 5px;
     }
     .copy-image-btn {
-      width: 100%;
-      background: #1d9bf0;
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background: rgba(29, 155, 240, 0.9);
       color: #fff;
       border: none;
-      padding: 12px 20px;
-      font-size: 15px;
-      font-weight: 700;
-      border-radius: 20px;
-      cursor: pointer;
-      transition: background 0.2s;
-      font-family: inherit;
-    }
-    .copy-image-btn:hover {
-      background: #1a8cd8;
-    }
-    .copy-image-btn:active {
-      background: #1570b5;
-    }
-    .copy-image-btn.copied {
-      background: #00ba7c;
-    }
-    .image-number {
-      display: inline-block;
-      background: #1d9bf0;
-      color: #fff;
-      padding: 4px 10px;
-      border-radius: 12px;
+      padding: 6px 14px;
       font-size: 13px;
-      font-weight: 700;
-      margin-bottom: 8px;
+      font-weight: 600;
+      border-radius: 16px;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.2s;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
-    /* --- markdown typography --- */
+    .image-container:hover .copy-image-btn { opacity: 1; }
+    .copy-image-btn:hover { background: rgba(20, 120, 190, 0.95); }
+    .copy-image-btn.copied { opacity: 1; background: #1478be; }
+    /* --- cell wrappers --- */
     .md-cell { margin-bottom: 1.3em; }
     .code-cell { margin: 1.5em 0; }
+    /* --- images --- */
+    img {
+      max-width: 100%;
+      height: auto;
+      display: block;
+    }
+    .code-cell img { border-radius: 5px; }
+    /* --- markdown typography --- */
     h1, h2, h3, h4, h5, h6 {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       font-weight: 800;
@@ -165,10 +119,10 @@ _HEAD = """\
     ul, ol { margin: 0 0 1em; padding-left: 1.8em; }
     li { margin-bottom: 0.3em; }
     blockquote {
-      border-left: 4px solid #1d9bf0;
+      border-left: 3px solid #0f1419;
       margin: 1.2em 0;
-      padding: 0.3em 1.2em;
-      color: #536471;
+      padding: 0.1em 1.2em;
+      color: #0f1419;
       font-style: italic;
     }
     pre, code {
@@ -177,180 +131,141 @@ _HEAD = """\
     }
     pre {
       background: #f7f9f9;
-      padding: 1em;
-      border-radius: 8px;
+      padding: 1.2em;
+      border-radius: 4px;
       overflow-x: auto;
-      border: 1px solid #eff3f4;
     }
     code {
       background: #f7f9f9;
-      padding: 0.2em 0.4em;
-      border-radius: 4px;
+      padding: 0.15em 0.4em;
+      border-radius: 3px;
     }
-    table {
-      border-collapse: collapse;
-      width: 100%;
-      margin-bottom: 1.2em;
-      border: 1px solid #eff3f4;
-      border-radius: 8px;
-      overflow: hidden;
+    pre code {
+      background: none;
+      padding: 0;
     }
-    th, td {
-      border: 1px solid #eff3f4;
-      padding: 0.6em 0.8em;
-      text-align: left;
-    }
-    th {
-      background: #f7f9f9;
-      font-weight: 700;
-      color: #0f1419;
-    }
-    hr {
-      border: none;
-      border-top: 1px solid #eff3f4;
-      margin: 2em 0;
-    }
+    table { border-collapse: collapse; width: 100%; margin-bottom: 1.2em; }
+    th, td { border: 1px solid #eff3f4; padding: 0.5em 0.8em; }
+    th { background: #f7f9f9; font-weight: 700; }
+    hr { border: none; border-top: 1px solid #eff3f4; margin: 2em 0; }
+    a { color: inherit; text-decoration: underline; }
     .nb2wb-footer {
       margin-top: 3em;
-      padding-top: 1.2em;
+      padding-top: 1em;
       border-top: 1px solid #eff3f4;
       text-align: center;
       font-size: 0.8em;
       color: #536471;
     }
-    .nb2wb-footer a {
-      color: #1d9bf0;
-      text-decoration: none;
-      font-weight: 500;
-    }
-    .nb2wb-footer a:hover {
-      text-decoration: underline;
-    }
+    .nb2wb-footer a { color: #536471; text-decoration: none; }
+    .nb2wb-footer a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
-  <div id="sidebar">
-    <h2>📋 How to copy to X Articles</h2>
-    <button id="copy-text-btn" onclick="copyArticleText()">📄 Copy article text</button>
-    <ol>
-      <li><strong>Click "Copy article text" above</strong> to copy all text content</li>
-      <li><strong>Click each "Copy image" button below</strong> (they'll turn green)</li>
-      <li><strong>Paste into your X Article draft</strong> interleaving text and images</li>
-    </ol>
-    <p style="margin-top: 12px; font-size: 13px; opacity: 0.85;">
-      💡 <strong>Tip:</strong> X's editor will automatically upload images when you paste them from clipboard.
-    </p>
+  <div id="toolbar">
+    <button id="copy-btn" onclick="copyContent()">&#128203; Copy to clipboard</button>
+    <p>Paste into X Articles. If images are missing, hover each one to copy it.</p>
   </div>
-  <div id="main-container">
-    <div id="content">
+  <div id="content">
 """
 
 _TAIL = """\
   <div class="nb2wb-footer">
     Made with <a href="https://github.com/the-palindrome/nb2wb">nb2wb</a>
   </div>
-    </div><!-- #content -->
-  </div><!-- #main-container -->
+  </div><!-- #content -->
 
   <script>
-    // Copy image to clipboard when button is clicked
-    async function copyImageToClipboard(imgSrc, button) {
+    async function copyContent() {
+      var btn = document.getElementById("copy-btn");
       try {
-        let blob;
-        let mimeType;
+        var content = document.getElementById("content").cloneNode(true);
 
-        // Check if it's a data URI or external URL
-        if (imgSrc.startsWith('data:')) {
-          // Handle data URI (base64 encoded)
-          const base64Data = imgSrc.split(',')[1];
-          mimeType = imgSrc.match(/data:([^;]+);/)[1];
-          const byteCharacters = atob(base64Data);
-          const byteNumbers = new Array(byteCharacters.length);
-          for (let i = 0; i < byteCharacters.length; i++) {
-            byteNumbers[i] = byteCharacters.charCodeAt(i);
+        // Unwrap .md-cell and .code-cell divs to avoid empty lines
+        content.querySelectorAll(".md-cell, .code-cell").forEach(function(div) {
+          var parent = div.parentNode;
+          while (div.firstChild) {
+            parent.insertBefore(div.firstChild, div);
           }
-          const byteArray = new Uint8Array(byteNumbers);
-          blob = new Blob([byteArray], { type: mimeType });
-        } else {
-          // Handle external URL - fetch the image
-          button.textContent = '⏳ Fetching image...';
-          const response = await fetch(imgSrc);
-          blob = await response.blob();
-          mimeType = blob.type;
-        }
-
-        // Copy to clipboard using Clipboard API
-        const item = new ClipboardItem({ [mimeType]: blob });
-        await navigator.clipboard.write([item]);
-
-        // Update button state
-        const originalText = button.textContent;
-        button.textContent = '✓ Copied! Now paste in X editor';
-        button.classList.add('copied');
-
-        setTimeout(() => {
-          button.textContent = originalText;
-          button.classList.remove('copied');
-        }, 3000);
-      } catch (err) {
-        console.error('Failed to copy image:', err);
-        button.textContent = '❌ Copy failed (try right-click → Copy image)';
-        setTimeout(() => {
-          button.textContent = '📋 Copy this image';
-        }, 3000);
-      }
-    }
-
-    // Copy article text (without images) to clipboard
-    async function copyArticleText() {
-      const button = document.getElementById('copy-text-btn');
-      try {
-        // Clone the content div
-        const content = document.getElementById('content').cloneNode(true);
-
-        // Remove all image containers
-        const imageContainers = content.querySelectorAll('.image-container');
-        imageContainers.forEach(container => {
-          // Replace with a placeholder marker
-          const marker = document.createElement('p');
-          const imageNum = container.querySelector('.image-number').textContent;
-          marker.textContent = `[${imageNum} - insert here]`;
-          marker.style.color = '#1d9bf0';
-          marker.style.fontWeight = 'bold';
-          container.replaceWith(marker);
+          parent.removeChild(div);
         });
 
-        // Copy the modified HTML to clipboard
-        const html = content.innerHTML;
-        const blob = new Blob([html], { type: 'text/html' });
-        const item = new ClipboardItem({ 'text/html': blob });
+        // Unwrap image containers but keep the <img> tags
+        content.querySelectorAll(".image-container").forEach(function(container) {
+          var img = container.querySelector("img");
+          if (img) {
+            container.replaceWith(img);
+          }
+        });
+
+        // Remove footer
+        var footer = content.querySelector(".nb2wb-footer");
+        if (footer) footer.remove();
+
+        var html = content.innerHTML;
+        var blob = new Blob([html], { type: "text/html" });
+        var item = new ClipboardItem({ "text/html": blob });
         await navigator.clipboard.write([item]);
 
-        // Update button state
-        button.textContent = '✓ Text copied!';
-        button.classList.add('copied');
-        setTimeout(() => {
-          button.textContent = '📄 Copy article text';
-          button.classList.remove('copied');
-        }, 3000);
-      } catch (err) {
-        console.error('Failed to copy text:', err);
-        button.textContent = '❌ Copy failed';
-        setTimeout(() => {
-          button.textContent = '📄 Copy article text';
-        }, 3000);
+        btn.textContent = "\\u2713 Copied!";
+        setTimeout(function() { btn.textContent = "\\u{1F4CB} Copy to clipboard"; }, 2500);
+      } catch (_) {
+        var el = document.getElementById("content");
+        var range = document.createRange();
+        range.selectNode(el);
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(range);
+        document.execCommand("copy");
+        window.getSelection().removeAllRanges();
+        btn.textContent = "\\u2713 Copied!";
+        setTimeout(function() { btn.textContent = "\\u{1F4CB} Copy to clipboard"; }, 2500);
       }
     }
 
-    // Auto-setup copy buttons on page load
-    document.addEventListener('DOMContentLoaded', () => {
-      const containers = document.querySelectorAll('.image-container');
-      containers.forEach((container, index) => {
-        const img = container.querySelector('img');
-        const btn = container.querySelector('.copy-image-btn');
+    // Copy a single image to clipboard
+    async function copyImage(imgSrc, button) {
+      try {
+        var blob;
+        if (imgSrc.startsWith("data:")) {
+          var base64Data = imgSrc.split(",")[1];
+          var mimeType = imgSrc.match(/data:([^;]+);/)[1];
+          var byteChars = atob(base64Data);
+          var bytes = new Uint8Array(byteChars.length);
+          for (var i = 0; i < byteChars.length; i++) {
+            bytes[i] = byteChars.charCodeAt(i);
+          }
+          blob = new Blob([bytes], { type: mimeType });
+        } else {
+          button.textContent = "Fetching\\u2026";
+          var response = await fetch(imgSrc);
+          blob = await response.blob();
+        }
+
+        await navigator.clipboard.write([
+          new ClipboardItem({ [blob.type]: blob })
+        ]);
+
+        button.textContent = "\\u2713 Copied";
+        button.classList.add("copied");
+        setTimeout(function() {
+          button.textContent = "Copy image";
+          button.classList.remove("copied");
+        }, 3000);
+      } catch (err) {
+        console.error("Failed to copy image:", err);
+        button.textContent = "Failed";
+        setTimeout(function() { button.textContent = "Copy image"; }, 3000);
+      }
+    }
+
+    // Wire up copy-image buttons
+    document.addEventListener("DOMContentLoaded", function() {
+      document.querySelectorAll(".image-container").forEach(function(container) {
+        var img = container.querySelector("img");
+        var btn = container.querySelector(".copy-image-btn");
         if (img && btn) {
-          btn.addEventListener('click', () => {
-            copyImageToClipboard(img.src, btn);
+          btn.addEventListener("click", function() {
+            copyImage(img.src, btn);
           });
         }
       });
@@ -384,41 +299,30 @@ class XArticlesBuilder(PlatformBuilder):
         return _HEAD + content_html + _TAIL
 
     def _make_images_copyable(self, html: str) -> str:
-        """
-        Wrap each <img> tag in a container with a copy-to-clipboard button.
-
-        Converts external URLs and file paths to data URIs to avoid CORS issues.
-        Returns modified HTML with interactive image containers.
-        """
-        # Pattern to match ALL img tags (data URIs, external URLs, self-closing or not)
+        """Wrap each <img> in a container with an inline copy button."""
         img_pattern = re.compile(
             r'<img\s+[^>]*src="([^"]+)"[^>]*/?>',
-            re.IGNORECASE
+            re.IGNORECASE,
         )
 
-        image_counter = [0]  # Use list for mutability in nested function
-
         def wrap_image(match: re.Match) -> str:
-            image_counter[0] += 1
             img_src = match.group(1)
 
-            # Convert external URLs and file paths to data URIs
             if not img_src.startswith('data:'):
                 img_src = self._to_data_uri(img_src)
 
-            # Extract alt text if present, otherwise use default
             full_tag = match.group(0)
             alt_match = re.search(r'alt="([^"]*)"', full_tag)
-            alt_text = alt_match.group(1) if alt_match else f"Image {image_counter[0]}"
+            alt_text = alt_match.group(1) if alt_match else "image"
 
-            return f'''<div class="image-container">
-  <div class="image-number">Image {image_counter[0]}</div>
-  <img src="{img_src}" alt="{alt_text}">
-  <button class="copy-image-btn" type="button">📋 Copy this image</button>
-</div>'''
+            return (
+                f'<div class="image-container">'
+                f'<img src="{img_src}" alt="{alt_text}">'
+                f'<button class="copy-image-btn" type="button">Copy image</button>'
+                f'</div>'
+            )
 
-        modified_html = img_pattern.sub(wrap_image, html)
-        return modified_html
+        return img_pattern.sub(wrap_image, html)
 
     def _to_data_uri(self, src: str) -> str:
         """
