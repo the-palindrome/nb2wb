@@ -47,7 +47,10 @@ def _extract_images(html: str, images_dir: Path) -> str:
         mime = m.group(2)
         b64 = m.group(3)
 
-        ext = _MIME_TO_EXT.get(mime, ".png")
+        if mime not in _MIME_TO_EXT:
+            return full_tag  # skip non-image MIME types
+
+        ext = _MIME_TO_EXT[mime]
         filename = f"img_{counter[0]}{ext}"
         filepath = images_dir / filename
 

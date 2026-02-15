@@ -9,11 +9,7 @@ works out of the box.
 """
 from __future__ import annotations
 
-import base64
-import mimetypes
 import re
-import urllib.request
-from pathlib import Path
 from .base import PlatformBuilder
 
 # ---- HTML template --------------------------------------------------------
@@ -334,25 +330,4 @@ class MediumBuilder(PlatformBuilder):
 
         return img_pattern.sub(wrap_image, html)
 
-    def _to_data_uri(self, src: str) -> str:
-        """Convert an image URL or file path to a base64 data URI."""
-        try:
-            if src.startswith(("http://", "https://")):
-                with urllib.request.urlopen(src) as response:
-                    image_data = response.read()
-                    mime_type = response.headers.get_content_type()
-            else:
-                file_path = Path(src)
-                if not file_path.is_absolute():
-                    file_path = Path.cwd() / src
-                with open(file_path, "rb") as f:
-                    image_data = f.read()
-                mime_type, _ = mimetypes.guess_type(str(file_path))
-                if not mime_type:
-                    mime_type = "image/png"
-
-            b64_data = base64.b64encode(image_data).decode("utf-8")
-            return f"data:{mime_type};base64,{b64_data}"
-        except Exception as e:
-            print(f"Warning: Could not convert image '{src}' to data URI: {e}")
-            return src
+    # _to_data_uri inherited from PlatformBuilder
