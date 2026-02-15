@@ -1,3 +1,24 @@
+"""
+Medium platform HTML builder.
+
+Medium's editor strips data-URI images from pasted HTML but fetches images at
+real HTTP URLs.  The default output includes per-image "Copy image" hover
+buttons so users can paste images individually.  When combined with the CLI's
+``--serve`` flag (ngrok tunnel), images get public URLs and one-click copy
+works out of the box.
+"""
+from __future__ import annotations
+
+import base64
+import mimetypes
+import re
+import urllib.request
+from pathlib import Path
+from .base import PlatformBuilder
+
+# ---- HTML template --------------------------------------------------------
+
+_HEAD = """\
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -150,125 +171,9 @@
     <p>Paste into Medium. If images are missing, hover each one to copy it.</p>
   </div>
   <div id="content">
-<div class="md-cell"><h1>From Jupyter Notebook to Web</h1>
-<p>This notebook demonstrates the <code>nb2wb</code> converter. It covers the three pillars<br />
-of technical writing: prose, mathematics, and code.</p>
-<p>Here's a nice image for illustration.</p>
-<p><div class="image-container"><img src="images/img_1.png" alt="The parallelogram rule"><button class="copy-image-btn" type="button">Copy image</button></div></p></div>
+"""
 
-<div class="md-cell"><h2>1  Inline LaTeX → Unicode</h2>
-<p>Inline expressions like <em>α</em> + <em>β</em> = <em>γ</em> or <em>E</em> = mc² are converted<br />
-to Unicode so they render as plain readable text in Substack's editor.</p>
-<p>Other examples: the golden ratio <em>ϕ</em> = (1+√5)/(2), and Euler's<br />
-identity <em>e</em><sup><em>i</em><em>π</em></sup> + 1 = 0.</p></div>
-
-<div class="md-cell"><h2>2  Display Math → Image</h2>
-<p>Block equations are rendered to crisp PNG images.</p>
-<p>The quadratic formula:</p>
-<pre><code class="language-latex">x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a} \label{eq:quadratic}
-</code></pre>
-<p>is rendered to </p>
-<p><div class="image-container"><img src="images/img_2.png" alt="math"><button class="copy-image-btn" type="button">Copy image</button></div></p>
-<p>You can render the equation references as <code>\\eqref{eq:quadratic}</code>, which renders like this: (1) gives both roots of ax² + bx + <em>c</em> = 0 simultaneously.</p>
-<p>You can also use colors that are defined in the preamble. Bayes' theorem:</p>
-<pre><code class="language-latex">P({\color{maizeCrayola} A} \mid {\color{blueGray} B}) = \frac{P({\color{blueGray} B} \mid {\color{maizeCrayola} A})\, P({\color{maizeCrayola} A})}{P({\color{blueGray} B})} \label{eq:bayes}
-</code></pre>
-<p>is rendered to </p>
-<p><div class="image-container"><img src="images/img_3.png" alt="math"><button class="copy-image-btn" type="button">Copy image</button></div></p>
-<p>A matrix equation:</p>
-<pre><code class="language-latex">\mathbf{y} = \mathbf{X}\boldsymbol{\beta} + \boldsymbol{\varepsilon} \label{eq:mtx}
-</code></pre>
-<p>is rendered to </p>
-<p><div class="image-container"><img src="images/img_4.png" alt="math"><button class="copy-image-btn" type="button">Copy image</button></div></p>
-<p>The Basel formula:</p>
-<pre><code class="language-latex">\sum_{n=1}^{\infty} \frac{1}{n^2} = \frac{\pi^2}{6}
-</code></pre>
-<p>is rendered to </p>
-<p><div class="image-container"><img src="images/img_5.png" alt="math"><button class="copy-image-btn" type="button">Copy image</button></div></p>
-<p>Now, a complex multi-line example. The Gaussian integral, derived by switching to polar coordinates:</p>
-<pre><code class="language-latex">\begin{align*}
-I   &amp;= \int_{-\infty}^{\infty} e^{-x^2}\,dx \\[4pt]
-I^2 &amp;= \int_{-\infty}^{\infty}\!\int_{-\infty}^{\infty} e^{-(x^2+y^2)}\,dx\,dy \\[4pt]
-    &amp;= \int_0^{2\pi}\!\int_0^{\infty} e^{-r^2}\,r\,dr\,d\theta \\[4pt]
-    &amp;= 2\pi \cdot \Bigl[-\tfrac{1}{2}e^{-r^2}\Bigr]_0^{\infty} \\[4pt]
-    &amp;= \pi \\[4pt]
-\therefore\quad I &amp;= \sqrt{\pi}
-\end{align*}
-</code></pre>
-<p>is rendered to </p>
-<p><div class="image-container"><img src="images/img_6.png" alt="math"><button class="copy-image-btn" type="button">Copy image</button></div></p></div>
-
-<div class="md-cell"><h2>3  Code Blocks → Image</h2>
-<p>Code cells and their outputs are rendered as syntax-highlighted images,<br />
-so formatting and colours are perfectly preserved.</p></div>
-
-<div class="code-cell">
-<div class="image-container"><img src="images/img_7.png" alt="code"><button class="copy-image-btn" type="button">Copy image</button></div>
-</div>
-
-<div class="code-cell">
-<div class="image-container"><img src="images/img_8.png" alt="code"><button class="copy-image-btn" type="button">Copy image</button></div>
-</div>
-
-<div class="md-cell"><h2>4  Mixed: equation in context</h2>
-<p>The softmax function maps a vector 𝐳 ∈ ℝᴷ to a<br />
-probability distribution:</p>
-<p><div class="image-container"><img src="images/img_9.png" alt="math"><button class="copy-image-btn" type="button">Copy image</button></div></p>
-<p>Here <em>j</em> = 1, …, <em>K</em> indexes the classes.  Note that ∑ⱼ <em>σ</em>ⱼ = 1<br />
-by construction.</p></div>
-
-<div class="code-cell">
-<div class="image-container"><img src="images/img_10.png" alt="code"><button class="copy-image-btn" type="button">Copy image</button></div>
-</div>
-
-<div class="md-cell"><h2>5  Figures</h2></div>
-
-<div class="code-cell">
-<div class="image-container"><img src="images/img_11.png" alt="code"><button class="copy-image-btn" type="button">Copy image</button></div>
-<div class="image-container"><img src="images/img_12.png" alt="output"><button class="copy-image-btn" type="button">Copy image</button></div>
-</div>
-
-<div class="md-cell"><h2>6  Cell Tags</h2>
-<p>Cells can be tagged to control what appears in the output.<br />
-Tags are set via <strong>Edit → Cell Metadata</strong> (or the cell toolbar) in Jupyter.</p>
-<table>
-<thead>
-<tr>
-<th>Tag</th>
-<th>Effect</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>hide-cell</code></td>
-<td>Entire cell omitted (input + output)</td>
-</tr>
-<tr>
-<td><code>hide-input</code></td>
-<td>Source code hidden; output shown</td>
-</tr>
-<tr>
-<td><code>hide-output</code></td>
-<td>Output hidden; source code shown</td>
-</tr>
-</tbody>
-</table></div>
-
-<div class="md-cell"><p>The next cell is tagged <code>hide-input</code>: only its output is rendered.</p></div>
-
-<div class="code-cell">
-<div class="image-container"><img src="images/img_13.png" alt="code"><button class="copy-image-btn" type="button">Copy image</button></div>
-</div>
-
-<div class="md-cell"><p>The next cell is tagged <code>hide-output</code>: only its source code is rendered.</p></div>
-
-<div class="code-cell">
-<div class="image-container"><img src="images/img_14.png" alt="code"><button class="copy-image-btn" type="button">Copy image</button></div>
-</div>
-
-<div class="md-cell"><p>The setup cell at the top of this notebook is tagged <code>hide-cell</code> and is invisible in the output.</p></div>
-
-<div class="md-cell"></div>
+_TAIL = """\
   <div class="nb2wb-footer">
     Made with <a href="https://github.com/the-palindrome/nb2wb">nb2wb</a>
   </div>
@@ -306,8 +211,8 @@ Tags are set via <strong>Edit → Cell Metadata</strong> (or the cell toolbar) i
         var item = new ClipboardItem({ "text/html": blob });
         await navigator.clipboard.write([item]);
 
-        btn.textContent = "\u2713 Copied!";
-        setTimeout(function() { btn.textContent = "\u{1F4CB} Copy to clipboard"; }, 2500);
+        btn.textContent = "\\u2713 Copied!";
+        setTimeout(function() { btn.textContent = "\\u{1F4CB} Copy to clipboard"; }, 2500);
       } catch (_) {
         var el = document.getElementById("content");
         var range = document.createRange();
@@ -316,8 +221,8 @@ Tags are set via <strong>Edit → Cell Metadata</strong> (or the cell toolbar) i
         window.getSelection().addRange(range);
         document.execCommand("copy");
         window.getSelection().removeAllRanges();
-        btn.textContent = "\u2713 Copied!";
-        setTimeout(function() { btn.textContent = "\u{1F4CB} Copy to clipboard"; }, 2500);
+        btn.textContent = "\\u2713 Copied!";
+        setTimeout(function() { btn.textContent = "\\u{1F4CB} Copy to clipboard"; }, 2500);
       }
     }
 
@@ -335,7 +240,7 @@ Tags are set via <strong>Edit → Cell Metadata</strong> (or the cell toolbar) i
           }
           blob = new Blob([bytes], { type: mimeType });
         } else {
-          button.textContent = "Fetching\u2026";
+          button.textContent = "Fetching\\u2026";
           var response = await fetch(imgSrc);
           blob = await response.blob();
         }
@@ -344,7 +249,7 @@ Tags are set via <strong>Edit → Cell Metadata</strong> (or the cell toolbar) i
           new ClipboardItem({ [blob.type]: blob })
         ]);
 
-        button.textContent = "\u2713 Copied";
+        button.textContent = "\\u2713 Copied";
         button.classList.add("copied");
         setTimeout(function() {
           button.textContent = "Copy image";
@@ -372,3 +277,82 @@ Tags are set via <strong>Edit → Cell Metadata</strong> (or the cell toolbar) i
   </script>
 </body>
 </html>
+"""
+
+# ---- Mapping from data-URI MIME type to file extension --------------------
+_MIME_TO_EXT: dict[str, str] = {
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/gif": ".gif",
+    "image/svg+xml": ".svg",
+    "image/webp": ".webp",
+}
+
+
+class MediumBuilder(PlatformBuilder):
+    """
+    HTML builder optimized for Medium.
+
+    Wraps each image in a container with a hover "Copy image" button for the
+    default (no-serve) workflow.  The main "Copy to clipboard" button copies
+    the full content — images transfer automatically when served via ``--serve``
+    (public URLs) and are available via per-image buttons otherwise.
+    """
+
+    @property
+    def name(self) -> str:
+        return "Medium"
+
+    def build_page(self, content_html: str) -> str:
+        """Wrap content in Medium-optimized HTML page."""
+        content_html = self._make_images_copyable(content_html)
+        return _HEAD + content_html + _TAIL
+
+    def _make_images_copyable(self, html: str) -> str:
+        """Wrap each <img> in a container with an inline copy button."""
+        img_pattern = re.compile(
+            r'<img\s+[^>]*src="([^"]+)"[^>]*/?>',
+            re.IGNORECASE,
+        )
+
+        def wrap_image(match: re.Match) -> str:
+            img_src = match.group(1)
+
+            if not img_src.startswith("data:"):
+                img_src = self._to_data_uri(img_src)
+
+            full_tag = match.group(0)
+            alt_match = re.search(r'alt="([^"]*)"', full_tag)
+            alt_text = alt_match.group(1) if alt_match else "image"
+
+            return (
+                f'<div class="image-container">'
+                f'<img src="{img_src}" alt="{alt_text}">'
+                f'<button class="copy-image-btn" type="button">Copy image</button>'
+                f'</div>'
+            )
+
+        return img_pattern.sub(wrap_image, html)
+
+    def _to_data_uri(self, src: str) -> str:
+        """Convert an image URL or file path to a base64 data URI."""
+        try:
+            if src.startswith(("http://", "https://")):
+                with urllib.request.urlopen(src) as response:
+                    image_data = response.read()
+                    mime_type = response.headers.get_content_type()
+            else:
+                file_path = Path(src)
+                if not file_path.is_absolute():
+                    file_path = Path.cwd() / src
+                with open(file_path, "rb") as f:
+                    image_data = f.read()
+                mime_type, _ = mimetypes.guess_type(str(file_path))
+                if not mime_type:
+                    mime_type = "image/png"
+
+            b64_data = base64.b64encode(image_data).decode("utf-8")
+            return f"data:{mime_type};base64,{b64_data}"
+        except Exception as e:
+            print(f"Warning: Could not convert image '{src}' to data URI: {e}")
+            return src

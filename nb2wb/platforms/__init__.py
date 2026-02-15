@@ -6,11 +6,13 @@ from __future__ import annotations
 from .base import PlatformBuilder
 from .substack import SubstackBuilder
 from .x import XArticlesBuilder
+from .medium import MediumBuilder
 
 
 _BUILDERS: dict[str, type[PlatformBuilder]] = {
     "substack": SubstackBuilder,
     "x": XArticlesBuilder,
+    "medium": MediumBuilder,
 }
 
 
