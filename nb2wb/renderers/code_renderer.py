@@ -18,6 +18,7 @@ from pygments.styles import get_style_by_name
 from pygments.token import Token
 
 from ..config import CodeConfig
+from ._image_utils import round_corners as _round_corners
 
 # ---------------------------------------------------------------------------
 # Platform font candidates (first existing path wins)
@@ -187,15 +188,6 @@ def vstack_and_pad(png_list: list[bytes], config: CodeConfig, *,
 # ---------------------------------------------------------------------------
 # Rendering internals
 # ---------------------------------------------------------------------------
-
-def _round_corners(img: Image.Image, radius: int) -> Image.Image:
-    """Apply transparent rounded corners via an alpha-channel mask."""
-    rgba = img.convert("RGBA")
-    mask = Image.new("L", rgba.size, 0)
-    draw = ImageDraw.Draw(mask)
-    draw.rounded_rectangle([0, 0, rgba.width - 1, rgba.height - 1], radius=radius, fill=255)
-    rgba.putalpha(mask)
-    return rgba
 
 
 def _outer_pad(png_bytes: bytes, padding_x: int, padding_y: int, background: str) -> bytes:
