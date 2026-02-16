@@ -261,6 +261,7 @@ def _paint(
     min_width: int = 0,
     left_margin_label: Optional[str] = None,
 ) -> bytes:
+    """Render tokenized lines onto a PIL image and return raw PNG bytes."""
     if not lines:
         lines = [[(200, 200, 200), ""]]
 
@@ -366,6 +367,7 @@ def _tokenize(
 # ---------------------------------------------------------------------------
 
 def _load_font(size: int) -> ImageFont.FreeTypeFont:
+    """Load a monospace TrueType font at the given size, falling back to Pillow's default."""
     path = _find_font()
     if path:
         try:
@@ -380,6 +382,7 @@ def _load_font(size: int) -> ImageFont.FreeTypeFont:
 
 
 def _find_font() -> Optional[str]:
+    """Return the path to the first available monospace font for the current platform."""
     platform = sys.platform
     if platform.startswith("linux"):
         candidates = _FONT_CANDIDATES["linux"]
@@ -399,6 +402,7 @@ def _find_font() -> Optional[str]:
 # ---------------------------------------------------------------------------
 
 def _text_w(text: str, font) -> float:
+    """Return the rendered width of *text* in pixels using the given font."""
     try:
         return font.getlength(text)
     except AttributeError:
@@ -410,6 +414,7 @@ def _text_w(text: str, font) -> float:
 
 
 def _line_height(font, gap: int = _LINE_GAP) -> int:
+    """Return the pixel height of a single text line (ascent + descent + gap)."""
     try:
         asc, desc = font.getmetrics()
         return asc + desc + gap
@@ -422,6 +427,7 @@ def _line_height(font, gap: int = _LINE_GAP) -> int:
 # ---------------------------------------------------------------------------
 
 def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
+    """Convert a hex color string (e.g. ``#ff00aa``) to an (R, G, B) tuple."""
     h = (hex_color or "").lstrip("#")
     if len(h) == 3:
         h = "".join(c * 2 for c in h)
@@ -436,6 +442,7 @@ def _shift(rgb: tuple[int, int, int], amount: int) -> tuple[int, int, int]:
 
 
 def _default_fg(style_cls) -> tuple[int, int, int]:
+    """Determine the default foreground color from a Pygments style, inferring from background if needed."""
     for ttype in (Token.Text, Token):
         info = style_cls.style_for_token(ttype)
         if info.get("color"):

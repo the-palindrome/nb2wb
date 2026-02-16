@@ -64,6 +64,7 @@ def read_qmd(path: Path) -> nbformat.NotebookNode:
 # ---------------------------------------------------------------------------
 
 def _split_front_matter(text: str) -> tuple[dict[str, Any], str]:
+    """Split YAML front matter from the body, returning (parsed_dict, remaining_text)."""
     m = _FRONT_MATTER_RE.match(text)
     if not m:
         return {}, text
@@ -75,6 +76,7 @@ def _split_front_matter(text: str) -> tuple[dict[str, Any], str]:
 
 
 def _detect_language(fm: dict[str, Any], text: str) -> str:
+    """Detect the default language from front matter or the first code chunk."""
     # Explicit engine in front matter
     if "engine" in fm:
         return str(fm["engine"])
@@ -96,6 +98,7 @@ def _detect_language(fm: dict[str, Any], text: str) -> str:
 # ---------------------------------------------------------------------------
 
 def _extract_cells(text: str, default_lang: str) -> list[nbformat.NotebookNode]:
+    """Parse the body of a .qmd file into a list of notebook cells."""
     cells: list[nbformat.NotebookNode] = []
     pos = 0
     last_code_cell: nbformat.NotebookNode | None = None

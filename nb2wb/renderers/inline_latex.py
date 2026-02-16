@@ -64,6 +64,7 @@ def convert_inline_math(text: str) -> str:
 # ---------------------------------------------------------------------------
 
 def _to_unicode(latex: str) -> str:
+    """Convert a single inline LaTeX expression to Unicode/HTML text."""
     latex = _expand_frac(latex)
 
     try:

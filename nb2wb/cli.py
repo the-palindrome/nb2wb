@@ -134,6 +134,7 @@ def _serve(serve_dir: Path, html_name: str) -> None:
 
 
 def main() -> None:
+    """CLI entry point: parse arguments, convert notebook, and write output HTML."""
     platforms = list_platforms()
     parser = argparse.ArgumentParser(
         prog="nb2wb",

@@ -8,6 +8,8 @@ from typing import Optional
 
 @dataclass
 class CodeConfig:
+    """Configuration for rendering code cells as syntax-highlighted PNG images."""
+
     font_size: int = 48
     theme: str = "monokai"
     line_numbers: bool = True
@@ -22,6 +24,8 @@ class CodeConfig:
 
 @dataclass
 class LatexConfig:
+    """Configuration for rendering display-math LaTeX blocks as PNG images."""
+
     font_size: int = 48
     dpi: int = 150
     color: str = "black"
@@ -35,6 +39,8 @@ class LatexConfig:
 
 @dataclass
 class Config:
+    """Top-level configuration aggregating code and LaTeX rendering settings."""
+
     image_width: int = 1920  # default canvas width for all rendered images
     border_radius: int = 14  # corner radius in pixels for all rendered images
     code: CodeConfig = field(default_factory=CodeConfig)
@@ -42,6 +48,11 @@ class Config:
 
 
 def load_config(path: Optional[Path]) -> Config:
+    """Load configuration from a YAML file, returning defaults if *path* is None or missing.
+
+    Sub-configs (code, latex) inherit the top-level ``image_width`` and
+    ``border_radius`` unless explicitly overridden in the YAML.
+    """
     if path is None or not path.exists():
         return Config()
 
