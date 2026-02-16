@@ -158,6 +158,29 @@ class TestCLIPlatformSelection:
         html = output_path.read_text()
         assert len(html) > 0
 
+    def test_cli_medium_platform(self, tmp_path):
+        """CLI generates Medium-formatted HTML."""
+        nb = nbformat.v4.new_notebook()
+        nb.cells = [nbformat.v4.new_markdown_cell("# Medium Test")]
+
+        notebook_path = tmp_path / "test.ipynb"
+        with open(notebook_path, "w") as f:
+            nbformat.write(nb, f)
+
+        output_path = tmp_path / "medium.html"
+
+        sys.argv = ["nb2wb", str(notebook_path), "-t", "medium",
+                    "-o", str(output_path)]
+
+        try:
+            main()
+        except SystemExit:
+            pass
+
+        assert output_path.exists()
+        html = output_path.read_text()
+        assert len(html) > 0
+
 
 class TestCLIErrorHandling:
     """Test CLI error handling."""

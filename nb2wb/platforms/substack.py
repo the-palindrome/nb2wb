@@ -3,11 +3,7 @@ Substack platform HTML builder.
 """
 from __future__ import annotations
 
-import base64
-import mimetypes
 import re
-import urllib.request
-from pathlib import Path
 from .base import PlatformBuilder
 
 # Split into head/tail so we never have to escape CSS/JS braces
@@ -192,42 +188,4 @@ class SubstackBuilder(PlatformBuilder):
 
         return img_pattern.sub(convert_image, html)
 
-    def _to_data_uri(self, src: str) -> str:
-        """
-        Convert an image URL or file path to a base64 data URI.
-
-        Args:
-            src: Image URL or file path
-
-        Returns:
-            Base64 data URI string
-        """
-        try:
-            # Try as URL first (http://, https://)
-            if src.startswith(('http://', 'https://')):
-                with urllib.request.urlopen(src) as response:
-                    image_data = response.read()
-                    mime_type = response.headers.get_content_type()
-            else:
-                # Treat as file path
-                file_path = Path(src)
-                if not file_path.is_absolute():
-                    # Try relative to current directory
-                    file_path = Path.cwd() / src
-
-                with open(file_path, 'rb') as f:
-                    image_data = f.read()
-
-                # Guess MIME type from file extension
-                mime_type, _ = mimetypes.guess_type(str(file_path))
-                if not mime_type:
-                    mime_type = 'image/png'  # Default fallback
-
-            # Convert to base64 data URI
-            b64_data = base64.b64encode(image_data).decode('utf-8')
-            return f"data:{mime_type};base64,{b64_data}"
-
-        except Exception as e:
-            # If conversion fails, return original src
-            print(f"Warning: Could not convert image '{src}' to data URI: {e}")
-            return src
+    # _to_data_uri inherited from PlatformBuilder

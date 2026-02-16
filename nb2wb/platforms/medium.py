@@ -1,30 +1,34 @@
 """
-X (Twitter) Articles platform HTML builder.
+Medium platform HTML builder.
 
-X's editor doesn't support base64 data URIs, but accepts images pasted from clipboard.
-This builder creates an interactive HTML with "Copy image" buttons for each image.
+Medium's editor strips data-URI images from pasted HTML but fetches images at
+real HTTP URLs.  The default output includes per-image "Copy image" hover
+buttons so users can paste images individually.  When combined with the CLI's
+``--serve`` flag (ngrok tunnel), images get public URLs and one-click copy
+works out of the box.
 """
 from __future__ import annotations
 
 import re
 from .base import PlatformBuilder
 
-# X Articles HTML template with interactive image copying
+# ---- HTML template --------------------------------------------------------
+
 _HEAD = """\
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>nb2wb — X Articles Preview</title>
+  <title>nb2wb — Medium Preview</title>
   <style>
     * { box-sizing: border-box; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      font-size: 19px;
-      line-height: 1.6;
-      color: #0f1419;
-      max-width: 680px;
+      font-family: charter, Georgia, Cambria, "Times New Roman", Times, serif;
+      font-size: 20px;
+      line-height: 1.8;
+      color: #242424;
+      max-width: 700px;
       margin: 0 auto;
       padding: 24px 20px 60px;
       background: #fff;
@@ -33,7 +37,7 @@ _HEAD = """\
       position: sticky;
       top: 0;
       z-index: 100;
-      background: #1d9bf0;
+      background: #1a8917;
       color: #fff;
       padding: 10px 20px;
       border-radius: 8px;
@@ -45,7 +49,7 @@ _HEAD = """\
     }
     #toolbar button {
       background: #fff;
-      color: #1d9bf0;
+      color: #1a8917;
       border: none;
       padding: 8px 18px;
       font-size: 14px;
@@ -55,7 +59,7 @@ _HEAD = """\
       transition: background 0.15s;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
-    #toolbar button:hover { background: #e8f5fe; }
+    #toolbar button:hover { background: #e6f4e6; }
     #toolbar p { margin: 0; font-size: 13px; opacity: 0.9; }
     #content {
       background: #fff;
@@ -75,7 +79,7 @@ _HEAD = """\
       position: absolute;
       top: 8px;
       right: 8px;
-      background: rgba(29, 155, 240, 0.9);
+      background: rgba(26, 137, 23, 0.9);
       color: #fff;
       border: none;
       padding: 6px 14px;
@@ -88,11 +92,11 @@ _HEAD = """\
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
     .image-container:hover .copy-image-btn { opacity: 1; }
-    .copy-image-btn:hover { background: rgba(20, 120, 190, 0.95); }
-    .copy-image-btn.copied { opacity: 1; background: #1478be; }
+    .copy-image-btn:hover { background: rgba(13, 95, 11, 0.95); }
+    .copy-image-btn.copied { opacity: 1; background: #0d5f0b; }
     /* --- cell wrappers --- */
-    .md-cell { margin-bottom: 1.3em; }
-    .code-cell { margin: 1.5em 0; }
+    .md-cell { margin-bottom: 1.4em; }
+    .code-cell { margin: 1.6em 0; }
     /* --- images --- */
     img {
       max-width: 100%;
@@ -102,37 +106,37 @@ _HEAD = """\
     .code-cell img { border-radius: 5px; }
     /* --- markdown typography --- */
     h1, h2, h3, h4, h5, h6 {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      font-weight: 800;
-      margin: 1.5em 0 0.6em;
+      font-family: sohne, "Helvetica Neue", Helvetica, Arial, sans-serif;
+      font-weight: 700;
+      margin: 1.6em 0 0.4em;
       line-height: 1.3;
-      color: #0f1419;
+      color: #242424;
     }
-    h1 { font-size: 2.2em; }
-    h2 { font-size: 1.8em; }
-    h3 { font-size: 1.4em; }
-    p { margin: 0 0 1em; }
-    ul, ol { margin: 0 0 1em; padding-left: 1.8em; }
+    h1 { font-size: 2em; }
+    h2 { font-size: 1.6em; }
+    h3 { font-size: 1.3em; letter-spacing: -0.02em; }
+    p { margin: 0 0 1.1em; }
+    ul, ol { margin: 0 0 1.1em; padding-left: 1.8em; }
     li { margin-bottom: 0.3em; }
     blockquote {
-      border-left: 3px solid #0f1419;
+      border-left: 3px solid #242424;
       margin: 1.2em 0;
       padding: 0.1em 1.2em;
-      color: #0f1419;
+      color: #242424;
       font-style: italic;
     }
     pre, code {
-      font-family: "SF Mono", "Monaco", "Inconsolata", "Fira Code", monospace;
-      font-size: 0.88em;
+      font-family: Menlo, Monaco, "Courier New", Courier, monospace;
+      font-size: 0.85em;
     }
     pre {
-      background: #f7f9f9;
+      background: #f2f2f2;
       padding: 1.2em;
       border-radius: 4px;
       overflow-x: auto;
     }
     code {
-      background: #f7f9f9;
+      background: #f2f2f2;
       padding: 0.15em 0.4em;
       border-radius: 3px;
     }
@@ -141,26 +145,26 @@ _HEAD = """\
       padding: 0;
     }
     table { border-collapse: collapse; width: 100%; margin-bottom: 1.2em; }
-    th, td { border: 1px solid #eff3f4; padding: 0.5em 0.8em; }
-    th { background: #f7f9f9; font-weight: 700; }
-    hr { border: none; border-top: 1px solid #eff3f4; margin: 2em 0; }
+    th, td { border: 1px solid #e0e0e0; padding: 0.5em 0.8em; }
+    th { background: #f9f9f9; font-weight: 600; }
+    hr { border: none; border-top: 1px solid #e0e0e0; margin: 2em 0; }
     a { color: inherit; text-decoration: underline; }
     .nb2wb-footer {
       margin-top: 3em;
       padding-top: 1em;
-      border-top: 1px solid #eff3f4;
+      border-top: 1px solid #e6e6e6;
       text-align: center;
       font-size: 0.8em;
-      color: #536471;
+      color: #999;
     }
-    .nb2wb-footer a { color: #536471; text-decoration: none; }
+    .nb2wb-footer a { color: #999; text-decoration: none; }
     .nb2wb-footer a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
   <div id="toolbar">
     <button id="copy-btn" onclick="copyContent()">&#128203; Copy to clipboard</button>
-    <p>Paste into X Articles. If images are missing, hover each one to copy it.</p>
+    <p>Paste into Medium. If images are missing, hover each one to copy it.</p>
   </div>
   <div id="content">
 """
@@ -177,7 +181,7 @@ _TAIL = """\
       try {
         var content = document.getElementById("content").cloneNode(true);
 
-        // Unwrap .md-cell and .code-cell divs to avoid empty lines
+        // Unwrap .md-cell and .code-cell divs to avoid empty lines in Medium
         content.querySelectorAll(".md-cell, .code-cell").forEach(function(div) {
           var parent = div.parentNode;
           while (div.firstChild) {
@@ -271,26 +275,32 @@ _TAIL = """\
 </html>
 """
 
+# ---- Mapping from data-URI MIME type to file extension --------------------
+_MIME_TO_EXT: dict[str, str] = {
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/gif": ".gif",
+    "image/svg+xml": ".svg",
+    "image/webp": ".webp",
+}
 
-class XArticlesBuilder(PlatformBuilder):
+
+class MediumBuilder(PlatformBuilder):
     """
-    HTML builder optimized for X (Twitter) Articles.
+    HTML builder optimized for Medium.
 
-    Creates an interactive HTML page with copy-to-clipboard buttons for each image,
-    since X's editor accepts pasted images but not embedded data URIs.
+    Wraps each image in a container with a hover "Copy image" button for the
+    default (no-serve) workflow.  The main "Copy to clipboard" button copies
+    the full content — images transfer automatically when served via ``--serve``
+    (public URLs) and are available via per-image buttons otherwise.
     """
 
     @property
     def name(self) -> str:
-        return "X Articles"
+        return "Medium"
 
     def build_page(self, content_html: str) -> str:
-        """
-        Wrap content in X Articles-optimized HTML page.
-
-        Replaces inline images with interactive containers that have
-        "Copy image" buttons using the Clipboard API.
-        """
+        """Wrap content in Medium-optimized HTML page."""
         content_html = self._make_images_copyable(content_html)
         return _HEAD + content_html + _TAIL
 
@@ -304,7 +314,7 @@ class XArticlesBuilder(PlatformBuilder):
         def wrap_image(match: re.Match) -> str:
             img_src = match.group(1)
 
-            if not img_src.startswith('data:'):
+            if not img_src.startswith("data:"):
                 img_src = self._to_data_uri(img_src)
 
             full_tag = match.group(0)

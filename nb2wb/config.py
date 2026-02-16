@@ -111,5 +111,34 @@ def apply_platform_defaults(config: Config, platform: str) -> Config:
                 border_radius=config.latex.border_radius,
             ),
         )
+    if platform == "medium":
+        # Medium: ~700px content column, similar to X but slightly wider
+        return Config(
+            image_width=700,
+            border_radius=config.border_radius,
+            code=CodeConfig(
+                font_size=42,
+                theme=config.code.theme,
+                line_numbers=config.code.line_numbers,
+                font=config.code.font,
+                image_width=1200,
+                padding_x=30,
+                padding_y=30,
+                separator=0,
+                background=config.code.background,
+                border_radius=config.code.border_radius,
+            ),
+            latex=LatexConfig(
+                font_size=35,
+                dpi=config.latex.dpi,
+                color=config.latex.color,
+                background=config.latex.background,
+                padding=50,
+                image_width=1200,
+                try_usetex=config.latex.try_usetex,
+                preamble=config.latex.preamble,
+                border_radius=config.latex.border_radius,
+            ),
+        )
     # Default: return config unchanged (for Substack and others)
     return config
