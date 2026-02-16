@@ -13,16 +13,9 @@ from pathlib import Path
 
 from .converter import Converter
 from .config import load_config, apply_platform_defaults
-from .platforms import get_builder, list_platforms
+from .platforms import get_builder, list_platforms, MIME_TO_EXT
 
-# ---- Mapping from data-URI MIME type to file extension --------------------
-_MIME_TO_EXT: dict[str, str] = {
-    "image/png": ".png",
-    "image/jpeg": ".jpg",
-    "image/gif": ".gif",
-    "image/svg+xml": ".svg",
-    "image/webp": ".webp",
-}
+_MIME_TO_EXT = MIME_TO_EXT
 
 
 def _extract_images(html: str, images_dir: Path) -> str:
@@ -141,6 +134,7 @@ def _serve(serve_dir: Path, html_name: str) -> None:
 
 
 def main() -> None:
+    """CLI entry point: parse arguments, convert notebook, and write output HTML."""
     platforms = list_platforms()
     parser = argparse.ArgumentParser(
         prog="nb2wb",

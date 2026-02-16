@@ -3,7 +3,7 @@ Platform-specific HTML builders for different publishing platforms.
 """
 from __future__ import annotations
 
-from .base import PlatformBuilder
+from .base import MIME_TO_EXT, PlatformBuilder
 from .substack import SubstackBuilder
 from .x import XArticlesBuilder
 from .medium import MediumBuilder
@@ -30,4 +30,4 @@ def list_platforms() -> list[str]:
     return list(_BUILDERS.keys())
 
 
-__all__ = ["PlatformBuilder", "get_builder", "list_platforms"]
+__all__ = ["MIME_TO_EXT", "PlatformBuilder", "get_builder", "list_platforms"]

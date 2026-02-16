@@ -8,6 +8,8 @@ from typing import Optional
 
 @dataclass
 class CodeConfig:
+    """Configuration for rendering code cells as syntax-highlighted PNG images."""
+
     font_size: int = 48
     theme: str = "monokai"
     line_numbers: bool = True
@@ -22,6 +24,8 @@ class CodeConfig:
 
 @dataclass
 class LatexConfig:
+    """Configuration for rendering display-math LaTeX blocks as PNG images."""
+
     font_size: int = 48
     dpi: int = 150
     color: str = "black"
@@ -35,6 +39,8 @@ class LatexConfig:
 
 @dataclass
 class Config:
+    """Top-level configuration aggregating code and LaTeX rendering settings."""
+
     image_width: int = 1920  # default canvas width for all rendered images
     border_radius: int = 14  # corner radius in pixels for all rendered images
     code: CodeConfig = field(default_factory=CodeConfig)
@@ -42,6 +48,11 @@ class Config:
 
 
 def load_config(path: Optional[Path]) -> Config:
+    """Load configuration from a YAML file, returning defaults if *path* is None or missing.
+
+    Sub-configs (code, latex) inherit the top-level ``image_width`` and
+    ``border_radius`` unless explicitly overridden in the YAML.
+    """
     if path is None or not path.exists():
         return Config()
 
@@ -76,69 +87,46 @@ def load_config(path: Optional[Path]) -> Config:
     )
 
 
+# Platform-specific default overrides.  Only the fields listed here are
+# changed; everything else is inherited from the user's config.
+_PLATFORM_DEFAULTS: dict[str, dict] = {
+    "x": {
+        "image_width": 680,
+        "code": {"font_size": 42, "image_width": 1200, "padding_x": 30, "padding_y": 30, "separator": 0},
+        "latex": {"font_size": 35, "padding": 50, "image_width": 1200},
+    },
+    "medium": {
+        "image_width": 700,
+        "code": {"font_size": 42, "image_width": 1200, "padding_x": 30, "padding_y": 30, "separator": 0},
+        "latex": {"font_size": 35, "padding": 50, "image_width": 1200},
+    },
+}
+
+
 def apply_platform_defaults(config: Config, platform: str) -> Config:
     """
     Apply platform-specific default adjustments to config.
 
     Returns a new Config with platform-optimized settings.
     """
-    if platform == "x":
-        # X Articles: much smaller images and fonts for 680px mobile-first content width
-        return Config(
-            image_width=680,
-            border_radius=config.border_radius,
-            code=CodeConfig(
-                font_size=42,
-                theme=config.code.theme,
-                line_numbers=config.code.line_numbers,
-                font=config.code.font,
-                image_width=1200,
-                padding_x=30,
-                padding_y=30,
-                separator=0,
-                background=config.code.background,
-                border_radius=config.code.border_radius,
-            ),
-            latex=LatexConfig(
-                font_size=35,
-                dpi=config.latex.dpi,
-                color=config.latex.color,
-                background=config.latex.background,
-                padding=50,
-                image_width=1200,
-                try_usetex=config.latex.try_usetex,
-                preamble=config.latex.preamble,
-                border_radius=config.latex.border_radius,
-            ),
-        )
-    if platform == "medium":
-        # Medium: ~700px content column, similar to X but slightly wider
-        return Config(
-            image_width=700,
-            border_radius=config.border_radius,
-            code=CodeConfig(
-                font_size=42,
-                theme=config.code.theme,
-                line_numbers=config.code.line_numbers,
-                font=config.code.font,
-                image_width=1200,
-                padding_x=30,
-                padding_y=30,
-                separator=0,
-                background=config.code.background,
-                border_radius=config.code.border_radius,
-            ),
-            latex=LatexConfig(
-                font_size=35,
-                dpi=config.latex.dpi,
-                color=config.latex.color,
-                background=config.latex.background,
-                padding=50,
-                image_width=1200,
-                try_usetex=config.latex.try_usetex,
-                preamble=config.latex.preamble,
-                border_radius=config.latex.border_radius,
-            ),
-        )
-    # Default: return config unchanged (for Substack and others)
-    return config
+    defaults = _PLATFORM_DEFAULTS.get(platform)
+    if defaults is None:
+        return config
+
+    code_overrides = defaults.get("code", {})
+    latex_overrides = defaults.get("latex", {})
+
+    # Build CodeConfig: start from current config, override with platform defaults
+    code_fields = {f: getattr(config.code, f) for f in CodeConfig.__dataclass_fields__}
+    code_fields.update(code_overrides)
+
+    # Build LatexConfig: start from current config, override with platform defaults
+    latex_fields = {f: getattr(config.latex, f) for f in LatexConfig.__dataclass_fields__}
+    latex_fields.update(latex_overrides)
+
+    return Config(
+        image_width=defaults.get("image_width", config.image_width),
+        border_radius=config.border_radius,
+        code=CodeConfig(**code_fields),
+        latex=LatexConfig(**latex_fields),
+    )

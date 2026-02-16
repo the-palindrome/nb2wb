@@ -6,7 +6,6 @@ This builder creates an interactive HTML with "Copy image" buttons for each imag
 """
 from __future__ import annotations
 
-import re
 from .base import PlatformBuilder
 
 # X Articles HTML template with interactive image copying
@@ -293,31 +292,3 @@ class XArticlesBuilder(PlatformBuilder):
         """
         content_html = self._make_images_copyable(content_html)
         return _HEAD + content_html + _TAIL
-
-    def _make_images_copyable(self, html: str) -> str:
-        """Wrap each <img> in a container with an inline copy button."""
-        img_pattern = re.compile(
-            r'<img\s+[^>]*src="([^"]+)"[^>]*/?>',
-            re.IGNORECASE,
-        )
-
-        def wrap_image(match: re.Match) -> str:
-            img_src = match.group(1)
-
-            if not img_src.startswith('data:'):
-                img_src = self._to_data_uri(img_src)
-
-            full_tag = match.group(0)
-            alt_match = re.search(r'alt="([^"]*)"', full_tag)
-            alt_text = alt_match.group(1) if alt_match else "image"
-
-            return (
-                f'<div class="image-container">'
-                f'<img src="{img_src}" alt="{alt_text}">'
-                f'<button class="copy-image-btn" type="button">Copy image</button>'
-                f'</div>'
-            )
-
-        return img_pattern.sub(wrap_image, html)
-
-    # _to_data_uri inherited from PlatformBuilder

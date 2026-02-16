@@ -6,6 +6,7 @@ from __future__ import annotations
 import base64
 import ipaddress
 import mimetypes
+import re
 import urllib.request
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -27,6 +28,15 @@ _ALLOWED_IMAGE_MIMES = frozenset({
     "image/bmp",
     "image/tiff",
 })
+
+# Mapping from data-URI MIME type to file extension
+MIME_TO_EXT: dict[str, str] = {
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/gif": ".gif",
+    "image/svg+xml": ".svg",
+    "image/webp": ".webp",
+}
 
 
 def _is_private_host(hostname: str) -> bool:
@@ -173,3 +183,29 @@ class PlatformBuilder(ABC):
 
         b64_data = base64.b64encode(image_data).decode("utf-8")
         return f"data:{mime_type};base64,{b64_data}"
+
+    def _make_images_copyable(self, html: str) -> str:
+        """Wrap each ``<img>`` in a container with an inline copy button."""
+        img_pattern = re.compile(
+            r'<img\s+[^>]*src="([^"]+)"[^>]*/?>',
+            re.IGNORECASE,
+        )
+
+        def wrap_image(match: re.Match) -> str:
+            img_src = match.group(1)
+
+            if not img_src.startswith("data:"):
+                img_src = self._to_data_uri(img_src)
+
+            full_tag = match.group(0)
+            alt_match = re.search(r'alt="([^"]*)"', full_tag)
+            alt_text = alt_match.group(1) if alt_match else "image"
+
+            return (
+                f'<div class="image-container">'
+                f'<img src="{img_src}" alt="{alt_text}">'
+                f'<button class="copy-image-btn" type="button">Copy image</button>'
+                f'</div>'
+            )
+
+        return img_pattern.sub(wrap_image, html)

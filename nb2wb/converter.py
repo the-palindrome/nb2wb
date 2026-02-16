@@ -52,10 +52,17 @@ _MD_EXTENSIONS = ["extra", "sane_lists", "nl2br"]
 
 
 class Converter:
+    """Converts a Jupyter notebook or Quarto document into HTML content fragments."""
+
     def __init__(self, config: Config) -> None:
         self.config = config
 
     def convert(self, notebook_path: Path) -> str:
+        """Convert a ``.ipynb`` or ``.qmd`` file to a concatenated HTML string.
+
+        Reads the notebook, collects LaTeX preamble and equation labels across
+        all cells, then renders each markdown and code cell to HTML fragments.
+        """
         if notebook_path.suffix.lower() == ".qmd":
             nb = read_qmd(notebook_path)
             nb = _execute_cells(nb, notebook_path.parent)
@@ -107,6 +114,7 @@ class Converter:
     # ------------------------------------------------------------------
 
     def _markdown_cell(self, cell) -> str:
+        """Render a markdown cell to HTML, processing LaTeX and equation references."""
         src = cell.source
 
         # Protect fenced code blocks and inline code spans from all LaTeX
@@ -158,6 +166,7 @@ class Converter:
         return f'<div class="md-cell">{html}</div>\n'
 
     def _code_cell(self, cell, tags: frozenset[str] = frozenset()) -> str:
+        """Render a code cell (source + outputs) to an HTML ``<div>``."""
         png_parts: list[bytes] = []
         rich_parts: list[str] = []
         has_code = False
@@ -263,6 +272,7 @@ class Converter:
 # ---------------------------------------------------------------------------
 
 def _png_uri(png_bytes: bytes) -> str:
+    """Encode raw PNG bytes as a ``data:image/png;base64,...`` URI."""
     return "data:image/png;base64," + base64.b64encode(png_bytes).decode("ascii")
 
 
@@ -290,6 +300,7 @@ def _cell_tags(cell) -> frozenset[str]:
 
 
 def _notebook_language(nb) -> str:
+    """Detect the programming language of a notebook from its metadata, defaulting to Python."""
     try:
         meta = nb.metadata
         lang = meta.get("kernelspec", {}).get("language", "")

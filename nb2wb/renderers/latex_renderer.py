@@ -27,24 +27,7 @@ import matplotlib.pyplot as plt
 from PIL import Image, ImageChops, ImageDraw, ImageFont
 
 from ..config import LatexConfig
-
-# ---------------------------------------------------------------------------
-# Patterns that identify display-math spans
-# ---------------------------------------------------------------------------
-_PATTERNS = [
-    # $$...$$
-    re.compile(r"\$\$(.*?)\$\$", re.DOTALL),
-    # \[...\]
-    re.compile(r"\\\[(.*?)\\\]", re.DOTALL),
-    # \begin{equation|align|gather|multline|eqnarray}[*]...\end{...}[*]
-    re.compile(
-        r"\\begin\{(equation|align|gather|multline|eqnarray)(\*)?\}"
-        r"(.*?)"
-        r"\\end\{\1\2?\}",
-        re.DOTALL,
-    ),
-]
-
+from ._image_utils import round_corners as _round_corners
 
 def extract_display_math(text: str) -> list[tuple[int, int, str]]:
     """
@@ -109,15 +92,6 @@ def render_latex_block(
 # ---------------------------------------------------------------------------
 # Post-processing helpers
 # ---------------------------------------------------------------------------
-
-def _round_corners(img: Image.Image, radius: int) -> Image.Image:
-    """Apply transparent rounded corners via an alpha-channel mask."""
-    rgba = img.convert("RGBA")
-    mask = Image.new("L", rgba.size, 0)
-    draw = ImageDraw.Draw(mask)
-    draw.rounded_rectangle([0, 0, rgba.width - 1, rgba.height - 1], radius=radius, fill=255)
-    rgba.putalpha(mask)
-    return rgba
 
 
 def _draw_tag(canvas: Image.Image, tag: int, config: LatexConfig) -> None:
