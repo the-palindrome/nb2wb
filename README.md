@@ -47,10 +47,12 @@ pip install -e ".[examples]"
 
 ```bash
 nb2wb notebook.ipynb                         # → notebook.html (Substack by default)
+nb2wb notebook.ipynb -t medium               # → Medium format
 nb2wb notebook.ipynb -t x                    # → X Articles format
 nb2wb notebook.ipynb -c config.yaml          # with custom config
 nb2wb notebook.ipynb -o out.html             # explicit output path
 nb2wb notebook.ipynb --open                  # open in browser when done
+nb2wb notebook.ipynb --serve                 # serve with ngrok tunnel (see below)
 ```
 
 Then open the HTML file in your browser, click **Copy to clipboard**, and
@@ -60,10 +62,48 @@ paste into your platform's draft editor.
 
 | Platform | Flag | How it works |
 |---|---|---|
-| **Substack** | `-t substack` (default) | Copy HTML and paste directly into Substack editor |
-| **X Articles** | `-t x` | Interactive HTML with "Copy image" buttons — click each button to copy images to clipboard, then paste into X editor |
+| **Substack** | `-t substack` (default) | Copy and paste — images transfer automatically |
+| **Medium** | `-t medium` | Copy and paste text, then hover each image to copy it individually (or use `--serve` for one-click) |
+| **X Articles** | `-t x` | Copy and paste text, then hover each image to copy it individually (or use `--serve` for one-click) |
 
-**Note for X Articles:** X's editor doesn't support embedded images, so nb2wb generates an interactive HTML page. Click the "Copy image" button for each image, paste it into your X draft at the right position, then copy-paste the text content around the images.
+### Platform tips
+
+**Substack** works out of the box — click **Copy to clipboard**, paste into
+your draft, and all text and images transfer in one step.
+
+**Medium** strips embedded images from pasted HTML, so the default output
+includes per-image **Copy image** buttons that appear on hover. For a
+smoother workflow, use `--serve` mode (see below) which gives images public
+URLs that Medium can fetch automatically — one click, everything pastes.
+
+**X Articles** also strips embedded images. The same two workflows apply:
+hover-to-copy each image individually, or use `--serve` for one-click pasting.
+
+### Serve mode (`--serve`)
+
+Some platforms (Medium, X Articles) strip base64-embedded images but will
+fetch images from real HTTP URLs. The `--serve` flag starts a local HTTP
+server and exposes it via an [ngrok](https://ngrok.com/) tunnel, giving every
+image a public URL.
+
+```bash
+nb2wb notebook.ipynb -t medium --serve
+```
+
+This will:
+
+1. Extract embedded images to an `images/` directory
+2. Rewrite the HTML to reference those files
+3. Start a local HTTP server and an ngrok tunnel
+4. Open the public URL in your browser
+
+Copy from the opened page and paste into your editor — images transfer
+automatically because the platform can fetch them from the public URL.
+Press **Ctrl-C** to stop the server when done.
+
+**Requirements:** [ngrok](https://ngrok.com/download) must be installed and
+authenticated (`ngrok config add-authtoken <TOKEN>`). Serve mode works with
+any target platform (`-t substack`, `-t medium`, `-t x`).
 
 ---
 
