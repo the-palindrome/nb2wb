@@ -27,18 +27,15 @@ this by turning complex content into **images**, and converting simple inline ma
 ## Installation
 
 ```bash
-git clone https://github.com/yourname/nb2wb.git
-cd nb2wb
-python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install -e .
+pip install nb2wb
 ```
 
-To run the bundled example notebooks (which use NumPy), install the optional
-`examples` extra:
+For development:
 
 ```bash
-pip install -e ".[examples]"
+git clone https://github.com/the-palindrome/nb2wb.git
+cd nb2wb
+pip install -e ".[dev]"
 ```
 
 ---
