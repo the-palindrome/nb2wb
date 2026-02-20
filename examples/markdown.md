@@ -1,30 +1,13 @@
----
-title: "From Quarto to Web"
-author: "Your Name"
-date: today
-format: html
-execute:
-  echo: true    # show code by default (overridable per-chunk with #| echo: false)
-  output: true  # show output by default
----
+# From Markdown to Web
 
-```{latex-preamble}
+```latex-preamble
 \usepackage{amsmath}
-\usepackage{amsfonts}
-\usepackage{amssymb}
 \usepackage{xcolor}
-
-\definecolor{ashBlack}{HTML}{111111}
-\definecolor{matrixGreen}{HTML}{03A062}
-\definecolor{matrixBlue}{HTML}{03A0C2}
 \definecolor{maizeCrayola}{HTML}{E8C547}
 \definecolor{blueGray}{HTML}{6290C3}
-\definecolor{ruby}{HTML}{D81E5B}
 ```
 
-# From Quarto to Web
-
-This document demonstrates the `nb2wb` converter with a Quarto (`.qmd`) source
+This document demonstrates the `nb2wb` converter with a plain Markdown source
 file. It covers the three pillars of technical writing: prose, mathematics, and
 code.
 
@@ -46,7 +29,7 @@ Block equations are rendered to crisp PNG images.
 
 The quadratic formula:
 
-```latex
+```latex text-snippet
 x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a} \label{eq:quadratic}
 ```
 
@@ -58,7 +41,7 @@ You can render the equation references as `\\eqref{eq:quadratic}`, which renders
 
 You can also use colors that are defined in the preamble. Bayes' theorem:
 
-```latex
+```latex text-snippet
 P({\color{maizeCrayola} A} \mid {\color{blueGray} B}) = \frac{P({\color{blueGray} B} \mid {\color{maizeCrayola} A})\, P({\color{maizeCrayola} A})}{P({\color{blueGray} B})} \label{eq:bayes}
 ```
 
@@ -68,19 +51,19 @@ $$P({\color{maizeCrayola} A} \mid {\color{blueGray} B}) = \frac{P({\color{blueGr
 
 A matrix equation:
 
-```latex
+```latex text-snippet
 \mathbf{y} = \mathbf{X}\boldsymbol{\beta} + \boldsymbol{\varepsilon} \label{eq:mtx}
 ```
 
 is rendered to
 
-\[
+$$
   \mathbf{y} = \mathbf{X}\boldsymbol{\beta} + \boldsymbol{\varepsilon} \label{eq:mtx}
-\]
+$$
 
 The Basel formula:
 
-```latex
+```latex text-snippet
 \sum_{n=1}^{\infty} \frac{1}{n^2} = \frac{\pi^2}{6}
 ```
 
@@ -92,7 +75,7 @@ $$
 
 Now, a complex multi-line example. The Gaussian integral, derived by switching to polar coordinates:
 
-```latex
+```latex text-snippet
 \begin{align*}
 I   &= \int_{-\infty}^{\infty} e^{-x^2}\,dx \\[4pt]
 I^2 &= \int_{-\infty}^{\infty}\!\int_{-\infty}^{\infty} e^{-(x^2+y^2)}\,dx\,dy \\[4pt]
@@ -121,7 +104,7 @@ $$
 Code cells and their outputs are rendered as syntax-highlighted images,
 so formatting and colours are perfectly preserved.
 
-```{python}
+```python
 def fibonacci(n):
     """Yield the first n Fibonacci numbers."""
     a, b = 0, 1
@@ -133,7 +116,7 @@ print("Fibonacci sequence (first 10 terms):")
 print(*fibonacci(10))
 ```
 
-```{python}
+```python
 # Simple list comprehension
 x = list(range(10))
 [i ** 2 for i in x]
@@ -149,7 +132,7 @@ $$\sigma(\mathbf{z})_j = \frac{e^{z_j}}{\sum_{k=1}^{K} e^{z_k}}$$
 Here $j = 1, \ldots, K$ indexes the classes.  Note that $\sum_j \sigma_j = 1$
 by construction.
 
-```{python}
+```python
 import math
 
 def softmax(z):
@@ -166,7 +149,7 @@ print(f"softmax({z}) = [{probs[0]:.4f} {probs[1]:.4f} {probs[2]:.4f}]")
 
 ## 5  Figures
 
-```{python}
+```python
 import matplotlib.pyplot as plt
 
 
@@ -183,33 +166,3 @@ with plt.style.context("seaborn-v0_8-white"):
     plt.tight_layout()
     plt.show()
 ```
-
-## 6  Cell Tags
-
-Quarto cell options (`#|` lines) map to nb2wb cell tags:
-
-| Quarto option | nb2wb tag | Effect |
-|---|---|---|
-| `#\| include: false` | `hide-cell` | Entire cell omitted (input + output) |
-| `#\| echo: false` | `hide-input` | Source code hidden; output shown |
-| `#\| output: false` | `hide-output` | Output hidden; source code shown |
-
-The next cell uses `#| echo: false` — only its output is rendered.
-
-```{python}
-#| echo: false
-result = sum(i**2 for i in range(1, 11))
-print(f"Sum of squares 1..10 = {result}")
-```
-
-The next cell uses `#| output: false` — only its source code is rendered.
-
-```{python}
-#| output: false
-import sys
-print(f"Python {sys.version}")
-print("(This output is hidden in the published post.)")
-```
-
-The preamble chunk at the top of this document uses the `{latex-preamble}`
-chunk type and is likewise invisible in the output.

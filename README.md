@@ -2,9 +2,9 @@
 
 **Write in Jupyter Notebooks. Publish anywhere.**
 
-`nb2wb` (short for *notebook to web*) converts Jupyter Notebooks into self-contained HTML files you can
-paste directly into publishing platforms like **Substack** and **X Articles** — with LaTeX, code, and outputs all
-rendered faithfully.
+`nb2wb` (short for *notebook to web*) converts Jupyter Notebooks (`.ipynb`), Quarto documents (`.qmd`),
+and plain Markdown files (`.md`) into self-contained HTML files you can paste directly into publishing
+platforms like **Substack**, **Medium**, and **X Articles** — with LaTeX, code, and outputs all rendered faithfully.
 
 ---
 
@@ -50,6 +50,9 @@ nb2wb notebook.ipynb -c config.yaml          # with custom config
 nb2wb notebook.ipynb -o out.html             # explicit output path
 nb2wb notebook.ipynb --open                  # open in browser when done
 nb2wb notebook.ipynb --serve                 # serve with ngrok tunnel (see below)
+nb2wb article.md                             # → article.html from Markdown
+nb2wb article.md --execute                   # execute code blocks via Jupyter kernel
+nb2wb document.qmd                           # → document.html from Quarto
 ```
 
 Then open the HTML file in your browser, click **Copy to clipboard**, and
@@ -144,8 +147,6 @@ handles most common expressions without any extra dependencies.
 ### Cell tags
 
 Attach tags to cells to control what appears in the output.
-In JupyterLab open **View → Cell Toolbar → Tags**; in Jupyter Notebook use
-**View → Cell Toolbar → Tags** or edit the cell metadata directly.
 
 | Tag | Effect |
 |---|---|
@@ -153,15 +154,72 @@ In JupyterLab open **View → Cell Toolbar → Tags**; in Jupyter Notebook use
 | `hide-input` | Source code hidden; output shown |
 | `hide-output` | Output hidden; source code shown |
 | `latex-preamble` | Cell source used as LaTeX preamble; cell itself is hidden |
+| `text-snippet` | Code rendered as copyable HTML text instead of a PNG image |
 
 `hide-cell` also works on Markdown cells.
 
+#### Notebook cell tags
+
+In JupyterLab open **View → Cell Toolbar → Tags**; in Jupyter Notebook use
+**View → Cell Toolbar → Tags** or edit the cell metadata directly.
+
+#### Markdown cell tags
+
+In `.md` files there are two ways to attach tags to code blocks.
+
+**Fence-line tags** — add tags after the language on the opening fence:
+
+````markdown
+```python hide-input
+secret = "not shown"
+```
+
+```python text-snippet
+x = 1 + 1
+print(x)
+```
+````
+
+**HTML comment directives** — place a `<!-- nb2wb: ... -->` comment on its
+own line immediately before the code block:
+
+```markdown
+<!-- nb2wb: hide-input -->
+```python
+secret = "not shown"
+```
+```
+
+Multiple tags can be combined in a single comment:
+
+```markdown
+<!-- nb2wb: hide-input, hide-output -->
+```python
+x = 1
+```
+```
+
+Both methods can be used together — the tags are merged.
+
+#### Quarto cell tags
+
+In `.qmd` files, use the standard `#|` options inside code chunks:
+
+````markdown
+```{python}
+#| echo: false
+secret = "not shown"
+```
+````
+
+See the [Quarto documentation](https://quarto.org/) for all available options.
+
 ### LaTeX preamble
 
-Custom LaTeX packages and macros can be supplied in two ways (both are
+Custom LaTeX packages and macros can be supplied in several ways (all are
 combined when rendering):
 
-**1. Notebook cell (recommended for per-notebook customisation)**
+**1. Notebook cell (`.ipynb`)**
 
 Tag any Markdown cell with `latex-preamble`. Its raw source is injected into
 every formula's LaTeX document. The cell is invisible in the output.
@@ -171,7 +229,20 @@ every formula's LaTeX document. The cell is invisible in the output.
 \definecolor{accent}{HTML}{E8C547}
 ```
 
-**2. Config file (for project-wide defaults)**
+**2. Markdown file (`.md`)**
+
+Use a fenced code block with the special language `latex-preamble`:
+
+````markdown
+```latex-preamble
+\usepackage{xcolor}
+\definecolor{accent}{HTML}{E8C547}
+```
+````
+
+The block is consumed by the converter and does not appear in the output.
+
+**3. Config file (for project-wide defaults)**
 
 ```yaml
 latex:
@@ -201,7 +272,7 @@ Popular choices: `monokai`, `dracula`, `nord`, `solarized-dark`, `vs`,
 ## How it works
 
 ```
-notebook.ipynb
+notebook.ipynb / document.qmd / article.md
       │
       ▼
   [nbformat]  parse cells

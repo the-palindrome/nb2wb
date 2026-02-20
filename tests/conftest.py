@@ -380,6 +380,43 @@ def temp_qmd(tmp_path):
 
 
 @pytest.fixture
+def temp_md(tmp_path):
+    """Write minimal .md file to temporary location and return path."""
+    md_path = tmp_path / "test.md"
+    md_path.write_text("# Test\n\nSome text.\n\n```python\nprint('hello')\n```\n")
+    return md_path
+
+
+@pytest.fixture
+def md_with_preamble(tmp_path):
+    """Write .md file with latex-preamble to temporary location."""
+    content = (
+        "# Test\n\n"
+        "```latex-preamble\n"
+        "\\usepackage{xcolor}\n"
+        "\\definecolor{myblue}{RGB}{0,100,200}\n"
+        "```\n\n"
+        "$$\\color{myblue} E = mc^2$$\n"
+    )
+    md_path = tmp_path / "preamble_test.md"
+    md_path.write_text(content)
+    return md_path
+
+
+@pytest.fixture
+def md_with_directives(tmp_path):
+    """Write .md file with nb2wb directives."""
+    content = (
+        "# Test\n\n"
+        "<!-- nb2wb: hide-input -->\n"
+        "```python\nprint('hidden source')\n```\n"
+    )
+    md_path = tmp_path / "directive_test.md"
+    md_path.write_text(content)
+    return md_path
+
+
+@pytest.fixture
 def temp_config(tmp_path):
     """Write minimal config to temporary file and return path."""
     config_path = tmp_path / "config.yaml"
