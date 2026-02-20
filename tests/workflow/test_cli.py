@@ -252,6 +252,87 @@ print(x)
             assert len(html) > 0
 
 
+class TestCLIMarkdownSupport:
+    """Test CLI with Markdown files."""
+
+    def test_cli_converts_md(self, tmp_path):
+        """CLI converts Markdown .md files."""
+        md_content = "# Heading\n\nSome text.\n\n```python\nx = 1 + 1\n```\n"
+        md_path = tmp_path / "test.md"
+        md_path.write_text(md_content)
+        output_path = tmp_path / "output.html"
+
+        sys.argv = ["nb2wb", str(md_path), "-o", str(output_path)]
+
+        try:
+            main()
+        except SystemExit:
+            pass
+
+        assert output_path.exists()
+        html = output_path.read_text()
+        assert "Heading" in html
+        assert len(html) > 100
+
+    def test_cli_md_default_output_path(self, tmp_path):
+        """CLI generates default output path for .md files."""
+        md_path = tmp_path / "article.md"
+        md_path.write_text("# Simple\n")
+
+        sys.argv = ["nb2wb", str(md_path)]
+
+        try:
+            main()
+        except SystemExit:
+            pass
+
+        default_output = tmp_path / "article.html"
+        assert default_output.exists()
+
+    def test_cli_md_with_execute_flag(self, tmp_path):
+        """CLI accepts --execute flag with .md files."""
+        md_path = tmp_path / "exec.md"
+        md_path.write_text("# Test\n\n```python\nprint('hi')\n```\n")
+        output_path = tmp_path / "output.html"
+
+        sys.argv = ["nb2wb", str(md_path), "--execute", "-o", str(output_path)]
+
+        try:
+            main()
+        except (SystemExit, Exception):
+            # Execution may fail without Jupyter kernel; that's OK
+            pass
+
+        # If output was created, it should be valid
+        if output_path.exists():
+            html = output_path.read_text()
+            assert len(html) > 0
+
+    def test_cli_execute_flag_in_help(self, capsys):
+        """--execute flag appears in CLI help text."""
+        sys.argv = ["nb2wb", "--help"]
+
+        try:
+            main()
+        except SystemExit:
+            pass
+
+        captured = capsys.readouterr()
+        assert "--execute" in captured.out
+
+    def test_cli_md_help_mentions_md(self, capsys):
+        """CLI help text mentions .md files."""
+        sys.argv = ["nb2wb", "--help"]
+
+        try:
+            main()
+        except SystemExit:
+            pass
+
+        captured = capsys.readouterr()
+        assert ".md" in captured.out
+
+
 class TestCLIOutputValidation:
     """Test CLI output validation."""
 

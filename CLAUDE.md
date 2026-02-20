@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Project Does
 
-nb2wb (notebook to web) converts Jupyter Notebooks and Quarto (.qmd) files into self-contained HTML files for publishing on Substack, Medium, and X Articles. It renders LaTeX as PNGs, converts inline math to Unicode, and syntax-highlights code cells as images — all base64-embedded so the HTML has no external dependencies.
+nb2wb (notebook to web) converts Jupyter Notebooks, Quarto (.qmd), and Markdown (.md) files into self-contained HTML files for publishing on Substack, Medium, and X Articles. It renders LaTeX as PNGs, converts inline math to Unicode, and syntax-highlights code cells as images — all base64-embedded so the HTML has no external dependencies.
 
 ## Commands
 
@@ -19,6 +19,8 @@ nb2wb notebook.ipynb                    # Substack (default)
 nb2wb notebook.ipynb -t medium          # Medium format
 nb2wb notebook.ipynb -t x              # X Articles format
 nb2wb notebook.ipynb -c config.yaml    # Custom config
+nb2wb article.md                        # Markdown file (static code blocks)
+nb2wb article.md --execute              # Markdown with code execution
 ```
 
 ### Tests
@@ -47,10 +49,10 @@ pip install build && python -m build
 ### Conversion Pipeline
 
 ```
-.ipynb / .qmd
+.ipynb / .qmd / .md
     │
     ▼
- read (nbformat / qmd_reader)
+ read (nbformat / qmd_reader / md_reader)
     │
     ▼
  Converter.convert()
@@ -77,6 +79,7 @@ nb2wb/
 ├── cli.py                   # CLI argument parsing & serve mode
 ├── config.py                # YAML config loading, dataclasses
 ├── converter.py             # Main conversion pipeline orchestrator
+├── md_reader.py             # Plain Markdown .md file parser
 ├── qmd_reader.py            # Quarto .qmd file parser
 ├── platforms/
 │   ├── __init__.py          # get_builder() / list_platforms()
@@ -94,7 +97,7 @@ nb2wb/
 
 ### `cli.py` — Command-Line Interface
 
-- `main()` — Entry point: parses args (`-t`, `-c`, `-o`, `--open`, `--serve`), loads config, runs converter, writes HTML
+- `main()` — Entry point: parses args (`-t`, `-c`, `-o`, `--open`, `--serve`, `--execute`), loads config, runs converter, writes HTML
 - `_extract_images(html, images_dir)` — Replaces base64 `<img>` sources with extracted files (for serve mode)
 - `_find_free_port()` — Finds available TCP port for local HTTP server
 - `_get_ngrok_url(max_attempts)` — Polls ngrok local API for public tunnel URL
@@ -113,7 +116,7 @@ Functions:
 
 ### `converter.py` — Conversion Orchestrator
 
-Class `Converter`:
+Class `Converter(config, execute=False)`:
 - `convert(notebook_path)` — Main pipeline: read notebook → collect preamble → collect equation labels → process cells → return concatenated HTML
 - `_markdown_cell(cell)` — Protect code blocks → resolve `\eqref` → extract display math → render to PNG → convert inline math to Unicode → Markdown→HTML
 - `_code_cell(cell, tags)` — Render source as syntax-highlighted PNG → process outputs (stream/text→PNG, image/svg/html→embed) → stack PNGs vertically → add footer
@@ -125,7 +128,22 @@ Module helpers:
 - `_apply_eq_tag(latex, eq_labels)` — Strips `\label{...}`, returns (clean_latex, equation_number)
 - `_cell_tags(cell)` — Extracts tags from cell metadata (`hide-cell`, `hide-input`, `hide-output`, `latex-preamble`)
 - `_notebook_language(nb)` — Detects language from kernel metadata, defaults to "python"
-- `_execute_cells(nb, cwd)` — Executes code cells via Jupyter kernel (for .qmd)
+- `_execute_cells(nb, cwd)` — Executes code cells via Jupyter kernel (for .qmd; for .md with `--execute`)
+
+### `md_reader.py` — Markdown Parser
+
+- `read_md(path)` — Parses `.md` → nbformat NotebookNode (split front matter, detect language, extract cells)
+- `_split_front_matter(text)` — Extracts optional YAML front matter from document
+- `_detect_language(fm, text)` — Detects language from front matter or first code block
+- `_extract_cells(text, default_lang)` — Parses body into notebook cells; handles `latex-preamble` blocks and HTML comment directives
+- `_consume_directives(text, tags)` — Removes `<!-- nb2wb: tag1, tag2 -->` comments, collects tags for next code cell
+
+Markdown-specific features:
+- Standard fenced code blocks: `` ```language ... ``` `` (also supports `~~~`)
+- LaTeX preamble: `` ```latex-preamble ... ``` `` blocks (hidden, used for LaTeX rendering)
+- Cell visibility: `<!-- nb2wb: hide-input -->`, `<!-- nb2wb: hide-output -->`, `<!-- nb2wb: hide-cell -->` directives
+- Per-cell language: each code cell stores its language in `cell.metadata["language"]`
+- Execution: opt-in via `--execute` CLI flag (unlike .qmd which always executes)
 
 ### `qmd_reader.py` — Quarto Parser
 
@@ -232,12 +250,14 @@ tests/
 │   ├── test_inline_latex.py           # $...$ → Unicode conversion, fractions, scripts, italicization
 │   ├── test_latex_renderer.py         # Display math extraction, rendering, color conversion, equation numbering
 │   ├── test_code_renderer.py          # Code/output rendering, image stacking, font/color/style handling
+│   ├── test_md_reader.py             # .md parsing, code blocks, directives, preamble, front matter
 │   └── platforms/
 │       └── test_image_security.py     # SSRF blocking, path traversal, MIME validation, size limits
 ├── integration/
-│   └── test_converter_markdown.py     # Full markdown cell processing pipeline
+│   ├── test_converter_markdown.py     # Full markdown cell processing pipeline
+│   └── test_converter_md.py           # .md file conversion pipeline (md_reader + converter)
 └── workflow/
     └── test_cli.py                    # CLI arguments, end-to-end conversion
 ```
 
-Key fixtures in `tests/conftest.py`: `default_config`, `minimal_config`, `x_platform_config`, `mock_latex_available`, `mock_latex_unavailable`, `mock_font_available`, programmatically-generated notebooks (`minimal_notebook`, `markdown_notebook`, `code_notebook`, `tagged_notebook`, `equation_numbered_notebook`, `latex_preamble_notebook`), and temp file helpers (`temp_notebook`, `temp_qmd`, `temp_config`).
+Key fixtures in `tests/conftest.py`: `default_config`, `minimal_config`, `x_platform_config`, `mock_latex_available`, `mock_latex_unavailable`, `mock_font_available`, programmatically-generated notebooks (`minimal_notebook`, `markdown_notebook`, `code_notebook`, `tagged_notebook`, `equation_numbered_notebook`, `latex_preamble_notebook`), and temp file helpers (`temp_notebook`, `temp_qmd`, `temp_md`, `md_with_preamble`, `md_with_directives`, `temp_config`).

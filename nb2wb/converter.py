@@ -28,6 +28,7 @@ import markdown
 import nbformat
 
 from .config import Config
+from .md_reader import read_md
 from .qmd_reader import read_qmd
 # Platform-specific HTML wrapping is now done in CLI
 from .renderers.code_renderer import render_code, render_output_text, vstack_and_pad
@@ -54,11 +55,12 @@ _MD_EXTENSIONS = ["extra", "sane_lists", "nl2br"]
 class Converter:
     """Converts a Jupyter notebook or Quarto document into HTML content fragments."""
 
-    def __init__(self, config: Config) -> None:
+    def __init__(self, config: Config, *, execute: bool = False) -> None:
         self.config = config
+        self.execute = execute
 
     def convert(self, notebook_path: Path) -> str:
-        """Convert a ``.ipynb`` or ``.qmd`` file to a concatenated HTML string.
+        """Convert a ``.ipynb``, ``.qmd``, or ``.md`` file to a concatenated HTML string.
 
         Reads the notebook, collects LaTeX preamble and equation labels across
         all cells, then renders each markdown and code cell to HTML fragments.
@@ -66,6 +68,10 @@ class Converter:
         if notebook_path.suffix.lower() == ".qmd":
             nb = read_qmd(notebook_path)
             nb = _execute_cells(nb, notebook_path.parent)
+        elif notebook_path.suffix.lower() == ".md":
+            nb = read_md(notebook_path)
+            if self.execute:
+                nb = _execute_cells(nb, notebook_path.parent)
         else:
             nb = nbformat.read(str(notebook_path), as_version=4)
         self._lang = _notebook_language(nb)
@@ -175,11 +181,12 @@ class Converter:
 
         if cell.source.strip() and "hide-input" not in tags:
             has_code = True
+            cell_lang = cell.metadata.get("language", self._lang)
             ec = cell.get("execution_count")
             footer_left = f"[{ec}]" if ec is not None else "[ ]"
-            footer_right = self._lang.capitalize() if self._lang else ""
+            footer_right = cell_lang.capitalize() if cell_lang else ""
             png_parts.append(
-                render_code(cell.source, self._lang, self.config.code,
+                render_code(cell.source, cell_lang, self.config.code,
                             apply_padding=False)
             )
 

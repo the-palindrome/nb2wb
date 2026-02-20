@@ -138,9 +138,9 @@ def main() -> None:
     platforms = list_platforms()
     parser = argparse.ArgumentParser(
         prog="nb2wb",
-        description="Convert Jupyter Notebooks or Quarto documents to web-ready HTML",
+        description="Convert Jupyter Notebooks, Quarto, or Markdown documents to web-ready HTML",
     )
-    parser.add_argument("notebook", type=Path, help="Path to the .ipynb or .qmd file")
+    parser.add_argument("notebook", type=Path, help="Path to the .ipynb, .qmd, or .md file")
     parser.add_argument(
         "-c", "--config", type=Path, default=None, help="Path to config.yaml (optional)"
     )
@@ -169,6 +169,12 @@ def main() -> None:
         action="store_true",
         help="Start a local server with an ngrok tunnel (images get public URLs)",
     )
+    parser.add_argument(
+        "--execute",
+        action="store_true",
+        help="Execute code blocks via Jupyter kernel (applies to .md files; "
+             ".qmd files are always executed)",
+    )
 
     args = parser.parse_args()
 
@@ -183,7 +189,7 @@ def main() -> None:
 
     print(f"Converting '{args.notebook}' for {builder.name} …")
     try:
-        content_html = Converter(config).convert(args.notebook)
+        content_html = Converter(config, execute=args.execute).convert(args.notebook)
         html = builder.build_page(content_html)
     except Exception as exc:
         print(f"Conversion failed: {exc}", file=sys.stderr)
