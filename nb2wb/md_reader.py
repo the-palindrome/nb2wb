@@ -7,6 +7,7 @@ Markdown format support
 - Standard fenced code blocks:  ```lang  ...  ```  (or ~~~)
 - The special language ``latex-preamble`` marks a preamble block (the
   source is attached to a markdown cell with the ``latex-preamble`` tag).
+- Inline tags on the fence line:  ```python hide-input  ...  ```
 - HTML comment directives control cell visibility:
     <!-- nb2wb: hide-input -->       hides the code source
     <!-- nb2wb: hide-output -->      hides the output
@@ -24,9 +25,10 @@ import nbformat
 import yaml
 
 
-# Standard fenced code block: ```lang\n...\n```  (3+ backticks or tildes)
+# Standard fenced code block: ```lang [tags...]\n...\n```  (3+ backticks or tildes)
+# Group 1: fence chars, Group 2: language, Group 3: rest of fence line (tags), Group 4: body
 _MD_CODE_RE = re.compile(
-    r"^(`{3,}|~{3,})(\S*)[ \t]*\n(.*?)^\1[ \t]*$",
+    r"^(`{3,}|~{3,})(\S*)([ \t][^\n]*)?\n(.*?)^\1[ \t]*$",
     re.DOTALL | re.MULTILINE,
 )
 
@@ -92,6 +94,7 @@ def _detect_language(fm: dict[str, Any], text: str) -> str:
     for m in _MD_CODE_RE.finditer(text):
         lang = m.group(2).strip()
         if lang and lang not in _SPECIAL_LANGS:
+            # Strip fence-line tags from language (only want the lang itself)
             return lang
     return "python"
 
@@ -119,18 +122,23 @@ def _extract_cells(text: str, default_lang: str) -> list[nbformat.NotebookNode]:
 
         # Parse the code block
         lang = m.group(2).strip() or default_lang
-        body = m.group(3)
+        fence_rest = (m.group(3) or "").strip()
+        body = m.group(4)
+
+        # Parse space-separated tags from the fence line (e.g. ```python hide-input)
+        fence_tags = fence_rest.split() if fence_rest else []
+        all_tags = pending_tags + fence_tags
 
         if lang == "latex-preamble":
             # Hidden markdown cell carrying LaTeX preamble
             cell = nbformat.v4.new_markdown_cell(body.strip())
-            tags = pending_tags + ["latex-preamble"]
-            cell.metadata["tags"] = tags
+            all_tags = all_tags + ["latex-preamble"]
+            cell.metadata["tags"] = all_tags
         else:
             cell = nbformat.v4.new_code_cell(body.strip())
             cell.metadata["language"] = lang
-            if pending_tags:
-                cell.metadata["tags"] = pending_tags
+            if all_tags:
+                cell.metadata["tags"] = all_tags
 
         cells.append(cell)
         pos = m.end()

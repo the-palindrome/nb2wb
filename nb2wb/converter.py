@@ -24,6 +24,8 @@ import base64
 import re
 from pathlib import Path
 
+import html as html_mod
+
 import markdown
 import nbformat
 
@@ -173,6 +175,15 @@ class Converter:
 
     def _code_cell(self, cell, tags: frozenset[str] = frozenset()) -> str:
         """Render a code cell (source + outputs) to an HTML ``<div>``."""
+        # text-snippet: render as copyable HTML text instead of a PNG image
+        if "text-snippet" in tags and cell.source.strip() and "hide-input" not in tags:
+            escaped = html_mod.escape(cell.source)
+            return (
+                '<div class="code-cell">\n'
+                f'<pre><code>{escaped}</code></pre>\n'
+                '</div>\n'
+            )
+
         png_parts: list[bytes] = []
         rich_parts: list[str] = []
         has_code = False

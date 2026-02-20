@@ -2,9 +2,9 @@
 
 **Write in Jupyter Notebooks. Publish anywhere.**
 
-`nb2wb` (short for *notebook to web*) converts Jupyter Notebooks into self-contained HTML files you can
-paste directly into publishing platforms like **Substack** and **X Articles** — with LaTeX, code, and outputs all
-rendered faithfully.
+`nb2wb` (short for *notebook to web*) converts Jupyter Notebooks (`.ipynb`), Quarto documents (`.qmd`),
+and plain Markdown files (`.md`) into self-contained HTML files you can paste directly into publishing
+platforms like **Substack**, **Medium**, and **X Articles** — with LaTeX, code, and outputs all rendered faithfully.
 
 ---
 

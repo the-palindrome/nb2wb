@@ -29,7 +29,7 @@ Block equations are rendered to crisp PNG images.
 
 The quadratic formula:
 
-```latex
+```latex text-snippet
 x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a} \label{eq:quadratic}
 ```
 
@@ -41,7 +41,7 @@ You can render the equation references as `\\eqref{eq:quadratic}`, which renders
 
 You can also use colors that are defined in the preamble. Bayes' theorem:
 
-```latex
+```latex text-snippet
 P({\color{maizeCrayola} A} \mid {\color{blueGray} B}) = \frac{P({\color{blueGray} B} \mid {\color{maizeCrayola} A})\, P({\color{maizeCrayola} A})}{P({\color{blueGray} B})} \label{eq:bayes}
 ```
 
@@ -51,19 +51,19 @@ $$P({\color{maizeCrayola} A} \mid {\color{blueGray} B}) = \frac{P({\color{blueGr
 
 A matrix equation:
 
-```latex
+```latex text-snippet
 \mathbf{y} = \mathbf{X}\boldsymbol{\beta} + \boldsymbol{\varepsilon} \label{eq:mtx}
 ```
 
 is rendered to
 
-\[
+$$
   \mathbf{y} = \mathbf{X}\boldsymbol{\beta} + \boldsymbol{\varepsilon} \label{eq:mtx}
-\]
+$$
 
 The Basel formula:
 
-```latex
+```latex text-snippet
 \sum_{n=1}^{\infty} \frac{1}{n^2} = \frac{\pi^2}{6}
 ```
 
@@ -75,7 +75,7 @@ $$
 
 Now, a complex multi-line example. The Gaussian integral, derived by switching to polar coordinates:
 
-```latex
+```latex text-snippet
 \begin{align*}
 I   &= \int_{-\infty}^{\infty} e^{-x^2}\,dx \\[4pt]
 I^2 &= \int_{-\infty}^{\infty}\!\int_{-\infty}^{\infty} e^{-(x^2+y^2)}\,dx\,dy \\[4pt]

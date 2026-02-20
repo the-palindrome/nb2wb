@@ -100,6 +100,63 @@ class TestMarkdownFileConversion:
         assert html.count("code-cell") == 2
 
 
+class TestTextSnippet:
+    """Test the text-snippet tag rendering."""
+
+    def test_text_snippet_renders_as_html(self, minimal_config, tmp_path):
+        """text-snippet tag renders code as HTML pre/code instead of PNG."""
+        content = "```python text-snippet\nx = 1 + 1\nprint(x)\n```\n"
+        md = tmp_path / "snippet.md"
+        md.write_text(content)
+        converter = Converter(minimal_config)
+        html = converter.convert(md)
+        assert "<pre><code>" in html
+        assert "x = 1 + 1" in html
+        assert "print(x)" in html
+        # Should NOT contain a PNG image for this cell
+        assert "data:image/png" not in html
+
+    def test_text_snippet_escapes_html(self, minimal_config, tmp_path):
+        """text-snippet properly escapes HTML special characters."""
+        content = "```python text-snippet\nif x < 10 & y > 5:\n    pass\n```\n"
+        md = tmp_path / "escape.md"
+        md.write_text(content)
+        converter = Converter(minimal_config)
+        html = converter.convert(md)
+        assert "&lt;" in html
+        assert "&amp;" in html
+        assert "&gt;" in html
+
+    def test_text_snippet_with_hide_input(self, minimal_config, tmp_path):
+        """text-snippet combined with hide-input produces nothing."""
+        content = "```python text-snippet hide-input\nprint('hidden')\n```\n"
+        md = tmp_path / "hidden_snippet.md"
+        md.write_text(content)
+        converter = Converter(minimal_config)
+        html = converter.convert(md)
+        assert "hidden" not in html
+
+    def test_text_snippet_via_directive(self, minimal_config, tmp_path):
+        """text-snippet works via HTML comment directive too."""
+        content = "<!-- nb2wb: text-snippet -->\n```python\nx = 1\n```\n"
+        md = tmp_path / "directive_snippet.md"
+        md.write_text(content)
+        converter = Converter(minimal_config)
+        html = converter.convert(md)
+        assert "<pre><code>" in html
+        assert "x = 1" in html
+
+    def test_normal_code_still_renders_as_image(self, minimal_config, tmp_path):
+        """Code blocks without text-snippet still render as PNG images."""
+        content = "```python\nx = 1\n```\n"
+        md = tmp_path / "normal.md"
+        md.write_text(content)
+        converter = Converter(minimal_config)
+        html = converter.convert(md)
+        assert "data:image/png" in html
+        assert "<pre><code>" not in html
+
+
 class TestMarkdownExecutionFlag:
     """Test the execute flag behavior."""
 

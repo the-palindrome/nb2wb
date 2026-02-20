@@ -286,6 +286,81 @@ class TestDirectives:
 
 
 # ==============================================================================
+# Fence-line tags
+# ==============================================================================
+
+class TestFenceLineTags:
+    """Test tags specified directly on the code fence line."""
+
+    def test_single_fence_tag(self, tmp_path):
+        """```python hide-input adds hide-input tag."""
+        content = "```python hide-input\nprint('hi')\n```\n"
+        md = tmp_path / "fence_tag.md"
+        md.write_text(content)
+        nb = read_md(md)
+        code_cell = nb.cells[0]
+        assert "hide-input" in code_cell.metadata["tags"]
+        assert code_cell.metadata["language"] == "python"
+
+    def test_multiple_fence_tags(self, tmp_path):
+        """```python hide-input hide-output adds both tags."""
+        content = "```python hide-input hide-output\nprint('hi')\n```\n"
+        md = tmp_path / "fence_multi.md"
+        md.write_text(content)
+        nb = read_md(md)
+        code_cell = nb.cells[0]
+        assert "hide-input" in code_cell.metadata["tags"]
+        assert "hide-output" in code_cell.metadata["tags"]
+
+    def test_fence_tag_hide_cell(self, tmp_path):
+        """```python hide-cell adds hide-cell tag."""
+        content = "```python hide-cell\nprint('hi')\n```\n"
+        md = tmp_path / "fence_hide.md"
+        md.write_text(content)
+        nb = read_md(md)
+        code_cell = nb.cells[0]
+        assert "hide-cell" in code_cell.metadata["tags"]
+
+    def test_fence_tags_combined_with_directive(self, tmp_path):
+        """Fence-line tags and HTML comment directives are merged."""
+        content = "<!-- nb2wb: hide-output -->\n```python hide-input\nprint('hi')\n```\n"
+        md = tmp_path / "fence_combo.md"
+        md.write_text(content)
+        nb = read_md(md)
+        code_cell = nb.cells[0]
+        assert "hide-input" in code_cell.metadata["tags"]
+        assert "hide-output" in code_cell.metadata["tags"]
+
+    def test_latex_with_fence_tag(self, tmp_path):
+        """```latex hide-input adds tag to latex code cell."""
+        content = "```latex hide-input\n\\frac{a}{b}\n```\n"
+        md = tmp_path / "latex_tag.md"
+        md.write_text(content)
+        nb = read_md(md)
+        code_cell = nb.cells[0]
+        assert code_cell.metadata["language"] == "latex"
+        assert "hide-input" in code_cell.metadata["tags"]
+
+    def test_fence_tag_with_tilde(self, tmp_path):
+        """~~~python hide-input also works with tilde fences."""
+        content = "~~~python hide-input\nprint('hi')\n~~~\n"
+        md = tmp_path / "tilde_tag.md"
+        md.write_text(content)
+        nb = read_md(md)
+        code_cell = nb.cells[0]
+        assert "hide-input" in code_cell.metadata["tags"]
+
+    def test_no_fence_tags(self, tmp_path):
+        """Code block with only language has no fence-line tags."""
+        content = "```python\nprint('hi')\n```\n"
+        md = tmp_path / "no_fence_tag.md"
+        md.write_text(content)
+        nb = read_md(md)
+        code_cell = nb.cells[0]
+        assert not code_cell.metadata.get("tags")
+
+
+# ==============================================================================
 # Front matter
 # ==============================================================================
 
