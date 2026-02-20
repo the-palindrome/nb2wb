@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import base64
 import re
+import warnings
 from pathlib import Path
 
 import html as html_mod
@@ -156,7 +157,11 @@ class Converter:
                 # Blank lines around the image so Markdown treats it as a block
                 chunks.append(f"\n\n![math]({uri})\n\n")
             except Exception as exc:
-                print(f"  [warn] LaTeX render failed: {exc}")
+                warnings.warn(
+                    f"LaTeX render failed; leaving source block unchanged: {exc}",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
                 chunks.append(src[start:end])
             prev = end
         chunks.append(src[prev:])
@@ -313,7 +318,7 @@ def _cell_tags(cell) -> frozenset[str]:
     """Return the set of tags on a cell (from cell.metadata.tags)."""
     try:
         return frozenset(cell.metadata.get("tags", []))
-    except Exception:
+    except (AttributeError, TypeError):
         return frozenset()
 
 
@@ -325,7 +330,7 @@ def _notebook_language(nb) -> str:
         if not lang:
             lang = meta.get("language_info", {}).get("name", "")
         return lang or "python"
-    except Exception:
+    except (AttributeError, TypeError):
         return "python"
 
 
@@ -334,7 +339,11 @@ def _execute_cells(nb, cwd: Path):
     try:
         from nbconvert.preprocessors import ExecutePreprocessor
     except ImportError:
-        print("  [warn] nbconvert not installed; skipping cell execution for .qmd.")
+        warnings.warn(
+            "nbconvert not installed; skipping code-cell execution.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
         return nb
 
     lang = nb.metadata.get("kernelspec", {}).get("language", "python")
@@ -345,5 +354,9 @@ def _execute_cells(nb, cwd: Path):
     try:
         ep.preprocess(nb, {"metadata": {"path": str(cwd)}})
     except Exception as exc:
-        print(f"  [warn] Cell execution stopped early: {exc}")
+        warnings.warn(
+            f"Cell execution stopped early: {exc}",
+            RuntimeWarning,
+            stacklevel=2,
+        )
     return nb

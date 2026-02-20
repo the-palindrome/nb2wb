@@ -211,6 +211,12 @@ class TestToDataUriFallback:
         result = builder._to_data_uri("../../../etc/passwd")
         assert result == "../../../etc/passwd"
 
+    def test_emits_warning_on_conversion_failure(self):
+        builder = SubstackBuilder()
+        with pytest.warns(RuntimeWarning, match="Could not convert image"):
+            result = builder._to_data_uri("../../../etc/passwd")
+        assert result == "../../../etc/passwd"
+
     def test_returns_original_on_ssrf(self):
         builder = MediumBuilder()
         result = builder._to_data_uri("http://127.0.0.1/secret")
@@ -256,3 +262,13 @@ class TestExtractImagesMime:
 
         assert "images/img_1.png" in result
         assert (tmp_path / "images" / "img_1.png").exists()
+
+    def test_skips_malformed_base64(self, tmp_path):
+        from nb2wb.cli import _extract_images
+
+        bad_b64 = "%%%not-base64%%%"
+        html = f'<img src="data:image/png;base64,{bad_b64}" />'
+        result = _extract_images(html, tmp_path / "images")
+
+        assert f"data:image/png;base64,{bad_b64}" in result
+        assert len(list((tmp_path / "images").iterdir())) == 0

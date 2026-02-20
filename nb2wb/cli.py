@@ -1,5 +1,6 @@
 import argparse
 import base64
+import binascii
 import functools
 import json
 import re
@@ -26,7 +27,7 @@ def _extract_images(html: str, images_dir: Path) -> str:
     (e.g. ``images/img_1.png``).
     """
     images_dir.mkdir(parents=True, exist_ok=True)
-    counter = [0]
+    counter = 0
 
     data_uri_re = re.compile(
         r'<img\s+[^>]*src="(data:([^;]+);base64,([^"]+))"[^>]*/?>',
@@ -34,7 +35,8 @@ def _extract_images(html: str, images_dir: Path) -> str:
     )
 
     def _replace(m: re.Match) -> str:
-        counter[0] += 1
+        nonlocal counter
+        counter += 1
         full_tag = m.group(0)
         full_uri = m.group(1)
         mime = m.group(2)
@@ -44,10 +46,15 @@ def _extract_images(html: str, images_dir: Path) -> str:
             return full_tag  # skip non-image MIME types
 
         ext = _MIME_TO_EXT[mime]
-        filename = f"img_{counter[0]}{ext}"
+        filename = f"img_{counter}{ext}"
         filepath = images_dir / filename
 
-        filepath.write_bytes(base64.b64decode(b64))
+        try:
+            filepath.write_bytes(base64.b64decode(b64, validate=True))
+        except (binascii.Error, ValueError):
+            # Malformed payload: keep the original tag unchanged.
+            counter -= 1
+            return full_tag
 
         rel_path = f"images/{filename}"
         return full_tag.replace(f'src="{full_uri}"', f'src="{rel_path}"')
@@ -64,19 +71,20 @@ def _find_free_port() -> int:
 
 def _get_ngrok_url(max_attempts: int = 10) -> str:
     """Poll ngrok's local API until the public tunnel URL is available."""
+    import urllib.error
     import urllib.request
 
     for _ in range(max_attempts):
         time.sleep(1)
         try:
-            with urllib.request.urlopen("http://127.0.0.1:4040/api/tunnels") as resp:
+            with urllib.request.urlopen("http://127.0.0.1:4040/api/tunnels", timeout=2) as resp:
                 data = json.loads(resp.read())
             for tunnel in data.get("tunnels", []):
                 if tunnel.get("proto") == "https":
                     return tunnel["public_url"]
             if data.get("tunnels"):
                 return data["tunnels"][0]["public_url"]
-        except Exception:
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, KeyError, TypeError):
             continue
     raise RuntimeError("Could not get ngrok tunnel URL. Is ngrok running?")
 

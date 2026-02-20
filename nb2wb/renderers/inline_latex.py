@@ -69,8 +69,19 @@ def _to_unicode(latex: str) -> str:
 
     try:
         import unicodeit
-        result = unicodeit.replace(latex)
-    except Exception:
+    except ImportError:
+        result = latex
+    else:
+        try:
+            result = unicodeit.replace(latex)
+        except (TypeError, ValueError):
+            result = latex
+        except Exception:
+            # unicodeit internals can raise parser-specific exceptions for
+            # malformed input; keep conversion best-effort.
+            result = latex
+
+    if not isinstance(result, str):
         result = latex
 
     result = _expand_scripts(result)
