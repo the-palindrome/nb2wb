@@ -7,9 +7,11 @@ import base64
 import ipaddress
 import mimetypes
 import re
+import warnings
 import urllib.request
 from abc import ABC, abstractmethod
 from pathlib import Path
+from typing import Callable
 from urllib.parse import urlparse
 
 # Maximum image download size: 50 MB
@@ -38,6 +40,51 @@ MIME_TO_EXT: dict[str, str] = {
     "image/webp": ".webp",
 }
 
+_IMG_TAG_RE = re.compile(
+    r'<img\s+[^>]*src="([^"]+)"[^>]*/?>',
+    re.IGNORECASE,
+)
+
+_ALT_ATTR_RE = re.compile(r'alt="([^"]*)"')
+
+
+def _rewrite_img_tags(
+    html: str,
+    rewrite: Callable[[str, str], str],
+) -> str:
+    """Rewrite ``<img ... src="...">`` tags using *rewrite(full_tag, src)*."""
+
+    def _sub(match: re.Match[str]) -> str:
+        return rewrite(match.group(0), match.group(1))
+
+    return _IMG_TAG_RE.sub(_sub, html)
+
+
+def _validate_public_http_url(url: str, *, context: str = "Image URL") -> str:
+    """Validate that *url* is HTTP(S) and does not resolve to private hosts."""
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError(f"{context} must use http/https: {url}")
+
+    hostname = parsed.hostname or ""
+    if not hostname:
+        raise ValueError(f"{context} is missing a hostname: {url}")
+
+    if _is_private_host(hostname):
+        raise ValueError(
+            f"Refusing to fetch image from private/loopback host: {hostname}"
+        )
+
+    return hostname
+
+
+class _SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Redirect handler that rejects redirects to non-public hosts."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        _validate_public_http_url(newurl, context="Redirect target")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
 
 def _is_private_host(hostname: str) -> bool:
     """Return True if *hostname* resolves to a private/loopback address."""
@@ -54,7 +101,7 @@ def _is_private_host(hostname: str) -> bool:
             addr = ipaddress.ip_address(sockaddr[0])
             if addr.is_private or addr.is_loopback or addr.is_reserved:
                 return True
-    except socket.gaierror:
+    except OSError:
         pass
     return False
 
@@ -100,30 +147,38 @@ class PlatformBuilder(ABC):
             if src.startswith(("http://", "https://")):
                 return self._fetch_url_as_data_uri(src)
             return self._read_file_as_data_uri(src)
-        except Exception as e:
-            print(f"Warning: Could not convert image '{src}' to data URI: {e}")
+        except Exception as exc:
+            warnings.warn(
+                f"Could not convert image '{src}' to data URI: {exc}",
+                RuntimeWarning,
+                stacklevel=2,
+            )
             return src
 
     @staticmethod
     def _fetch_url_as_data_uri(url: str) -> str:
         """Fetch a remote image with SSRF, timeout, size, and MIME checks."""
-        parsed = urlparse(url)
-        hostname = parsed.hostname or ""
+        _validate_public_http_url(url)
 
-        if _is_private_host(hostname):
-            raise ValueError(
-                f"Refusing to fetch image from private/loopback host: {hostname}"
-            )
-
+        opener = urllib.request.build_opener(_SafeRedirectHandler())
         req = urllib.request.Request(url)
-        with urllib.request.urlopen(req, timeout=_URL_TIMEOUT) as response:
+        with opener.open(req, timeout=_URL_TIMEOUT) as response:
+            _validate_public_http_url(response.geturl(), context="Final response URL")
+
             # Check Content-Length header first (if provided)
             content_length = response.headers.get("Content-Length")
-            if content_length and int(content_length) > _MAX_IMAGE_BYTES:
-                raise ValueError(
-                    f"Image too large ({int(content_length)} bytes, "
-                    f"max {_MAX_IMAGE_BYTES})"
-                )
+            if content_length:
+                try:
+                    declared_size = int(content_length)
+                except ValueError as exc:
+                    raise ValueError(
+                        f"Invalid Content-Length header for {url}: {content_length!r}"
+                    ) from exc
+                if declared_size > _MAX_IMAGE_BYTES:
+                    raise ValueError(
+                        f"Image too large ({declared_size} bytes, "
+                        f"max {_MAX_IMAGE_BYTES})"
+                    )
 
             # Read in chunks up to the limit
             chunks: list[bytes] = []
@@ -164,7 +219,14 @@ class PlatformBuilder(ABC):
                 f"Path traversal ('..') not allowed in image path: {src}"
             )
 
-        file_path = Path.cwd() / raw
+        cwd = Path.cwd().resolve()
+        file_path = (cwd / raw).resolve(strict=True)
+        if not file_path.is_relative_to(cwd):
+            raise ValueError(
+                f"Resolved image path escapes current working directory: {src}"
+            )
+        if not file_path.is_file():
+            raise ValueError(f"Image path is not a file: {src}")
 
         with open(file_path, "rb") as f:
             image_data = f.read(_MAX_IMAGE_BYTES + 1)
@@ -186,19 +248,12 @@ class PlatformBuilder(ABC):
 
     def _make_images_copyable(self, html: str) -> str:
         """Wrap each ``<img>`` in a container with an inline copy button."""
-        img_pattern = re.compile(
-            r'<img\s+[^>]*src="([^"]+)"[^>]*/?>',
-            re.IGNORECASE,
-        )
-
-        def wrap_image(match: re.Match) -> str:
-            img_src = match.group(1)
+        def wrap_image(full_tag: str, img_src: str) -> str:
 
             if not img_src.startswith("data:"):
                 img_src = self._to_data_uri(img_src)
 
-            full_tag = match.group(0)
-            alt_match = re.search(r'alt="([^"]*)"', full_tag)
+            alt_match = _ALT_ATTR_RE.search(full_tag)
             alt_text = alt_match.group(1) if alt_match else "image"
 
             return (
@@ -208,4 +263,4 @@ class PlatformBuilder(ABC):
                 f'</div>'
             )
 
-        return img_pattern.sub(wrap_image, html)
+        return _rewrite_img_tags(html, wrap_image)

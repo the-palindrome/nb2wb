@@ -1,26 +1,72 @@
 # nb2wb
 
-**Write in Jupyter Notebooks. Publish anywhere.**
+**Write in notebooks. Publish anywhere.**
 
-`nb2wb` (short for *notebook to web*) converts Jupyter Notebooks (`.ipynb`), Quarto documents (`.qmd`),
-and plain Markdown files (`.md`) into self-contained HTML files you can paste directly into publishing
-platforms like **Substack**, **Medium**, and **X Articles** — with LaTeX, code, and outputs all rendered faithfully.
+`nb2wb` converts:
+
+- Jupyter notebooks (`.ipynb`)
+- Quarto documents (`.qmd`)
+- Markdown files (`.md`)
+
+into platform-ready HTML for:
+
+- Substack
+- Medium
+- X Articles
+
+The output is designed for copy/paste workflows where platforms often break MathJax and code formatting.
 
 ---
 
-## Why
+## Why `nb2wb`
 
-Most web publishing platforms strip MathJax and code-block formatting. `nb2wb` sidesteps
-this by turning complex content into **images**, and converting simple inline math into
-**Unicode text** that pastes cleanly as prose.
+Most publishing editors strip or mangle:
 
-| Notebook element | nb2wb output |
+- LaTeX
+- code blocks
+- notebook outputs
+
+`nb2wb` preserves fidelity by rendering complex parts as images and converting inline math to Unicode.
+
+| Content type | Converted as |
 |---|---|
-| Inline LaTeX `$...$` | Unicode text (α, β, ∇, ℝ, …) |
-| Display math `$$...$$`, `\[...\]`, `\begin{equation}` | PNG image |
-| Code cells | Syntax-highlighted PNG image |
-| Cell outputs (text, repr, …) | PNG image |
-| Cell outputs (matplotlib figure, …) | Embedded PNG / SVG |
+| Inline math `$...$` | Unicode + light HTML formatting |
+| Display math (`$$...$$`, `\[...\]`, `\begin{...}`) | PNG |
+| Code input | Syntax-highlighted PNG (or copyable text snippet) |
+| Text outputs / errors | PNG |
+| `image/png` outputs | Embedded as image data URI |
+| `image/svg+xml` outputs | Sanitized SVG as image data URI |
+| `text/html` outputs | Sanitized HTML fragment |
+
+---
+
+## Feature Overview
+
+- Converts `.ipynb`, `.qmd`, and `.md` from one CLI.
+- Platform-specific page wrappers for Substack, Medium, and X.
+- One-click copy toolbar in generated HTML.
+- Medium/X per-image copy buttons for reliable image transfer.
+- Optional `--serve` mode (local server + ngrok URL).
+- Equation labels and cross-references:
+  - `\label{...}` in display math
+  - `\eqref{...}` replaced with `(N)`
+- LaTeX rendering strategy:
+  - tries full `latex + dvipng`
+  - falls back to matplotlib mathtext
+- Inline LaTeX conversion pipeline:
+  - unicode command replacement
+  - superscript/subscript expansion
+  - variable italicization
+- Code rendering controls:
+  - Pygments theme
+  - line numbers
+  - font size
+  - padding / border radius
+- Cell-level visibility and behavior tags:
+  - `hide-cell`, `hide-input`, `hide-output`, `latex-preamble`, `text-snippet`
+- Markdown directives in `.md` via `<!-- nb2wb: ... -->`.
+- Quarto `#|` options mapped to notebook-style tags.
+- Security hardening for image fetching and HTML/SVG embedding.
 
 ---
 
@@ -30,7 +76,7 @@ this by turning complex content into **images**, and converting simple inline ma
 pip install nb2wb
 ```
 
-For development:
+Development install:
 
 ```bash
 git clone https://github.com/the-palindrome/nb2wb.git
@@ -40,291 +86,343 @@ pip install -e ".[dev]"
 
 ---
 
-## Usage
+## Quick Start
 
 ```bash
-nb2wb notebook.ipynb                         # → notebook.html (Substack by default)
-nb2wb notebook.ipynb -t medium               # → Medium format
-nb2wb notebook.ipynb -t x                    # → X Articles format
-nb2wb notebook.ipynb -c config.yaml          # with custom config
-nb2wb notebook.ipynb -o out.html             # explicit output path
-nb2wb notebook.ipynb --open                  # open in browser when done
-nb2wb notebook.ipynb --serve                 # serve with ngrok tunnel (see below)
-nb2wb article.md                             # → article.html from Markdown
-nb2wb article.md --execute                   # execute code blocks via Jupyter kernel
-nb2wb document.qmd                           # → document.html from Quarto
+nb2wb notebook.ipynb
+nb2wb notebook.ipynb -t medium
+nb2wb notebook.ipynb -t x
+nb2wb notebook.ipynb -o article.html
+nb2wb notebook.ipynb --open
+nb2wb notebook.ipynb --serve
+nb2wb article.md
+nb2wb article.md --execute
+nb2wb report.qmd
 ```
 
-Then open the HTML file in your browser, click **Copy to clipboard**, and
-paste into your platform's draft editor.
+Default output path is `<input_basename>.html`.
 
-### Supported platforms
+---
 
-| Platform | Flag | How it works |
+## CLI Reference
+
+```text
+nb2wb <input.{ipynb|qmd|md}> [options]
+```
+
+| Option | Meaning |
+|---|---|
+| `-t, --target {substack,medium,x}` | Target platform (`substack` default) |
+| `-c, --config PATH` | YAML config file |
+| `-o, --output PATH` | Output HTML path |
+| `--open` | Open generated HTML in browser |
+| `--serve` | Extract images, start local server, expose via ngrok |
+| `--execute` | Execute code cells for `.md` files (ignored for `.qmd`, which are always executed) |
+
+---
+
+## Platform Behavior
+
+| Platform | Paste workflow | Image behavior |
 |---|---|---|
-| **Substack** | `-t substack` (default) | Copy and paste — images transfer automatically |
-| **Medium** | `-t medium` | Copy and paste text, then hover each image to copy it individually (or use `--serve` for one-click) |
-| **X Articles** | `-t x` | Copy and paste text, then hover each image to copy it individually (or use `--serve` for one-click) |
+| Substack | One-click copy/paste | Embedded images transfer directly |
+| Medium | Copy/paste + optional per-image copy | Base64 images may be stripped by editor |
+| X Articles | Copy/paste + optional per-image copy | Base64 images may be stripped by editor |
 
-### Platform tips
+### `--serve` mode
 
-**Substack** works out of the box — click **Copy to clipboard**, paste into
-your draft, and all text and images transfer in one step.
+`--serve` helps Medium/X workflows by replacing embedded data URIs with public HTTP URLs.
 
-**Medium** strips embedded images from pasted HTML, so the default output
-includes per-image **Copy image** buttons that appear on hover. For a
-smoother workflow, use `--serve` mode (see below) which gives images public
-URLs that Medium can fetch automatically — one click, everything pastes.
+What it does:
 
-**X Articles** also strips embedded images. The same two workflows apply:
-hover-to-copy each image individually, or use `--serve` for one-click pasting.
+1. Extracts supported image MIME types from the generated HTML into `images/`
+2. Rewrites `<img src="...">` to those files
+3. Starts local HTTP server
+4. Starts ngrok tunnel and opens the public URL
 
-### Serve mode (`--serve`)
+Requirements:
 
-Some platforms (Medium, X Articles) strip base64-embedded images but will
-fetch images from real HTTP URLs. The `--serve` flag starts a local HTTP
-server and exposes it via an [ngrok](https://ngrok.com/) tunnel, giving every
-image a public URL.
+- `ngrok` installed
+- `ngrok` authenticated (`ngrok config add-authtoken <TOKEN>`)
 
-```bash
-nb2wb notebook.ipynb -t medium --serve
-```
+---
 
-This will:
+## Input Format Support
 
-1. Extract embedded images to an `images/` directory
-2. Rewrite the HTML to reference those files
-3. Start a local HTTP server and an ngrok tunnel
-4. Open the public URL in your browser
+### `.ipynb`
 
-Copy from the opened page and paste into your editor — images transfer
-automatically because the platform can fetch them from the public URL.
-Press **Ctrl-C** to stop the server when done.
+- Uses notebook cells and outputs directly.
+- Supports notebook tags in `cell.metadata.tags`.
+- Uses notebook/kernel metadata to infer language for syntax highlighting.
 
-**Requirements:** [ngrok](https://ngrok.com/download) must be installed and
-authenticated (`ngrok config add-authtoken <TOKEN>`). Serve mode works with
-any target platform (`-t substack`, `-t medium`, `-t x`).
+### `.md`
+
+Supported features:
+
+- Optional YAML front matter
+- Fenced code blocks with backticks or tildes
+- Per-fence tags (` ```python hide-input ` style)
+- Directive comments:
+  - `<!-- nb2wb: hide-input -->`
+  - `<!-- nb2wb: hide-output -->`
+  - `<!-- nb2wb: hide-cell -->`
+  - `<!-- nb2wb: text-snippet -->`
+  - comma-separated combinations are supported
+- Special fence language:
+  - `latex-preamble`
+
+Execution:
+
+- Not executed by default
+- Executed when `--execute` is provided
+
+### `.qmd`
+
+Supported features:
+
+- Optional YAML front matter
+- Quarto fenced chunks (` ```{python} ` etc.)
+- Quarto options mapped to tags:
+  - `#| echo: false` -> `hide-input`
+  - `#| output: false` -> `hide-output`
+  - `#| include: false` or `#| eval: false` -> `hide-cell`
+  - `#| tags: [tag1, tag2]` -> tags
+- Special chunk languages:
+  - `latex-preamble`
+  - `output` (attaches stdout to the immediately preceding code cell)
+
+Execution:
+
+- `.qmd` code execution is always attempted by design
+
+---
+
+## Cell Tags
+
+| Tag | Effect |
+|---|---|
+| `hide-cell` | Hide entire cell (input + output) |
+| `hide-input` | Hide code input |
+| `hide-output` | Hide outputs |
+| `latex-preamble` | Use cell/chunk content as LaTeX preamble and hide it |
+| `text-snippet` | Render code as `<pre><code>` instead of PNG |
+
+`hide-cell` applies to markdown cells too.
+
+---
+
+## LaTeX Features
+
+### Display math
+
+Detected forms include:
+
+- `$$...$$`
+- `\[...\]`
+- `\begin{equation}...\end{equation}`
+- `\begin{align}...\end{align}`
+- `\begin{gather}...\end{gather}`
+- `\begin{multline}...\end{multline}`
+- `\begin{eqnarray}...\end{eqnarray}`
+- starred variants where applicable
+
+### Equation numbering and references
+
+- `\label{eq:name}` assigns equation number
+- `\eqref{eq:name}` is replaced with `(N)` across the document
+
+### Inline math
+
+Inline `$...$` expressions are converted to Unicode-oriented text with script handling.
+
+---
+
+## LaTeX Preamble Sources
+
+All of these are combined:
+
+1. Config (`latex.preamble`)
+2. Notebook markdown cells tagged `latex-preamble`
+3. `.md` fenced blocks labeled `latex-preamble`
+4. `.qmd` chunks `{latex-preamble}`
+
+Note:
+
+- preamble only affects full LaTeX (`try_usetex: true` path)
+- matplotlib mathtext fallback ignores custom preamble
+
+---
+
+## Output Rendering Details
+
+For code cells:
+
+- Source code -> syntax-highlighted PNG
+- Footer includes execution count and language label
+- Text output / tracebacks -> muted output PNG block
+
+Rich outputs:
+
+- `image/png` -> embedded directly
+- `image/svg+xml` -> sanitized and embedded as `data:image/svg+xml;base64,...`
+- `text/html` -> sanitized HTML fragment
+
+Raw notebook cells are skipped.
 
 ---
 
 ## Configuration
 
-All options are optional. Copy `example_config.yaml` and edit as needed:
-
-```yaml
-code:
-  font_size: 14           # font size for code images
-  theme: "monokai"        # any Pygments style: monokai, dracula, vs, solarized-dark, …
-  line_numbers: true      # show line numbers
-  font: "DejaVu Sans Mono"
-
-latex:
-  font_size: 16           # font size for LaTeX images
-  dpi: 150                # image resolution
-  color: "black"
-  background: "white"
-  padding: 0.15           # whitespace around each expression (inches)
-  try_usetex: true        # use a full LaTeX install when available; falls back to mathtext
-```
-
-Pass it with `-c`:
+Pass with:
 
 ```bash
 nb2wb notebook.ipynb -c config.yaml
 ```
 
-### LaTeX rendering modes
-
-| Mode | Requirement | Quality |
-|---|---|---|
-| `usetex: true` (default) | LaTeX + dvipng installed | Full LaTeX, best quality |
-| mathtext fallback | None (matplotlib built-in) | Most standard expressions |
-
-If `try_usetex: true` and a LaTeX installation is found, full LaTeX is used
-automatically. Otherwise `nb2wb` falls back to matplotlib's mathtext, which
-handles most common expressions without any extra dependencies.
-
-### Cell tags
-
-Attach tags to cells to control what appears in the output.
-
-| Tag | Effect |
-|---|---|
-| `hide-cell` | Entire cell omitted (input + output) |
-| `hide-input` | Source code hidden; output shown |
-| `hide-output` | Output hidden; source code shown |
-| `latex-preamble` | Cell source used as LaTeX preamble; cell itself is hidden |
-| `text-snippet` | Code rendered as copyable HTML text instead of a PNG image |
-
-`hide-cell` also works on Markdown cells.
-
-#### Notebook cell tags
-
-In JupyterLab open **View → Cell Toolbar → Tags**; in Jupyter Notebook use
-**View → Cell Toolbar → Tags** or edit the cell metadata directly.
-
-#### Markdown cell tags
-
-In `.md` files there are two ways to attach tags to code blocks.
-
-**Fence-line tags** — add tags after the language on the opening fence:
-
-````markdown
-```python hide-input
-secret = "not shown"
-```
-
-```python text-snippet
-x = 1 + 1
-print(x)
-```
-````
-
-**HTML comment directives** — place a `<!-- nb2wb: ... -->` comment on its
-own line immediately before the code block:
-
-```markdown
-<!-- nb2wb: hide-input -->
-```python
-secret = "not shown"
-```
-```
-
-Multiple tags can be combined in a single comment:
-
-```markdown
-<!-- nb2wb: hide-input, hide-output -->
-```python
-x = 1
-```
-```
-
-Both methods can be used together — the tags are merged.
-
-#### Quarto cell tags
-
-In `.qmd` files, use the standard `#|` options inside code chunks:
-
-````markdown
-```{python}
-#| echo: false
-secret = "not shown"
-```
-````
-
-See the [Quarto documentation](https://quarto.org/) for all available options.
-
-### LaTeX preamble
-
-Custom LaTeX packages and macros can be supplied in several ways (all are
-combined when rendering):
-
-**1. Notebook cell (`.ipynb`)**
-
-Tag any Markdown cell with `latex-preamble`. Its raw source is injected into
-every formula's LaTeX document. The cell is invisible in the output.
-
-```
-\usepackage{xcolor}
-\definecolor{accent}{HTML}{E8C547}
-```
-
-**2. Markdown file (`.md`)**
-
-Use a fenced code block with the special language `latex-preamble`:
-
-````markdown
-```latex-preamble
-\usepackage{xcolor}
-\definecolor{accent}{HTML}{E8C547}
-```
-````
-
-The block is consumed by the converter and does not appear in the output.
-
-**3. Config file (for project-wide defaults)**
+### Complete config schema (with defaults)
 
 ```yaml
+# Global defaults
+image_width: 1920
+border_radius: 14
+
+code:
+  font_size: 48
+  theme: "monokai"
+  line_numbers: true
+  font: "DejaVu Sans Mono"
+  image_width: 1920
+  padding_x: 100
+  padding_y: 100
+  separator: 0
+  background: ""       # empty = use theme background
+  border_radius: 14
+
 latex:
-  preamble: |
-    \usepackage{xcolor}
-    \definecolor{accent}{HTML}{E8C547}
+  font_size: 48
+  dpi: 150
+  color: "black"
+  background: "white"
+  padding: 68          # pixels
+  image_width: 1920
+  try_usetex: true
+  preamble: ""
+  border_radius: 0
 ```
 
-> The preamble is only used when `try_usetex: true` and a LaTeX installation
-> is found. The mathtext fallback ignores it.
+Inheritance behavior:
 
----
+- `code.image_width` and `latex.image_width` inherit top-level `image_width` unless overridden
+- `code.border_radius` and `latex.border_radius` inherit top-level `border_radius` unless overridden
+
+### Platform defaults applied automatically
+
+When target is `medium` or `x`, defaults are adjusted for narrower layouts:
+
+- top-level `image_width`: `680`
+- `code.font_size`: `42`
+- `code.image_width`: `1200`
+- `code.padding_x`: `30`
+- `code.padding_y`: `30`
+- `code.separator`: `0`
+- `latex.font_size`: `35`
+- `latex.padding`: `50`
+- `latex.image_width`: `1200`
+
+Substack keeps base defaults unless your config overrides them.
 
 ### Code themes
 
-Any [Pygments style](https://pygments.org/styles/) works:
+Any Pygments style works. Example:
 
 ```bash
-python -c "from pygments.styles import get_all_styles; print(list(get_all_styles()))"
+python -c "from pygments.styles import get_all_styles; print(sorted(get_all_styles()))"
 ```
-
-Popular choices: `monokai`, `dracula`, `nord`, `solarized-dark`, `vs`,
-`github-dark`, `one-dark`.
 
 ---
 
-## How it works
+## Security Model
 
-```
-notebook.ipynb / document.qmd / article.md
-      │
-      ▼
-  [nbformat]  parse cells
-      │
-      ├─ Markdown cell
-      │      ├─ display math   →  [matplotlib]  →  PNG image
-      │      ├─ inline math    →  [unicodeit]   →  Unicode text
-      │      └─ prose          →  [markdown]    →  HTML
-      │
-      └─ Code cell
-             ├─ source         →  [PIL + Pygments]  →  PNG image
-             └─ outputs
-                    ├─ stream / text/plain  →  [PIL]  →  PNG image
-                    ├─ image/png            →  embedded as-is
-                    └─ image/svg+xml        →  embedded as-is
-                                               │
-                                               ▼
-                                        page.html  (self-contained)
-```
+`nb2wb` includes guardrails for image ingestion and HTML embedding:
 
-All images are base64-encoded and embedded in the HTML file — no external
-assets, no server required.
+### Image URL/file safety
+
+- Only `http` / `https` remote image URLs are allowed
+- Requests to private/loopback hosts are blocked (SSRF protection)
+- Redirect targets are re-validated (no public-to-private redirect bypass)
+- Download timeout and max size checks are enforced
+- MIME type allowlist is enforced for fetched/read images
+- Local image paths:
+  - absolute paths rejected
+  - `..` traversal rejected
+  - symlink escape outside current working directory rejected
+
+### Embedded content sanitization
+
+- Markdown-generated HTML is sanitized before embedding
+- `text/html` outputs are sanitized
+- SVG outputs are sanitized, then embedded via image data URI
+- Dangerous tags/attributes/URI schemes are stripped or neutralized
+
+Important:
+
+- Notebook execution (`.qmd` or `--execute`) runs code. Treat untrusted notebooks as untrusted code.
+- Sanitization is best-effort, not a browser sandbox.
 
 ---
 
 ## Requirements
 
-### Core (installed automatically)
+Core dependencies:
 
-- Python ≥ 3.9
-- [nbformat](https://nbformat.readthedocs.io/) — notebook parsing
-- [nbconvert](https://nbconvert.readthedocs.io/) + [ipykernel](https://ipykernel.readthedocs.io/) — `.qmd` cell execution
-- [matplotlib](https://matplotlib.org/) — LaTeX / mathtext rendering
-- [Pillow](https://pillow.readthedocs.io/) — image compositing
-- [Pygments](https://pygments.org/) — syntax highlighting
-- [PyYAML](https://pyyaml.org/) — config and `.qmd` front matter parsing
-- [Markdown](https://python-markdown.github.io/) — prose conversion
-- [unicodeit](https://github.com/svenkreiss/unicodeit) — inline LaTeX → Unicode
+- Python `>=3.9`
+- `nbformat`
+- `nbconvert`
+- `ipykernel`
+- `matplotlib`
+- `Pillow`
+- `Pygments`
+- `PyYAML`
+- `markdown`
+- `unicodeit`
 
-### Optional
+Optional system tools:
 
-| Extra | Install | What it adds |
-|---|---|---|
-| `examples` | `pip install -e ".[examples]"` | NumPy — required by the bundled example notebooks |
-| `dev` | `pip install -e ".[dev]"` | pytest, black, isort |
+- LaTeX + `dvipng` (for highest-fidelity display math rendering)
+- `ngrok` (for `--serve`)
 
-For the best LaTeX rendering, also install a LaTeX distribution
-([TeX Live](https://tug.org/texlive/) or [MiKTeX](https://miktex.org/)) plus
-`dvipng`.
+---
+
+## Development
+
+Run tests:
+
+```bash
+pytest
+pytest tests/unit/
+pytest tests/integration/
+pytest tests/workflow/
+```
+
+Format:
+
+```bash
+black nb2wb tests
+isort nb2wb tests
+```
+
+---
+
+## Limitations
+
+- Platforms can change paste behavior without notice.
+- Medium/X may still require per-image copy depending editor behavior.
+- Extremely complex custom HTML can be altered by sanitization.
+- `.qmd` execution requires a working Jupyter kernel setup.
 
 ---
 
 ## License
 
 MIT
+

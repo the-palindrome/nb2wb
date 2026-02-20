@@ -3,8 +3,7 @@ Substack platform HTML builder.
 """
 from __future__ import annotations
 
-import re
-from .base import PlatformBuilder
+from .base import PlatformBuilder, _rewrite_img_tags
 
 # Split into head/tail so we never have to escape CSS/JS braces
 _HEAD = """\
@@ -169,23 +168,13 @@ class SubstackBuilder(PlatformBuilder):
 
         This ensures all images are embedded and work when pasted into Substack.
         """
-        img_pattern = re.compile(
-            r'<img\s+[^>]*src="([^"]+)"[^>]*/?>',
-            re.IGNORECASE
-        )
+        def convert_image(full_tag: str, img_src: str) -> str:
+            # Convert external URLs and file paths to data URIs.
+            if img_src.startswith("data:"):
+                return full_tag
+            new_src = self._to_data_uri(img_src)
+            return full_tag.replace(f'src="{img_src}"', f'src="{new_src}"', 1)
 
-        def convert_image(match: re.Match) -> str:
-            img_src = match.group(1)
-            full_tag = match.group(0)
-
-            # Convert external URLs and file paths to data URIs
-            if not img_src.startswith('data:'):
-                new_src = self._to_data_uri(img_src)
-                # Replace src in the original tag
-                return full_tag.replace(f'src="{img_src}"', f'src="{new_src}"')
-
-            return full_tag
-
-        return img_pattern.sub(convert_image, html)
+        return _rewrite_img_tags(html, convert_image)
 
     # _to_data_uri inherited from PlatformBuilder
