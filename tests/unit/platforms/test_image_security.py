@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import http.server
 import threading
+import urllib.request
 from pathlib import Path
 from unittest.mock import patch
 
@@ -16,6 +17,7 @@ import pytest
 
 from nb2wb.platforms.base import (
     PlatformBuilder,
+    _SafeRedirectHandler,
     _is_private_host,
     _MAX_IMAGE_BYTES,
 )
@@ -110,6 +112,20 @@ class TestPathTraversal:
         result = PlatformBuilder._read_file_as_data_uri("assets/pic.png")
         assert result.startswith("data:image/png;base64,")
 
+    def test_rejects_symlink_escape(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        outside = tmp_path.parent / "outside.png"
+        outside.write_bytes(_TINY_PNG)
+
+        link = tmp_path / "link.png"
+        try:
+            link.symlink_to(outside)
+        except (OSError, NotImplementedError):
+            pytest.skip("Symlinks not supported in this environment")
+
+        with pytest.raises(ValueError, match="escapes current working directory"):
+            PlatformBuilder._read_file_as_data_uri("link.png")
+
 
 # ---------------------------------------------------------------------------
 # SSRF
@@ -135,6 +151,24 @@ class TestSSRF:
         with pytest.raises(ValueError, match="private/loopback"):
             PlatformBuilder._fetch_url_as_data_uri(
                 "http://169.254.169.254/latest/meta-data/"
+            )
+
+    def test_rejects_non_http_scheme(self):
+        with pytest.raises(ValueError, match="must use http/https"):
+            PlatformBuilder._fetch_url_as_data_uri("ftp://example.com/image.png")
+
+    def test_redirect_handler_rejects_private_target(self):
+        handler = _SafeRedirectHandler()
+        req = urllib.request.Request("https://example.com/image.png")
+
+        with pytest.raises(ValueError, match="private/loopback"):
+            handler.redirect_request(
+                req=req,
+                fp=None,
+                code=302,
+                msg="Found",
+                headers={},
+                newurl="http://127.0.0.1/admin",
             )
 
 

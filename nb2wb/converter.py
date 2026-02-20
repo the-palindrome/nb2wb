@@ -54,6 +54,36 @@ _FENCED_CODE_RE = re.compile(r"^(`{3,})[^\n]*\n.*?\1[ \t]*$", re.MULTILINE | re.
 # Markdown extensions used for cell conversion
 _MD_EXTENSIONS = ["extra", "sane_lists", "nl2br"]
 
+# Best-effort HTML sanitization for notebook-originated dynamic fragments.
+_DANGEROUS_BLOCK_TAG_RE = re.compile(
+    r"<\s*(script|iframe|object|embed)\b[^>]*>.*?<\s*/\s*\1\s*>",
+    re.IGNORECASE | re.DOTALL,
+)
+_DANGEROUS_SINGLE_TAG_RE = re.compile(
+    r"<\s*(script|iframe|object|embed|link|meta)\b[^>]*?/?>",
+    re.IGNORECASE,
+)
+_EVENT_ATTR_RE = re.compile(
+    r"""\s+on[a-zA-Z0-9_-]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)""",
+    re.IGNORECASE,
+)
+_JS_URI_QUOTED_RE = re.compile(
+    r"""(\b(?:href|src|xlink:href)\s*=\s*)(["'])\s*javascript:[^"']*\2""",
+    re.IGNORECASE,
+)
+_JS_URI_UNQUOTED_RE = re.compile(
+    r"""(\b(?:href|src|xlink:href)\s*=\s*)javascript:[^\s>]+""",
+    re.IGNORECASE,
+)
+_DATA_HTML_URI_QUOTED_RE = re.compile(
+    r"""(\b(?:href|src|xlink:href)\s*=\s*)(["'])\s*data:text/html[^"']*\2""",
+    re.IGNORECASE,
+)
+_DATA_HTML_URI_UNQUOTED_RE = re.compile(
+    r"""(\b(?:href|src|xlink:href)\s*=\s*)data:text/html[^\s>]+""",
+    re.IGNORECASE,
+)
+
 
 class Converter:
     """Converts a Jupyter notebook or Quarto document into HTML content fragments."""
@@ -176,6 +206,7 @@ class Converter:
 
         # 3. Markdown → HTML
         html = markdown.markdown(src, extensions=_MD_EXTENSIONS)
+        html = _sanitize_html_fragment(html)
         return f'<div class="md-cell">{html}</div>\n'
 
     def _code_cell(self, cell, tags: frozenset[str] = frozenset()) -> str:
@@ -279,13 +310,13 @@ class Converter:
                 svg = data["image/svg+xml"]
                 if isinstance(svg, list):
                     svg = "".join(svg)
-                return f'<div class="svg-output">{svg}</div>\n'
+                return f'<img src="{_svg_data_uri(svg)}" alt="output">\n'
 
             if "text/html" in data:
                 html = data["text/html"]
                 if isinstance(html, list):
                     html = "".join(html)
-                return f'<div class="html-output">{html}</div>\n'
+                return f'<div class="html-output">{_sanitize_html_fragment(html)}</div>\n'
 
         return ""
 
@@ -297,6 +328,25 @@ class Converter:
 def _png_uri(png_bytes: bytes) -> str:
     """Encode raw PNG bytes as a ``data:image/png;base64,...`` URI."""
     return "data:image/png;base64," + base64.b64encode(png_bytes).decode("ascii")
+
+
+def _svg_data_uri(svg: str) -> str:
+    """Encode sanitized SVG markup as a data URI for safe embedding via <img>."""
+    sanitized = _sanitize_html_fragment(svg)
+    encoded = base64.b64encode(sanitized.encode("utf-8")).decode("ascii")
+    return f"data:image/svg+xml;base64,{encoded}"
+
+
+def _sanitize_html_fragment(fragment: str) -> str:
+    """Remove active-content vectors from notebook-provided HTML fragments."""
+    cleaned = _DANGEROUS_BLOCK_TAG_RE.sub("", fragment)
+    cleaned = _DANGEROUS_SINGLE_TAG_RE.sub("", cleaned)
+    cleaned = _EVENT_ATTR_RE.sub("", cleaned)
+    cleaned = _JS_URI_QUOTED_RE.sub(r"\1\2#\2", cleaned)
+    cleaned = _JS_URI_UNQUOTED_RE.sub(r"\1#", cleaned)
+    cleaned = _DATA_HTML_URI_QUOTED_RE.sub(r"\1\2#\2", cleaned)
+    cleaned = _DATA_HTML_URI_UNQUOTED_RE.sub(r"\1#", cleaned)
+    return cleaned
 
 
 def _apply_eq_tag(latex: str, eq_labels: dict[str, int]) -> tuple[str, int | None]:

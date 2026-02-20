@@ -60,6 +60,32 @@ def _rewrite_img_tags(
     return _IMG_TAG_RE.sub(_sub, html)
 
 
+def _validate_public_http_url(url: str, *, context: str = "Image URL") -> str:
+    """Validate that *url* is HTTP(S) and does not resolve to private hosts."""
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError(f"{context} must use http/https: {url}")
+
+    hostname = parsed.hostname or ""
+    if not hostname:
+        raise ValueError(f"{context} is missing a hostname: {url}")
+
+    if _is_private_host(hostname):
+        raise ValueError(
+            f"Refusing to fetch image from private/loopback host: {hostname}"
+        )
+
+    return hostname
+
+
+class _SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Redirect handler that rejects redirects to non-public hosts."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        _validate_public_http_url(newurl, context="Redirect target")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
 def _is_private_host(hostname: str) -> bool:
     """Return True if *hostname* resolves to a private/loopback address."""
     try:
@@ -132,16 +158,13 @@ class PlatformBuilder(ABC):
     @staticmethod
     def _fetch_url_as_data_uri(url: str) -> str:
         """Fetch a remote image with SSRF, timeout, size, and MIME checks."""
-        parsed = urlparse(url)
-        hostname = parsed.hostname or ""
+        _validate_public_http_url(url)
 
-        if _is_private_host(hostname):
-            raise ValueError(
-                f"Refusing to fetch image from private/loopback host: {hostname}"
-            )
-
+        opener = urllib.request.build_opener(_SafeRedirectHandler())
         req = urllib.request.Request(url)
-        with urllib.request.urlopen(req, timeout=_URL_TIMEOUT) as response:
+        with opener.open(req, timeout=_URL_TIMEOUT) as response:
+            _validate_public_http_url(response.geturl(), context="Final response URL")
+
             # Check Content-Length header first (if provided)
             content_length = response.headers.get("Content-Length")
             if content_length:
@@ -196,7 +219,14 @@ class PlatformBuilder(ABC):
                 f"Path traversal ('..') not allowed in image path: {src}"
             )
 
-        file_path = Path.cwd() / raw
+        cwd = Path.cwd().resolve()
+        file_path = (cwd / raw).resolve(strict=True)
+        if not file_path.is_relative_to(cwd):
+            raise ValueError(
+                f"Resolved image path escapes current working directory: {src}"
+            )
+        if not file_path.is_file():
+            raise ValueError(f"Image path is not a file: {src}")
 
         with open(file_path, "rb") as f:
             image_data = f.read(_MAX_IMAGE_BYTES + 1)

@@ -3,10 +3,11 @@ Integration tests for markdown cell processing in the converter.
 
 Tests the complete pipeline: markdown → LaTeX processing → HTML conversion.
 """
-import pytest
+import base64
+import re
+
 import nbformat
 from nb2wb.converter import Converter
-from nb2wb.config import Config, LatexConfig
 
 
 class TestMarkdownCellProcessing:
@@ -334,3 +335,96 @@ class TestEdgeCases:
 
         # HTML should be preserved or escaped safely
         assert "Bold" in html
+
+
+class TestSecuritySanitization:
+    """Test sanitization of notebook-provided HTML/SVG fragments."""
+
+    def test_markdown_script_tags_are_removed(self, minimal_config, tmp_path):
+        nb = nbformat.v4.new_notebook()
+        nb.cells = [
+            nbformat.v4.new_markdown_cell(
+                '<strong>Safe</strong>'
+                '<script>alert(1)</script>'
+                '<a href="javascript:alert(1)" onclick="evil()">go</a>'
+            )
+        ]
+
+        notebook_path = tmp_path / "dangerous_markdown.ipynb"
+        with open(notebook_path, "w") as f:
+            nbformat.write(nb, f)
+
+        html = Converter(minimal_config).convert(notebook_path)
+        lowered = html.lower()
+        assert "<script" not in lowered
+        assert "onclick=" not in lowered
+        assert "javascript:" not in lowered
+        assert "Safe" in html
+        assert ">go<" in html
+
+    def test_html_output_is_sanitized(self, minimal_config, tmp_path):
+        nb = nbformat.v4.new_notebook()
+        cell = nbformat.v4.new_code_cell("x = 1")
+        cell.outputs = [
+            nbformat.from_dict(
+                {
+                    "output_type": "display_data",
+                    "data": {
+                        "text/html": (
+                            '<div onclick="evil()">OK</div>'
+                            '<script>alert(1)</script>'
+                            '<a href="javascript:alert(1)">x</a>'
+                        )
+                    },
+                    "metadata": {},
+                }
+            )
+        ]
+        nb.cells = [cell]
+
+        notebook_path = tmp_path / "dangerous_output.ipynb"
+        with open(notebook_path, "w") as f:
+            nbformat.write(nb, f)
+
+        html = Converter(minimal_config).convert(notebook_path)
+        lowered = html.lower()
+        assert "html-output" in html
+        assert "<script" not in lowered
+        assert "onclick=" not in lowered
+        assert "javascript:" not in lowered
+        assert "OK" in html
+
+    def test_svg_output_embeds_sanitized_data_uri(self, minimal_config, tmp_path):
+        nb = nbformat.v4.new_notebook()
+        cell = nbformat.v4.new_code_cell("x = 1")
+        cell.outputs = [
+            nbformat.from_dict(
+                {
+                    "output_type": "display_data",
+                    "data": {
+                        "image/svg+xml": (
+                            '<svg xmlns="http://www.w3.org/2000/svg" onload="evil()">'
+                            '<script>alert(1)</script>'
+                            '<rect width="10" height="10"/>'
+                            "</svg>"
+                        )
+                    },
+                    "metadata": {},
+                }
+            )
+        ]
+        nb.cells = [cell]
+
+        notebook_path = tmp_path / "dangerous_svg.ipynb"
+        with open(notebook_path, "w") as f:
+            nbformat.write(nb, f)
+
+        html = Converter(minimal_config).convert(notebook_path)
+        m = re.search(r'data:image/svg\+xml;base64,([^"]+)"', html)
+        assert m is not None
+
+        decoded_svg = base64.b64decode(m.group(1)).decode("utf-8")
+        lowered = decoded_svg.lower()
+        assert "<script" not in lowered
+        assert "onload=" not in lowered
+        assert "<rect" in lowered
