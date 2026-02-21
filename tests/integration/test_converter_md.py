@@ -3,6 +3,7 @@ Integration tests for Markdown (.md) file conversion.
 
 Tests the complete pipeline: .md file -> md_reader -> converter -> HTML.
 """
+import nbformat
 import pytest
 from nb2wb.converter import Converter
 
@@ -169,14 +170,74 @@ class TestMarkdownExecutionFlag:
         # Source code is rendered but 'output text' is not executed/shown
         assert "code-cell" in html
 
-    def test_qmd_always_executes(self, minimal_config, tmp_path):
-        """Converter(execute=False) does not affect .qmd execution."""
-        # .qmd execution is always attempted regardless of execute flag
+    def test_qmd_execute_false_skips_execution(self, minimal_config, tmp_path, monkeypatch):
+        """With execute=False, .qmd files are parsed but not executed."""
         qmd = tmp_path / "test.qmd"
         qmd.write_text("# Test\n\n```{python}\nx = 1\n```\n")
+        called = False
+
+        def fake_execute_cells(nb, cwd):
+            nonlocal called
+            called = True
+            return nb
+
+        monkeypatch.setattr("nb2wb.converter._execute_cells", fake_execute_cells)
         converter = Converter(minimal_config, execute=False)
-        # This should not crash; .qmd still goes through _execute_cells
-        try:
-            html = converter.convert(qmd)
-        except Exception:
-            pytest.skip("Jupyter kernel not available for .qmd execution")
+        html = converter.convert(qmd)
+        assert called is False
+        assert "Test" in html
+
+    def test_qmd_execute_true_runs_execution(self, minimal_config, tmp_path, monkeypatch):
+        """With execute=True, .qmd files go through notebook execution."""
+        qmd = tmp_path / "test.qmd"
+        qmd.write_text("# Test\n\n```{python}\nx = 1\n```\n")
+        called = False
+
+        def fake_execute_cells(nb, cwd):
+            nonlocal called
+            called = True
+            return nb
+
+        monkeypatch.setattr("nb2wb.converter._execute_cells", fake_execute_cells)
+        converter = Converter(minimal_config, execute=True)
+        converter.convert(qmd)
+        assert called is True
+
+    def test_ipynb_execute_false_skips_execution(self, minimal_config, tmp_path, monkeypatch):
+        """With execute=False, .ipynb files are rendered without re-executing cells."""
+        nb = nbformat.v4.new_notebook()
+        nb.cells = [nbformat.v4.new_markdown_cell("# Test")]
+        ipynb = tmp_path / "test.ipynb"
+        with open(ipynb, "w") as f:
+            nbformat.write(nb, f)
+
+        called = False
+
+        def fake_execute_cells(nb, cwd):
+            nonlocal called
+            called = True
+            return nb
+
+        monkeypatch.setattr("nb2wb.converter._execute_cells", fake_execute_cells)
+        html = Converter(minimal_config, execute=False).convert(ipynb)
+        assert called is False
+        assert "Test" in html
+
+    def test_ipynb_execute_true_runs_execution(self, minimal_config, tmp_path, monkeypatch):
+        """With execute=True, .ipynb files go through notebook execution."""
+        nb = nbformat.v4.new_notebook()
+        nb.cells = [nbformat.v4.new_markdown_cell("# Test")]
+        ipynb = tmp_path / "test.ipynb"
+        with open(ipynb, "w") as f:
+            nbformat.write(nb, f)
+
+        called = False
+
+        def fake_execute_cells(nb, cwd):
+            nonlocal called
+            called = True
+            return nb
+
+        monkeypatch.setattr("nb2wb.converter._execute_cells", fake_execute_cells)
+        Converter(minimal_config, execute=True).convert(ipynb)
+        assert called is True

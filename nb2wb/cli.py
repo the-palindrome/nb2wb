@@ -178,8 +178,7 @@ def main() -> None:
     parser.add_argument(
         "--execute",
         action="store_true",
-        help="Execute code blocks via Jupyter kernel (applies to .md files; "
-             ".qmd files are always executed)",
+        help="Execute code blocks via Jupyter kernel before rendering (.ipynb, .qmd, .md).",
     )
 
     args = parser.parse_args()

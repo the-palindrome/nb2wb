@@ -7,6 +7,7 @@ embedding in HTML.
 from __future__ import annotations
 
 import io
+import inspect
 import sys
 from pathlib import Path
 from typing import Optional
@@ -47,6 +48,58 @@ _LINE_GAP = 4   # extra vertical space between lines
 _FOOTER_FONT_RATIO = 0.58  # footer/label font size relative to main font
 
 
+def _png_to_image(png_bytes: bytes) -> Image.Image:
+    """Decode PNG bytes into an RGB PIL image."""
+    return Image.open(io.BytesIO(png_bytes)).convert("RGB")
+
+
+def _image_to_png(image: Image.Image) -> bytes:
+    """Encode a PIL image as PNG bytes."""
+    out = io.BytesIO()
+    image.save(out, format="PNG")
+    return out.getvalue()
+
+
+def _border_color(bg: tuple[int, int, int]) -> tuple[int, int, int]:
+    """Choose a visible border color against *bg*."""
+    brightness = sum(bg) / 3
+    return _shift(bg, 40 if brightness < 128 else -40)
+
+
+def _extend_image_width(image: Image.Image, width: int) -> Image.Image:
+    """Extend image to *width* by repeating its rightmost pixel column."""
+    if image.width >= width:
+        return image
+    right_col = image.crop((image.width - 1, 0, image.width, image.height))
+    fill = right_col.resize((width - image.width, image.height), Image.NEAREST)
+    extended = Image.new("RGB", (width, image.height))
+    extended.paste(image, (0, 0))
+    extended.paste(fill, (image.width, 0))
+    return extended
+
+
+def _normalize_image_widths(images: list[Image.Image]) -> list[Image.Image]:
+    """Extend all images to the widest image width."""
+    if not images:
+        return images
+    width = max(img.width for img in images)
+    return [_extend_image_width(img, width) for img in images]
+
+
+def _stack_images(images: list[Image.Image], separator: int, sep_color: str) -> Image.Image:
+    """Stack images vertically with *separator* pixels between rows."""
+    width = max(img.width for img in images)
+    total_h = sum(img.height for img in images) + separator * (len(images) - 1)
+    combined = Image.new("RGB", (width, total_h), _hex_to_rgb(sep_color))
+    y = 0
+    for index, img in enumerate(images):
+        combined.paste(img, (0, y))
+        y += img.height
+        if index < len(images) - 1:
+            y += separator
+    return combined
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -65,9 +118,16 @@ def render_code(source: str, language: str, config: CodeConfig, *,
         # Standalone rendering: draw footer, border, and padding now.
         ec_text = f"[{execution_count}]" if execution_count is not None else "[ ]"
         lang_display = language.capitalize() if language else ""
-        png = _draw_footer(png, style_cls, config, left_text=ec_text,
-                           right_text=lang_display)
-        png = _draw_border(png, style_cls)
+        image = _png_to_image(png)
+        image = _draw_footer_image(
+            image,
+            style_cls,
+            config,
+            left_text=ec_text,
+            right_text=lang_display,
+        )
+        image = _draw_border_image(image, style_cls)
+        png = _image_to_png(image)
         if config.padding_x or config.padding_y:
             bg = config.background or style_cls.background_color
             png = _outer_pad(png, config.padding_x, config.padding_y, bg)
@@ -111,77 +171,41 @@ def vstack_and_pad(png_list: list[bytes], config: CodeConfig, *,
     footer bar on the code cell (first image) **after** width normalisation so
     that the right-aligned text sits at the true right edge.
     """
+    if not png_list:
+        raise ValueError("png_list must not be empty")
+
     style_cls = get_style_by_name(config.theme)
     output_bg = _create_output_style(style_cls).background_color
     sep_color = config.background or output_bg
     has_footer = bool(code_footer_left or code_footer_right)
+    images = [_png_to_image(data) for data in png_list]
+    images = _normalize_image_widths(images)
 
-    if len(png_list) == 1:
-        png = png_list[0]
-        if has_footer:
-            png = _draw_footer(png, style_cls, config,
-                               left_text=code_footer_left,
-                               right_text=code_footer_right)
+    if has_footer:
+        images[0] = _draw_footer_image(
+            images[0],
+            style_cls,
+            config,
+            left_text=code_footer_left,
+            right_text=code_footer_right,
+        )
+
+    if len(images) == 1:
+        combined = images[0]
         if draw_code_border:
-            png = _draw_border(png, style_cls)
+            combined = _draw_border_image(combined, style_cls)
     else:
-        imgs = [Image.open(io.BytesIO(b)).convert("RGB") for b in png_list]
-        w = max(img.width for img in imgs)
-
-        # Normalise widths ------------------------------------------------
-        for idx in range(len(imgs)):
-            if imgs[idx].width < w:
-                img = imgs[idx]
-                # Replicate the rightmost column so every horizontal
-                # band extends to the full width with the correct colour.
-                right_col = img.crop((img.width - 1, 0, img.width, img.height))
-                fill = right_col.resize((w - img.width, img.height), Image.NEAREST)
-                extended = Image.new("RGB", (w, img.height))
-                extended.paste(img, (0, 0))
-                extended.paste(fill, (img.width, 0))
-                imgs[idx] = extended
-
-        # Draw footer on code image at the normalised width ---------------
-        if has_footer:
-            buf = io.BytesIO()
-            imgs[0].save(buf, format="PNG")
-            footer_png = _draw_footer(buf.getvalue(), style_cls, config,
-                                      left_text=code_footer_left,
-                                      right_text=code_footer_right)
-            imgs[0] = Image.open(io.BytesIO(footer_png)).convert("RGB")
-
-        # Combine ----------------------------------------------------------
-        sep = config.separator
-        h = sum(img.height for img in imgs) + sep * (len(imgs) - 1)
-        combined = Image.new("RGB", (w, h), _hex_to_rgb(sep_color))
-        y = 0
-        for i, img in enumerate(imgs):
-            combined.paste(img, (0, y))
-            y += img.height
-            if i < len(imgs) - 1:
-                y += sep
-
-        # Draw border on the code cell region after width normalisation
+        combined = _stack_images(images, config.separator, sep_color)
         if draw_code_border:
-            first_h = imgs[0].height
-            draw = ImageDraw.Draw(combined)
-            bg = _hex_to_rgb(style_cls.background_color)
-            brightness = sum(bg) / 3
-            border_color = _shift(bg, 40 if brightness < 128 else -40)
-            draw.rectangle([0, 0, w - 1, first_h - 1],
-                           outline=border_color, width=1)
+            _draw_border_on_region(combined, style_cls, region_height=images[0].height)
 
-        buf = io.BytesIO()
-        combined.save(buf, format="PNG")
-        png = buf.getvalue()
+    png = _image_to_png(combined)
     if config.padding_x or config.padding_y:
         png = _outer_pad(png, config.padding_x, config.padding_y, sep_color)
     if config.border_radius:
-        img = Image.open(io.BytesIO(png)).convert("RGB")
+        img = _png_to_image(png)
         img = _round_corners(img, config.border_radius)
-        buf = io.BytesIO()
-        img.save(buf, format="PNG")
-        png = buf.getvalue()
+        png = _image_to_png(img)
     return png
 
 
@@ -192,22 +216,25 @@ def vstack_and_pad(png_list: list[bytes], config: CodeConfig, *,
 
 def _outer_pad(png_bytes: bytes, padding_x: int, padding_y: int, background: str) -> bytes:
     """Wrap a PNG image with outer padding of the given background colour."""
-    img = Image.open(io.BytesIO(png_bytes)).convert("RGB")
+    img = _png_to_image(png_bytes)
     canvas = Image.new(
         "RGB",
         (img.width + 2 * padding_x, img.height + 2 * padding_y),
         background,
     )
     canvas.paste(img, (padding_x, padding_y))
-    out = io.BytesIO()
-    canvas.save(out, format="PNG")
-    return out.getvalue()
+    return _image_to_png(canvas)
 
 
-def _draw_footer(png_bytes: bytes, style_cls, config: CodeConfig, *,
-                 left_text: str, right_text: str) -> bytes:
+def _draw_footer_image(
+    image: Image.Image,
+    style_cls,
+    config: CodeConfig,
+    *,
+    left_text: str,
+    right_text: str,
+) -> Image.Image:
     """Append a Jupyter-style footer bar to a code cell image."""
-    img = Image.open(io.BytesIO(png_bytes)).convert("RGB")
     bg = _hex_to_rgb(style_cls.background_color)
     footer_bg = _shift(bg, -12)
 
@@ -218,39 +245,58 @@ def _draw_footer(png_bytes: bytes, style_cls, config: CodeConfig, *,
     text_color = _shift(bg, 50 if sum(bg) / 3 < 128 else -50)
 
     # New canvas: original image + 1px separator + footer
-    new_h = img.height + 1 + footer_h
-    canvas = Image.new("RGB", (img.width, new_h), footer_bg)
-    canvas.paste(img, (0, 0))
+    new_h = image.height + 1 + footer_h
+    canvas = Image.new("RGB", (image.width, new_h), footer_bg)
+    canvas.paste(image, (0, 0))
     draw = ImageDraw.Draw(canvas)
 
     # Separator line at bottom of code area
-    draw.line([(0, img.height), (img.width, img.height)],
-              fill=line_color, width=1)
+    draw.line([(0, image.height), (image.width, image.height)], fill=line_color, width=1)
 
     # Footer text
-    text_y = img.height + 1 + (footer_h - footer_lh) // 2
+    text_y = image.height + 1 + (footer_h - footer_lh) // 2
     draw.text((_PAD, text_y), left_text, font=footer_font, fill=text_color)
     right_w = int(_text_w(right_text, footer_font))
-    draw.text((img.width - right_w - _PAD, text_y), right_text,
-              font=footer_font, fill=text_color)
+    draw.text((image.width - right_w - _PAD, text_y), right_text, font=footer_font, fill=text_color)
+    return canvas
 
-    buf = io.BytesIO()
-    canvas.save(buf, format="PNG")
-    return buf.getvalue()
+
+def _draw_border_on_region(image: Image.Image, style_cls, *, region_height: int) -> None:
+    """Draw a thin border around the top *region_height* rows of an image."""
+    draw = ImageDraw.Draw(image)
+    bg = _hex_to_rgb(style_cls.background_color)
+    draw.rectangle(
+        [0, 0, image.width - 1, region_height - 1],
+        outline=_border_color(bg),
+        width=1,
+    )
+
+
+def _draw_border_image(image: Image.Image, style_cls) -> Image.Image:
+    """Draw a thin border around the full image."""
+    _draw_border_on_region(image, style_cls, region_height=image.height)
+    return image
+
+
+def _draw_footer(png_bytes: bytes, style_cls, config: CodeConfig, *,
+                 left_text: str, right_text: str) -> bytes:
+    """Append a Jupyter-style footer bar to a code cell image."""
+    image = _png_to_image(png_bytes)
+    return _image_to_png(
+        _draw_footer_image(
+            image,
+            style_cls,
+            config,
+            left_text=left_text,
+            right_text=right_text,
+        )
+    )
 
 
 def _draw_border(png_bytes: bytes, style_cls) -> bytes:
     """Draw a thin border rectangle around the code cell image."""
-    img = Image.open(io.BytesIO(png_bytes)).convert("RGB")
-    draw = ImageDraw.Draw(img)
-    bg = _hex_to_rgb(style_cls.background_color)
-    brightness = sum(bg) / 3
-    border_color = _shift(bg, 40 if brightness < 128 else -40)
-    draw.rectangle([0, 0, img.width - 1, img.height - 1],
-                   outline=border_color, width=1)
-    buf = io.BytesIO()
-    img.save(buf, format="PNG")
-    return buf.getvalue()
+    image = _png_to_image(png_bytes)
+    return _image_to_png(_draw_border_image(image, style_cls))
 
 
 def _paint(
@@ -374,11 +420,14 @@ def _load_font(size: int) -> ImageFont.FreeTypeFont:
             return ImageFont.truetype(path, size)
         except Exception:
             pass
-    # Pillow ≥10 supports a `size` argument on the default font
+    # Pillow >=10 supports a `size` argument on load_default.
     try:
-        return ImageFont.load_default(size=size)  # type: ignore[call-arg]
-    except TypeError:
-        return ImageFont.load_default()
+        params = inspect.signature(ImageFont.load_default).parameters
+    except (TypeError, ValueError):
+        params = {}
+    if "size" in params:
+        return ImageFont.load_default(size=size)
+    return ImageFont.load_default()
 
 
 def _find_font() -> Optional[str]:
@@ -438,7 +487,7 @@ def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
 
 def _shift(rgb: tuple[int, int, int], amount: int) -> tuple[int, int, int]:
     """Brighten (amount > 0) or darken (amount < 0) an RGB tuple."""
-    return tuple(max(0, min(255, c + amount)) for c in rgb)  # type: ignore[return-value]
+    return tuple(max(0, min(255, c + amount)) for c in rgb)
 
 
 def _default_fg(style_cls) -> tuple[int, int, int]:
@@ -452,31 +501,29 @@ def _default_fg(style_cls) -> tuple[int, int, int]:
     return (220, 220, 220) if sum(bg) / 3 < 128 else (40, 40, 40)
 
 
+class _OutputStyle:
+    """Lighter, muted Pygments-like style used for output cells."""
+
+    def __init__(self, base) -> None:
+        self._base = base
+        base_bg = _hex_to_rgb(base.background_color)
+        shift = 25 if sum(base_bg) / 3 < 128 else 20
+        self.background_color = _rgb_to_hex(_shift(base_bg, shift))
+
+    def style_for_token(self, ttype):
+        """Return muted token style mapping."""
+        info = self._base.style_for_token(ttype)
+        if not info.get("color"):
+            return info
+        rgb = _hex_to_rgb(info["color"])
+        gray = sum(rgb) // 3
+        muted = tuple(int(c * 0.6 + gray * 0.4) for c in rgb)
+        return {"color": _rgb_to_hex(muted)}
+
+
 def _create_output_style(base_style):
     """Create a lighter, muted style for output cells."""
-    class OutputStyle:
-        def __init__(self, base):
-            self._base = base
-            base_bg = _hex_to_rgb(base.background_color)
-            # Lighten the background significantly
-            if sum(base_bg) / 3 < 128:  # Dark theme
-                self.background_color = _rgb_to_hex(_shift(base_bg, 25))
-            else:  # Light theme
-                self.background_color = _rgb_to_hex(_shift(base_bg, 20))
-
-        def style_for_token(self, ttype):
-            info = self._base.style_for_token(ttype)
-            # Make text more muted/grayed
-            if info.get("color"):
-                rgb = _hex_to_rgb(info["color"])
-                base_bg = _hex_to_rgb(self._base.background_color)
-                # Move color 40% towards gray
-                gray = sum(rgb) // 3
-                muted = tuple(int(c * 0.6 + gray * 0.4) for c in rgb)
-                return {"color": _rgb_to_hex(muted)}
-            return info
-
-    return OutputStyle(base_style)
+    return _OutputStyle(base_style)
 
 
 def _rgb_to_hex(rgb: tuple[int, int, int]) -> str:

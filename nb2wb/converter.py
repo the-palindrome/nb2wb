@@ -24,6 +24,7 @@ import base64
 import re
 import warnings
 from pathlib import Path
+from typing import Any
 
 import html as html_mod
 
@@ -50,9 +51,13 @@ _EQREF_RE = re.compile(r"(?<!\\)\\eqref\{([^}]+)\}")
 # Fenced code blocks — protected from all LaTeX processing
 # Matches ``` or ~~~  (3+ identical fence chars) with optional language tag
 _FENCED_CODE_RE = re.compile(r"^(`{3,})[^\n]*\n.*?\1[ \t]*$", re.MULTILINE | re.DOTALL)
+_INLINE_CODE_RE = re.compile(r"(`+)(.+?)\1")
+_PROTECTED_TOKEN = "\x00PROTECTED{}\x00"
 
 # Markdown extensions used for cell conversion
 _MD_EXTENSIONS = ["extra", "sane_lists", "nl2br"]
+
+_RICH_OUTPUT_MIMES = frozenset({"image/png", "image/svg+xml", "text/html"})
 
 # Best-effort HTML sanitization for notebook-originated dynamic fragments.
 _DANGEROUS_BLOCK_TAG_RE = re.compile(
@@ -98,45 +103,15 @@ class Converter:
         Reads the notebook, collects LaTeX preamble and equation labels across
         all cells, then renders each markdown and code cell to HTML fragments.
         """
-        if notebook_path.suffix.lower() == ".qmd":
-            nb = read_qmd(notebook_path)
-            nb = _execute_cells(nb, notebook_path.parent)
-        elif notebook_path.suffix.lower() == ".md":
-            nb = read_md(notebook_path)
-            if self.execute:
-                nb = _execute_cells(nb, notebook_path.parent)
-        else:
-            nb = nbformat.read(str(notebook_path), as_version=4)
+        nb = _load_notebook(notebook_path, execute=self.execute)
         self._lang = _notebook_language(nb)
-
-        # First pass: collect LaTeX preamble from tagged cells
-        preamble_parts: list[str] = []
-        for cell in nb.cells:
-            if "latex-preamble" in _cell_tags(cell):
-                src = cell.source if isinstance(cell.source, str) else "".join(cell.source)
-                if src.strip():
-                    preamble_parts.append(src.strip())
-        self._latex_preamble = "\n".join(preamble_parts)
-
-        # Second pass: collect equation labels for document-wide numbering
-        self._eq_labels: dict[str, int] = {}
-        _eq_counter = 1
-        for cell in nb.cells:
-            tags = _cell_tags(cell)
-            if "hide-cell" in tags or "latex-preamble" in tags:
-                continue
-            if cell.cell_type == "markdown":
-                for _, _, latex in extract_display_math(cell.source):
-                    for lm in _LABEL_RE.finditer(latex):
-                        label = lm.group(1)
-                        if label not in self._eq_labels:
-                            self._eq_labels[label] = _eq_counter
-                            _eq_counter += 1
+        self._latex_preamble = _collect_latex_preamble(nb.cells)
+        self._eq_labels = _collect_equation_labels(nb.cells)
 
         parts: list[str] = []
         for cell in nb.cells:
             tags = _cell_tags(cell)
-            if "hide-cell" in tags or "latex-preamble" in tags:
+            if _skip_cell(tags):
                 continue
             if cell.cell_type == "markdown":
                 parts.append(self._markdown_cell(cell))
@@ -154,20 +129,7 @@ class Converter:
 
     def _markdown_cell(self, cell) -> str:
         """Render a markdown cell to HTML, processing LaTeX and equation references."""
-        src = cell.source
-
-        # Protect fenced code blocks and inline code spans from all LaTeX
-        # processing by replacing them with NUL-delimited placeholders,
-        # then restoring before the Markdown parser sees the source.
-        _stash: list[str] = []
-
-        def _protect(m: re.Match) -> str:
-            _stash.append(m.group(0))
-            return f"\x00PROTECTED{len(_stash) - 1}\x00"
-
-        src = _FENCED_CODE_RE.sub(_protect, src)
-        # Inline code spans: `...`, ``...``, etc.
-        src = re.sub(r"(`+)(.+?)\1", _protect, src)
+        src, stash = _protect_markdown_code_spans(cell.source)
 
         # 0. Substitute \eqref{label} → (N) throughout
         def _eqref_sub(m: re.Match) -> str:
@@ -201,8 +163,7 @@ class Converter:
         src = convert_inline_math(src)
 
         # Restore fenced code blocks and inline code spans before markdown parsing
-        for i, block in enumerate(_stash):
-            src = src.replace(f"\x00PROTECTED{i}\x00", block)
+        src = _restore_protected_spans(src, stash)
 
         # 3. Markdown → HTML
         html = markdown.markdown(src, extensions=_MD_EXTENSIONS)
@@ -266,57 +227,46 @@ class Converter:
         otype = output.get("output_type", "")
 
         if otype == "stream":
-            text = "".join(output.get("text", []))
-            if text.strip():
-                return render_output_text(text, self.config.code, apply_padding=False)
-            return None
-
-        if otype in ("execute_result", "display_data"):
-            data = output.get("data", {})
-            if "image/png" in data or "image/svg+xml" in data or "text/html" in data:
-                return None  # handled as a rich fragment
-            if "text/plain" in data:
-                text = data["text/plain"]
-                if isinstance(text, list):
-                    text = "".join(text)
-                if text.strip():
-                    return render_output_text(text, self.config.code, apply_padding=False)
+            return self._text_output_to_png(_join_text(output.get("text")))
 
         if otype == "error":
-            tb = "\n".join(output.get("traceback", []))
-            tb = _ANSI.sub("", tb)
-            if tb.strip():
-                return render_output_text(tb, self.config.code, apply_padding=False)
+            traceback = _ANSI.sub("", _join_text(output.get("traceback"), sep="\n"))
+            return self._text_output_to_png(traceback)
+
+        data = _rich_output_data(output)
+        if data is None:
+            return None
+
+        if any(mime in data for mime in _RICH_OUTPUT_MIMES):
+            return None  # handled as a rich fragment
+
+        return self._text_output_to_png(_join_text(data.get("text/plain")))
+
+    def _text_output_to_png(self, text: str) -> bytes | None:
+        """Render non-empty text output as PNG bytes."""
+        if text.strip():
+            return render_output_text(text, self.config.code, apply_padding=False)
 
         return None
 
     def _render_output(self, output) -> str:
         """Return HTML fragment for rich outputs (notebook PNG, SVG, HTML)."""
-        otype = output.get("output_type", "")
+        data = _rich_output_data(output)
+        if data is None:
+            return ""
 
-        if otype in ("execute_result", "display_data"):
-            data = output.get("data", {})
+        raw_png = _join_text(data.get("image/png")).strip()
+        if raw_png:
+            return f'<img src="data:image/png;base64,{raw_png}" alt="output">\n'
 
-            if "image/png" in data:
-                raw = data["image/png"]
-                if isinstance(raw, list):
-                    raw = "".join(raw)
-                return (
-                    f'<img src="data:image/png;base64,{raw.strip()}"'
-                    ' alt="output">\n'
-                )
+        raw_svg = _join_text(data.get("image/svg+xml"))
+        if raw_svg:
+            return f'<img src="{_svg_data_uri(raw_svg)}" alt="output">\n'
 
-            if "image/svg+xml" in data:
-                svg = data["image/svg+xml"]
-                if isinstance(svg, list):
-                    svg = "".join(svg)
-                return f'<img src="{_svg_data_uri(svg)}" alt="output">\n'
-
-            if "text/html" in data:
-                html = data["text/html"]
-                if isinstance(html, list):
-                    html = "".join(html)
-                return f'<div class="html-output">{_sanitize_html_fragment(html)}</div>\n'
+        raw_html = _join_text(data.get("text/html"))
+        if raw_html:
+            sanitized = _sanitize_html_fragment(raw_html)
+            return f'<div class="html-output">{sanitized}</div>\n'
 
         return ""
 
@@ -364,12 +314,97 @@ def _apply_eq_tag(latex: str, eq_labels: dict[str, int]) -> tuple[str, int | Non
     return clean, tag_num
 
 
+def _join_text(value: Any, *, sep: str = "") -> str:
+    """Join rich-output text payloads that can be str or list[str]."""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        return sep.join(part for part in value if isinstance(part, str))
+    return ""
+
+
+def _rich_output_data(output: dict[str, Any]) -> dict[str, Any] | None:
+    """Return ``output["data"]`` for rich outputs, otherwise ``None``."""
+    if output.get("output_type", "") not in ("execute_result", "display_data"):
+        return None
+    data = output.get("data", {})
+    return data if isinstance(data, dict) else {}
+
+
+def _protect_markdown_code_spans(src: str) -> tuple[str, list[str]]:
+    """Protect fenced and inline code spans from LaTeX transformations."""
+    stash: list[str] = []
+
+    def _protect(match: re.Match) -> str:
+        stash.append(match.group(0))
+        return _PROTECTED_TOKEN.format(len(stash) - 1)
+
+    src = _FENCED_CODE_RE.sub(_protect, src)
+    src = _INLINE_CODE_RE.sub(_protect, src)
+    return src, stash
+
+
+def _restore_protected_spans(src: str, stash: list[str]) -> str:
+    """Restore code spans previously stashed by ``_protect_markdown_code_spans``."""
+    for i, block in enumerate(stash):
+        src = src.replace(_PROTECTED_TOKEN.format(i), block)
+    return src
+
+
 def _cell_tags(cell) -> frozenset[str]:
     """Return the set of tags on a cell (from cell.metadata.tags)."""
     try:
         return frozenset(cell.metadata.get("tags", []))
     except (AttributeError, TypeError):
         return frozenset()
+
+
+def _skip_cell(tags: frozenset[str]) -> bool:
+    """Return True when a cell should be excluded from final rendering."""
+    return "hide-cell" in tags or "latex-preamble" in tags
+
+
+def _collect_latex_preamble(cells) -> str:
+    """Collect LaTeX preamble snippets from ``latex-preamble`` tagged cells."""
+    preamble_parts: list[str] = []
+    for cell in cells:
+        if "latex-preamble" in _cell_tags(cell):
+            source = _join_text(getattr(cell, "source", ""))
+            if source.strip():
+                preamble_parts.append(source.strip())
+    return "\n".join(preamble_parts)
+
+
+def _collect_equation_labels(cells) -> dict[str, int]:
+    """Collect document-level equation labels in source order."""
+    labels: dict[str, int] = {}
+    counter = 1
+    for cell in cells:
+        tags = _cell_tags(cell)
+        if _skip_cell(tags) or cell.cell_type != "markdown":
+            continue
+        source = _join_text(getattr(cell, "source", ""))
+        for _, _, latex in extract_display_math(source):
+            for match in _LABEL_RE.finditer(latex):
+                label = match.group(1)
+                if label in labels:
+                    continue
+                labels[label] = counter
+                counter += 1
+    return labels
+
+
+def _load_notebook(notebook_path: Path, *, execute: bool) -> Any:
+    """Load and optionally execute notebook-like sources."""
+    suffix = notebook_path.suffix.lower()
+    if suffix == ".qmd":
+        nb = read_qmd(notebook_path)
+    elif suffix == ".md":
+        nb = read_md(notebook_path)
+    else:
+        nb = nbformat.read(str(notebook_path), as_version=4)
+
+    return _execute_cells(nb, notebook_path.parent) if execute else nb
 
 
 def _notebook_language(nb) -> str:
