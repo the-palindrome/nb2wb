@@ -145,7 +145,12 @@ class Converter:
             chunks.append(src[prev:start])
             try:
                 latex, tag_num = _apply_eq_tag(latex, self._eq_labels)
-                uri = render_latex_block(latex, self.config.latex, self._latex_preamble, tag=tag_num)
+                uri = render_latex_block(
+                    latex,
+                    self.config.latex,
+                    self._latex_preamble,
+                    tag=tag_num,
+                )
                 # Blank lines around the image so Markdown treats it as a block
                 chunks.append(f"\n\n![math]({uri})\n\n")
             except Exception as exc:

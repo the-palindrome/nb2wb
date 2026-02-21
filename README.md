@@ -370,9 +370,15 @@ python -c "from pygments.styles import get_all_styles; print(sorted(get_all_styl
 - SVG outputs are sanitized, then embedded via image data URI
 - Dangerous tags/attributes/URI schemes are stripped or neutralized
 
+### CLI input sanitization
+
+- Input path is validated to be one of: `.ipynb`, `.qmd`, `.md`
+- CLI paths containing control characters are rejected
+
 Important:
 
 - Notebook execution via `--execute` runs code. Treat untrusted notebooks as untrusted code.
+- LaTeX rendering is independent of `--execute`; the external `latex`/`dvipng` path is sanitized and run with `-no-shell-escape`.
 - Sanitization is best-effort, not a browser sandbox.
 
 ---

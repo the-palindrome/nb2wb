@@ -16,6 +16,9 @@ from .converter import Converter
 from .config import load_config, apply_platform_defaults
 from .platforms import get_builder, list_platforms, MIME_TO_EXT
 
+_CONTROL_CHAR_RE = re.compile(r"[\x00-\x1f\x7f]")
+_ALLOWED_INPUT_SUFFIXES = frozenset({".ipynb", ".qmd", ".md"})
+
 
 def _extract_images(html: str, images_dir: Path) -> str:
     """Replace data-URI ``<img>`` sources with files in *images_dir*.
@@ -183,18 +186,29 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    if not args.notebook.exists():
-        print(f"Error: '{args.notebook}' not found.", file=sys.stderr)
+    try:
+        notebook_path = _sanitize_cli_path(
+            args.notebook,
+            arg_name="notebook path",
+            must_exist=True,
+            allowed_suffixes=_ALLOWED_INPUT_SUFFIXES,
+        )
+        config_path = _sanitize_cli_path(args.config, arg_name="config path")
+        output_path = _sanitize_cli_path(
+            args.output or notebook_path.with_suffix(".html"),
+            arg_name="output path",
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
         sys.exit(1)
 
-    config = load_config(args.config)
+    config = load_config(config_path)
     config = apply_platform_defaults(config, args.target)
     builder = get_builder(args.target)
-    output_path = args.output or args.notebook.with_suffix(".html")
 
-    print(f"Converting '{args.notebook}' for {builder.name} …")
+    print(f"Converting '{notebook_path}' for {builder.name} …")
     try:
-        content_html = Converter(config, execute=args.execute).convert(args.notebook)
+        content_html = Converter(config, execute=args.execute).convert(notebook_path)
         html = builder.build_page(content_html)
     except Exception as exc:
         print(f"Conversion failed: {exc}", file=sys.stderr)
@@ -211,6 +225,35 @@ def main() -> None:
         _serve(output_path.parent, output_path.name)
     elif args.open:
         webbrowser.open(output_path.absolute().as_uri())
+
+
+def _sanitize_cli_path(
+    path: Path | None,
+    *,
+    arg_name: str,
+    must_exist: bool = False,
+    allowed_suffixes: frozenset[str] | None = None,
+) -> Path | None:
+    """Validate and sanitize a user-provided filesystem path."""
+    if path is None:
+        return None
+
+    raw = str(path)
+    if _CONTROL_CHAR_RE.search(raw):
+        raise ValueError(f"{arg_name} contains invalid control characters")
+
+    if allowed_suffixes is not None:
+        suffix = path.suffix.lower()
+        if suffix not in allowed_suffixes:
+            allowed = ", ".join(sorted(allowed_suffixes))
+            raise ValueError(
+                f"{arg_name} must use one of: {allowed}"
+            )
+
+    if must_exist and not path.exists():
+        raise FileNotFoundError(f"'{path}' not found.")
+
+    return path
 
 
 if __name__ == "__main__":

@@ -333,6 +333,107 @@ class TestCLIMarkdownSupport:
         assert ".md" in captured.out
 
 
+class TestCLIExecutionFlag:
+    """Test unified --execute behavior across input types."""
+
+    @pytest.mark.parametrize("suffix", [".ipynb", ".md", ".qmd"])
+    def test_cli_without_execute_skips_execution(self, tmp_path, monkeypatch, suffix):
+        """Without --execute, converter execution is not invoked for any input type."""
+        if suffix == ".ipynb":
+            nb = nbformat.v4.new_notebook()
+            nb.cells = [nbformat.v4.new_markdown_cell("# Test")]
+            input_path = tmp_path / "test.ipynb"
+            with open(input_path, "w") as f:
+                nbformat.write(nb, f)
+        elif suffix == ".md":
+            input_path = tmp_path / "test.md"
+            input_path.write_text("# Test\n\n```python\nx = 1\n```\n")
+        else:
+            input_path = tmp_path / "test.qmd"
+            input_path.write_text("# Test\n\n```{python}\nx = 1\n```\n")
+
+        called = False
+
+        def fake_execute_cells(nb, cwd):
+            nonlocal called
+            called = True
+            return nb
+
+        monkeypatch.setattr("nb2wb.converter._execute_cells", fake_execute_cells)
+        sys.argv = ["nb2wb", str(input_path), "-o", str(tmp_path / "out.html")]
+
+        try:
+            main()
+        except SystemExit:
+            pass
+
+        assert called is False
+
+    @pytest.mark.parametrize("suffix", [".ipynb", ".md", ".qmd"])
+    def test_cli_with_execute_runs_execution(self, tmp_path, monkeypatch, suffix):
+        """With --execute, converter execution is invoked for every input type."""
+        if suffix == ".ipynb":
+            nb = nbformat.v4.new_notebook()
+            nb.cells = [nbformat.v4.new_markdown_cell("# Test")]
+            input_path = tmp_path / "test.ipynb"
+            with open(input_path, "w") as f:
+                nbformat.write(nb, f)
+        elif suffix == ".md":
+            input_path = tmp_path / "test.md"
+            input_path.write_text("# Test\n\n```python\nx = 1\n```\n")
+        else:
+            input_path = tmp_path / "test.qmd"
+            input_path.write_text("# Test\n\n```{python}\nx = 1\n```\n")
+
+        called = False
+
+        def fake_execute_cells(nb, cwd):
+            nonlocal called
+            called = True
+            return nb
+
+        monkeypatch.setattr("nb2wb.converter._execute_cells", fake_execute_cells)
+        sys.argv = ["nb2wb", str(input_path), "--execute", "-o", str(tmp_path / "out.html")]
+
+        try:
+            main()
+        except SystemExit:
+            pass
+
+        assert called is True
+
+
+class TestCLIInputSanitization:
+    """Test CLI sanitization and validation of user-provided paths."""
+
+    def test_cli_rejects_unsupported_input_extension(self, tmp_path, capsys):
+        bad = tmp_path / "bad.txt"
+        bad.write_text("hello")
+        sys.argv = ["nb2wb", str(bad)]
+
+        with pytest.raises(SystemExit):
+            main()
+
+        captured = capsys.readouterr()
+        assert "must use one of" in captured.err
+
+    def test_cli_rejects_control_chars_in_output_path(self, tmp_path, capsys):
+        nb = nbformat.v4.new_notebook()
+        nb.cells = [nbformat.v4.new_markdown_cell("# Test")]
+        notebook_path = tmp_path / "test.ipynb"
+        with open(notebook_path, "w") as f:
+            nbformat.write(nb, f)
+
+        bad_output = tmp_path / "out\nbad.html"
+        sys.argv = ["nb2wb", str(notebook_path), "-o", str(bad_output)]
+
+        with pytest.raises(SystemExit):
+            main()
+
+        captured = capsys.readouterr()
+        assert "control characters" in captured.err
+
+
 class TestCLIOutputValidation:
     """Test CLI output validation."""
 
