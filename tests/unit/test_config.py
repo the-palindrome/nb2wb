@@ -12,6 +12,7 @@ from nb2wb.config import (
     LatexConfig,
     SafetyConfig,
     load_config,
+    load_config_from_dict,
     apply_platform_defaults,
 )
 
@@ -116,6 +117,26 @@ safety:
         # Invalid YAML should raise an error
         with pytest.raises(yaml.scanner.ScannerError):
             load_config(config_path)
+
+    def test_load_config_from_dict(self):
+        """In-memory dict config is supported for script/API usage."""
+        config = load_config_from_dict(
+            {
+                "image_width": 1200,
+                "code": {"font_size": 30},
+                "latex": {"dpi": 200},
+                "safety": {"max_cells": 123},
+            }
+        )
+        assert config.image_width == 1200
+        assert config.code.font_size == 30
+        assert config.latex.dpi == 200
+        assert config.safety.max_cells == 123
+
+    def test_load_config_from_dict_rejects_non_mapping(self):
+        """Non-dict config input raises a TypeError."""
+        with pytest.raises(TypeError):
+            load_config_from_dict(["not", "a", "mapping"])
 
 
 class TestConfigInheritance:

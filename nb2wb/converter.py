@@ -77,6 +77,16 @@ class Converter:
         """
         _enforce_input_size(notebook_path, self.config.safety)
         nb = _load_notebook(notebook_path, execute=self.execute)
+        return self._convert_loaded_notebook(nb)
+
+    def convert_notebook(self, notebook, *, cwd: Path | None = None) -> str:
+        """Convert an in-memory notebook object (NotebookNode) to HTML."""
+        _enforce_serialized_notebook_size(notebook, self.config.safety)
+        nb = _execute_cells(notebook, cwd or Path.cwd()) if self.execute else notebook
+        return self._convert_loaded_notebook(nb)
+
+    def _convert_loaded_notebook(self, nb) -> str:
+        """Render an already-loaded notebook node to concatenated HTML fragments."""
         _enforce_notebook_limits(nb, self.config.safety)
         self._lang = _notebook_language(nb)
         self._latex_preamble = _collect_latex_preamble(nb.cells)
@@ -391,6 +401,19 @@ def _enforce_input_size(path: Path, safety: SafetyConfig) -> None:
     if size > safety.max_input_bytes:
         raise ValueError(
             f"Input file exceeds safety limit ({size} bytes > {safety.max_input_bytes})."
+        )
+
+
+def _enforce_serialized_notebook_size(nb, safety: SafetyConfig) -> None:
+    """Reject oversized in-memory notebooks using serialized JSON byte size."""
+    try:
+        serialized = nbformat.writes(nb)
+    except Exception as exc:
+        raise ValueError(f"Unable to serialize notebook payload: {exc}") from exc
+    size = len(serialized.encode("utf-8", errors="ignore"))
+    if size > safety.max_input_bytes:
+        raise ValueError(
+            f"Notebook payload exceeds safety limit ({size} bytes > {safety.max_input_bytes})."
         )
 
 

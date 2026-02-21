@@ -121,6 +121,56 @@ nb2wb <input.{ipynb|qmd|md}> [options]
 
 ---
 
+## Python API
+
+`nb2wb` also exposes a script-friendly API for backend integration (e.g. FastAPI).
+The package does not run an HTTP server itself.
+
+```python
+import nb2wb
+
+# Path-based usage
+html_ready = nb2wb.convert(
+    "notebook.ipynb",          # .ipynb / .qmd / .md
+    config={                   # same schema as config.yaml
+        "latex": {"try_usetex": True},
+        "safety": {"max_cells": 1500},
+    },
+    target="substack",         # "substack" | "medium" | "x"
+    execute=False,             # set True to execute code cells
+)
+
+# In-memory notebook payload (dict / NotebookNode), ideal for API backends
+html_ready = nb2wb.convert(
+    notebook_json_payload,
+    config={"latex": {"try_usetex": True}},
+    target="substack",
+)
+```
+
+`config` accepts:
+
+- `None` (defaults)
+- a `dict` (YAML-equivalent structure)
+- a `Config` object
+- a path to `config.yaml`
+
+`notebook` accepts:
+
+- file path (`.ipynb`, `.qmd`, `.md`)
+- Jupyter notebook dict payload (e.g. JSON/JSONB parsed object)
+- `nbformat.NotebookNode`
+
+You can also inspect supported targets programmatically:
+
+```python
+import nb2wb
+
+print(nb2wb.supported_targets())
+```
+
+---
+
 ## Platform Behavior
 
 | Platform | Paste workflow | Image behavior |

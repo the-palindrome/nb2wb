@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import yaml
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 from typing import Optional
 
 
@@ -60,6 +62,18 @@ class Config:
     safety: SafetyConfig = field(default_factory=SafetyConfig)
 
 
+def load_config_from_dict(data: Mapping[str, Any] | None) -> Config:
+    """Load config from an in-memory mapping using the same schema as YAML config files."""
+    if data is None:
+        return Config()
+    if not isinstance(data, Mapping):
+        raise TypeError("Config data must be a mapping (dict-like object).")
+
+    # Copy to a plain dict so .get() behavior is predictable even for custom mappings.
+    raw: dict[str, Any] = dict(data)
+    return _build_config_from_mapping(raw)
+
+
 def load_config(path: Optional[Path]) -> Config:
     """Load configuration from a YAML file, returning defaults if *path* is None or missing.
 
@@ -72,6 +86,14 @@ def load_config(path: Optional[Path]) -> Config:
     with open(path, "r") as f:
         data = yaml.safe_load(f) or {}
 
+    if not isinstance(data, dict):
+        raise TypeError("Config YAML root must be a mapping/object.")
+
+    return _build_config_from_mapping(data)
+
+
+def _build_config_from_mapping(data: dict[str, Any]) -> Config:
+    """Build Config from a parsed config mapping."""
     top_width = data.get("image_width", 1920)
     top_radius = data.get("border_radius", 0)
 

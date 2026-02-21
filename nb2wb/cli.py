@@ -12,9 +12,8 @@ import webbrowser
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 
-from .converter import Converter
-from .config import load_config, apply_platform_defaults
-from .platforms import get_builder, list_platforms, MIME_TO_EXT
+from .api import convert as convert_notebook
+from .platforms import list_platforms, MIME_TO_EXT
 
 _CONTROL_CHAR_RE = re.compile(r"[\x00-\x1f\x7f]")
 _ALLOWED_INPUT_SUFFIXES = frozenset({".ipynb", ".qmd", ".md"})
@@ -202,14 +201,14 @@ def main() -> None:
         print(f"Error: {exc}", file=sys.stderr)
         sys.exit(1)
 
-    config = load_config(config_path)
-    config = apply_platform_defaults(config, args.target)
-    builder = get_builder(args.target)
-
-    print(f"Converting '{notebook_path}' for {builder.name} …")
+    print(f"Converting '{notebook_path}' for {args.target} …")
     try:
-        content_html = Converter(config, execute=args.execute).convert(notebook_path)
-        html = builder.build_page(content_html)
+        html = convert_notebook(
+            notebook_path,
+            config=config_path,
+            target=args.target,
+            execute=args.execute,
+        )
     except Exception as exc:
         print(f"Conversion failed: {exc}", file=sys.stderr)
         sys.exit(1)

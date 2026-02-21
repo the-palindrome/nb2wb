@@ -415,30 +415,20 @@ class TestCLIServerSafeMode:
 
         seen: dict[str, bool] = {}
 
-        class FakeBuilder:
-            name = "Fake"
+        def fake_convert(notebook, *, config, target, execute):
+            from nb2wb.config import load_config
 
-            def build_page(self, content_html: str) -> str:
-                return content_html
+            resolved = load_config(config)
+            seen["api_called"] = True
+            seen["target"] = target
+            seen["has_safety_limits"] = (
+                resolved.safety.max_input_bytes > 0
+                and resolved.safety.max_cells > 0
+                and resolved.safety.max_total_output_bytes > 0
+            )
+            return "<html><body><p>ok</p></body></html>"
 
-        class FakeConverter:
-            def __init__(self, config, *, execute=False):
-                seen["has_safety_limits"] = (
-                    config.safety.max_input_bytes > 0
-                    and config.safety.max_cells > 0
-                    and config.safety.max_total_output_bytes > 0
-                )
-                self._execute = execute
-
-            def convert(self, notebook_path):
-                return "<p>ok</p>"
-
-        def fake_get_builder(_platform: str):
-            seen["builder_called"] = True
-            return FakeBuilder()
-
-        monkeypatch.setattr("nb2wb.cli.Converter", FakeConverter)
-        monkeypatch.setattr("nb2wb.cli.get_builder", fake_get_builder)
+        monkeypatch.setattr("nb2wb.cli.convert_notebook", fake_convert)
 
         sys.argv = ["nb2wb", str(notebook_path), "-o", str(tmp_path / "out.html")]
         try:
@@ -446,7 +436,8 @@ class TestCLIServerSafeMode:
         except SystemExit:
             pass
 
-        assert seen["builder_called"] is True
+        assert seen["api_called"] is True
+        assert seen["target"] == "substack"
         assert seen["has_safety_limits"] is True
 
 
