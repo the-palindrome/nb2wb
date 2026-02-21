@@ -2,73 +2,28 @@
 
 **Write in notebooks. Publish anywhere.**
 
-`nb2wb` converts:
+`nb2wb` converts notebook-style content into publishable HTML for Substack, Medium, and X Articles.
+
+Supported inputs:
 
 - Jupyter notebooks (`.ipynb`)
 - Quarto documents (`.qmd`)
-- Markdown files (`.md`)
+- Markdown documents (`.md`)
+- in-memory Jupyter notebook payloads (`dict` / `NotebookNode`)
 
-into platform-ready HTML for:
+## Documentation
 
-- Substack
-- Medium
-- X Articles
+- Detailed docs (Read the Docs): `https://nb2wb.readthedocs.io/`
+- Docs source in this repo: `docs/index.md`
 
-The output is designed for copy/paste workflows where platforms often break MathJax and code formatting.
+## Brief Feature Tour
 
----
-
-## Why `nb2wb`
-
-Most publishing editors strip or mangle:
-
-- LaTeX
-- code blocks
-- notebook outputs
-
-`nb2wb` preserves fidelity by rendering complex parts as images and converting inline math to Unicode.
-
-| Content type | Converted as |
-|---|---|
-| Inline math `$...$` | Unicode + light HTML formatting |
-| Display math (`$$...$$`, `\[...\]`, `\begin{...}`) | PNG |
-| Code input | Syntax-highlighted PNG (or copyable text snippet) |
-| Text outputs / errors | PNG |
-| `image/png` outputs | Embedded as image data URI |
-| `image/svg+xml` outputs | Sanitized SVG as image data URI |
-| `text/html` outputs | Sanitized HTML fragment |
-
----
-
-## Feature Overview
-
-- Converts `.ipynb`, `.qmd`, and `.md` from one CLI.
-- Platform-specific page wrappers for Substack, Medium, and X.
-- One-click copy toolbar in generated HTML.
-- Medium/X per-image copy buttons for reliable image transfer.
-- Optional `--serve` mode (local server + ngrok URL).
-- Equation labels and cross-references:
-  - `\label{...}` in display math
-  - `\eqref{...}` replaced with `(N)`
-- LaTeX rendering strategy:
-  - tries full `latex + dvipng`
-  - falls back to matplotlib mathtext
-- Inline LaTeX conversion pipeline:
-  - unicode command replacement
-  - superscript/subscript expansion
-  - variable italicization
-- Code rendering controls:
-  - Pygments theme
-  - line numbers
-  - font size
-  - padding / border radius
-- Cell-level visibility and behavior tags:
-  - `hide-cell`, `hide-input`, `hide-output`, `latex-preamble`, `text-snippet`
-- Markdown directives in `.md` via `<!-- nb2wb: ... -->`.
-- Quarto `#|` options mapped to notebook-style tags.
-- Security hardening for image fetching and HTML/SVG embedding.
-
----
+1. **Load notebook content** from file or in-memory payload.
+2. **Optionally execute code cells** (`--execute` / `execute=True`).
+3. **Render markdown, math, code, and outputs** into platform-safe HTML fragments.
+4. **Convert display math and code to images** for high-fidelity publishing.
+5. **Sanitize rich HTML/SVG output** and enforce server-side safety limits.
+6. **Wrap output for your target platform** (`substack`, `medium`, `x`).
 
 ## Installation
 
@@ -84,9 +39,7 @@ cd nb2wb
 pip install -e ".[dev]"
 ```
 
----
-
-## Quick Start
+## Quick Start (CLI)
 
 ```bash
 nb2wb notebook.ipynb
@@ -95,386 +48,68 @@ nb2wb notebook.ipynb -t x
 nb2wb notebook.ipynb -o article.html
 nb2wb notebook.ipynb --open
 nb2wb notebook.ipynb --serve
-nb2wb article.md
-nb2wb article.md --execute
-nb2wb report.qmd
+nb2wb report.qmd --execute
 ```
 
-Default output path is `<input_basename>.html`.
-
----
-
-## CLI Reference
-
-```text
-nb2wb <input.{ipynb|qmd|md}> [options]
-```
-
-| Option | Meaning |
-|---|---|
-| `-t, --target {substack,medium,x}` | Target platform (`substack` default) |
-| `-c, --config PATH` | YAML config file |
-| `-o, --output PATH` | Output HTML path |
-| `--open` | Open generated HTML in browser |
-| `--serve` | Extract images, start local server, expose via ngrok |
-| `--execute` | Execute code cells before rendering (`.ipynb`, `.qmd`, `.md`) |
-
----
-
-## Python API
-
-`nb2wb` also exposes a script-friendly API for backend integration (e.g. FastAPI).
-The package does not run an HTTP server itself.
+## Quick Start (Python API)
 
 ```python
 import nb2wb
 
-# Path-based usage
-html_ready = nb2wb.convert(
-    "notebook.ipynb",          # .ipynb / .qmd / .md
-    config={                   # same schema as config.yaml
-        "latex": {"try_usetex": True},
-        "safety": {"max_cells": 1500},
-    },
-    target="substack",         # "substack" | "medium" | "x"
-    execute=False,             # set True to execute code cells
-)
-
-# In-memory notebook payload (dict / NotebookNode), ideal for API backends
-html_ready = nb2wb.convert(
-    notebook_json_payload,
-    config={"latex": {"try_usetex": True}},
+# Path input
+html = nb2wb.convert(
+    "notebook.ipynb",
     target="substack",
+    config={"latex": {"try_usetex": True}},
+)
+
+# In-memory payload input (JSON / JSONB parsed notebook)
+html = nb2wb.convert(
+    notebook_payload,
+    target="substack",
+    execute=False,
 )
 ```
 
-`config` accepts:
+## Security at a Glance
 
-- `None` (defaults)
-- a `dict` (YAML-equivalent structure)
-- a `Config` object
-- a path to `config.yaml`
+`nb2wb` uses a mandatory server-safe conversion pipeline:
 
-`notebook` accepts:
+- strict HTML/SVG sanitization
+- CSS URL sanitization
+- SSRF-safe image fetching
+- path traversal protection for local files
+- notebook size/resource safety limits
+- fail-closed behavior for unsafe/unresolvable image sources
 
-- file path (`.ipynb`, `.qmd`, `.md`)
-- Jupyter notebook dict payload (e.g. JSON/JSONB parsed object)
-- `nbformat.NotebookNode`
-
-You can also inspect supported targets programmatically:
-
-```python
-import nb2wb
-
-print(nb2wb.supported_targets())
-```
-
----
-
-## Platform Behavior
-
-| Platform | Paste workflow | Image behavior |
-|---|---|---|
-| Substack | One-click copy/paste | Embedded images transfer directly |
-| Medium | Copy/paste + optional per-image copy | Base64 images may be stripped by editor |
-| X Articles | Copy/paste + optional per-image copy | Base64 images may be stripped by editor |
-
-### `--serve` mode
-
-`--serve` helps Medium/X workflows by replacing embedded data URIs with public HTTP URLs.
-
-What it does:
-
-1. Extracts supported image MIME types from the generated HTML into `images/`
-2. Rewrites `<img src="...">` to those files
-3. Starts local HTTP server
-4. Starts ngrok tunnel and opens the public URL
-
-Requirements:
-
-- `ngrok` installed
-- `ngrok` authenticated (`ngrok config add-authtoken <TOKEN>`)
-
----
-
-## Input Format Support
-
-### `.ipynb`
-
-- Uses notebook cells and outputs directly.
-- Supports notebook tags in `cell.metadata.tags`.
-- Uses notebook/kernel metadata to infer language for syntax highlighting.
-
-Execution:
-
-- Not executed by default
-- Executed when `--execute` is provided
-
-### `.md`
-
-Supported features:
-
-- Optional YAML front matter
-- Fenced code blocks with backticks or tildes
-- Per-fence tags (` ```python hide-input ` style)
-- Directive comments:
-  - `<!-- nb2wb: hide-input -->`
-  - `<!-- nb2wb: hide-output -->`
-  - `<!-- nb2wb: hide-cell -->`
-  - `<!-- nb2wb: text-snippet -->`
-  - comma-separated combinations are supported
-- Special fence language:
-  - `latex-preamble`
-
-Execution:
-
-- Not executed by default
-- Executed when `--execute` is provided
-
-### `.qmd`
-
-Supported features:
-
-- Optional YAML front matter
-- Quarto fenced chunks (` ```{python} ` etc.)
-- Quarto options mapped to tags:
-  - `#| echo: false` -> `hide-input`
-  - `#| output: false` -> `hide-output`
-  - `#| include: false` or `#| eval: false` -> `hide-cell`
-  - `#| tags: [tag1, tag2]` -> tags
-- Special chunk languages:
-  - `latex-preamble`
-  - `output` (attaches stdout to the immediately preceding code cell)
-
-Execution:
-
-- Not executed by default
-- Executed when `--execute` is provided
-
----
-
-## Cell Tags
-
-| Tag | Effect |
-|---|---|
-| `hide-cell` | Hide entire cell (input + output) |
-| `hide-input` | Hide code input |
-| `hide-output` | Hide outputs |
-| `latex-preamble` | Use cell/chunk content as LaTeX preamble and hide it |
-| `text-snippet` | Render code as `<pre><code>` instead of PNG |
-
-`hide-cell` applies to markdown cells too.
-
----
-
-## LaTeX Features
-
-### Display math
-
-Detected forms include:
-
-- `$$...$$`
-- `\[...\]`
-- `\begin{equation}...\end{equation}`
-- `\begin{align}...\end{align}`
-- `\begin{gather}...\end{gather}`
-- `\begin{multline}...\end{multline}`
-- `\begin{eqnarray}...\end{eqnarray}`
-- starred variants where applicable
-
-### Equation numbering and references
-
-- `\label{eq:name}` assigns equation number
-- `\eqref{eq:name}` is replaced with `(N)` across the document
-
-### Inline math
-
-Inline `$...$` expressions are converted to Unicode-oriented text with script handling.
-
----
-
-## LaTeX Preamble Sources
-
-All of these are combined:
-
-1. Config (`latex.preamble`)
-2. Notebook markdown cells tagged `latex-preamble`
-3. `.md` fenced blocks labeled `latex-preamble`
-4. `.qmd` chunks `{latex-preamble}`
-
-Note:
-
-- preamble only affects full LaTeX (`try_usetex: true` path)
-- matplotlib mathtext fallback ignores custom preamble
-
----
-
-## Output Rendering Details
-
-For code cells:
-
-- Source code -> syntax-highlighted PNG
-- Footer includes execution count and language label
-- Text output / tracebacks -> muted output PNG block
-
-Rich outputs:
-
-- `image/png` -> embedded directly
-- `image/svg+xml` -> sanitized and embedded as `data:image/svg+xml;base64,...`
-- `text/html` -> sanitized HTML fragment
-
-Raw notebook cells are skipped.
-
----
+Important: enabling execution runs notebook code. Treat `execute=True` workloads as untrusted code and isolate them appropriately.
 
 ## Configuration
 
-Pass with:
+Use YAML file in CLI:
 
 ```bash
 nb2wb notebook.ipynb -c config.yaml
 ```
 
-### Complete config schema (with defaults)
+Or pass dict/object/path in API:
 
-```yaml
-# Global defaults
-image_width: 1920
-border_radius: 14
-
-code:
-  font_size: 48
-  theme: "monokai"
-  line_numbers: true
-  font: "DejaVu Sans Mono"
-  image_width: 1920
-  padding_x: 100
-  padding_y: 100
-  separator: 0
-  background: ""       # empty = use theme background
-  border_radius: 14
-
-latex:
-  font_size: 48
-  dpi: 150
-  color: "black"
-  background: "white"
-  padding: 68          # pixels
-  image_width: 1920
-  try_usetex: true
-  preamble: ""
-  border_radius: 0
-
-safety:
-  max_input_bytes: 20971520
-  max_cells: 2000
-  max_cell_source_chars: 500000
-  max_total_output_bytes: 26214400
-  max_display_math_blocks: 500
-  max_total_latex_chars: 1000000
+```python
+html = nb2wb.convert(notebook_payload, config={"safety": {"max_cells": 1500}})
 ```
 
-Inheritance behavior:
+## Read More
 
-- `code.image_width` and `latex.image_width` inherit top-level `image_width` unless overridden
-- `code.border_radius` and `latex.border_radius` inherit top-level `border_radius` unless overridden
-
-### Platform defaults applied automatically
-
-When target is `medium` or `x`, defaults are adjusted for narrower layouts:
-
-- top-level `image_width`: `680`
-- `code.font_size`: `42`
-- `code.image_width`: `1200`
-- `code.padding_x`: `30`
-- `code.padding_y`: `30`
-- `code.separator`: `0`
-- `latex.font_size`: `35`
-- `latex.padding`: `50`
-- `latex.image_width`: `1200`
-
-Substack keeps base defaults unless your config overrides them.
-
-### Code themes
-
-Any Pygments style works. Example:
-
-```bash
-python -c "from pygments.styles import get_all_styles; print(sorted(get_all_styles()))"
-```
-
----
-
-## Security Model
-
-`nb2wb` includes guardrails for image ingestion and HTML embedding:
-
-### Image URL/file safety
-
-- Only `http` / `https` remote image URLs are allowed
-- Requests to non-public hosts are blocked (SSRF protection)
-- Redirect targets are re-validated (no public-to-private redirect bypass)
-- Download timeout and max size checks are enforced
-- MIME type allowlist is enforced for fetched/read images
-- Local image paths:
-  - absolute paths rejected
-  - `..` traversal rejected
-  - symlink escape outside current working directory rejected
-
-### Embedded content sanitization
-
-- Markdown-generated HTML is sanitized before embedding
-- `text/html` outputs are sanitized
-- SVG outputs are sanitized, then embedded via image data URI
-- Dangerous tags/attributes/URI schemes are stripped or neutralized
-- CSS `url(...)` values are restricted to image data URIs or fragment refs
-
-### CLI input sanitization
-
-- Input path is validated to be one of: `.ipynb`, `.qmd`, `.md`
-- CLI paths containing control characters are rejected
-
-### Server-safe pipeline
-
-- Uses parser-based strict sanitization for HTML and SVG fragments.
-- Drops image tags whose sources cannot be converted safely (fail-closed).
-- Enforces notebook resource limits:
-  - max input file bytes
-  - max cell count
-  - max chars per cell source
-  - max aggregate output payload bytes
-  - max number of display-math blocks
-  - max aggregate display-math character count
-
-Important:
-
-- Notebook execution via `--execute` runs code. Treat untrusted notebooks as untrusted code.
-- LaTeX rendering is independent of `--execute`; the external `latex`/`dvipng` path is sanitized and run with `-no-shell-escape`.
-- Sanitization is best-effort, not a browser sandbox.
-
----
-
-## Requirements
-
-Core dependencies:
-
-- Python `>=3.9`
-- `nbformat`
-- `nbconvert`
-- `ipykernel`
-- `matplotlib`
-- `Pillow`
-- `Pygments`
-- `PyYAML`
-- `markdown`
-- `unicodeit`
-
-Optional system tools:
-
-- LaTeX + `dvipng` (for highest-fidelity display math rendering)
-- `ngrok` (for `--serve`)
-
----
+- [Feature Tour](docs/feature-tour.md)
+- [Getting Started](docs/getting-started.md)
+- [CLI Reference](docs/cli-reference.md)
+- [Python API](docs/python-api.md)
+- [Input Formats](docs/input-formats.md)
+- [Configuration](docs/configuration.md)
+- [Platforms](docs/platforms.md)
+- [Security Model](docs/security.md)
+- [FastAPI/Nuxt Integration](docs/server-integration.md)
+- [Troubleshooting](docs/troubleshooting.md)
 
 ## Development
 
@@ -482,28 +117,14 @@ Run tests:
 
 ```bash
 pytest
-pytest tests/unit/
-pytest tests/integration/
-pytest tests/workflow/
 ```
 
-Format:
+Build docs locally:
 
 ```bash
-black nb2wb tests
-isort nb2wb tests
+pip install -e ".[docs]"
+sphinx-build -b html docs docs/_build/html
 ```
-
----
-
-## Limitations
-
-- Platforms can change paste behavior without notice.
-- Medium/X may still require per-image copy depending editor behavior.
-- Extremely complex custom HTML can be altered by sanitization.
-- Execution with `--execute` requires a working Jupyter kernel setup.
-
----
 
 ## License
 
