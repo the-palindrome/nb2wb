@@ -135,6 +135,21 @@ class PlatformBuilder(ABC):
 
     # ---- shared safe image helpers ----------------------------------------
 
+    @staticmethod
+    def _rewrite_image_sources(
+        html: str,
+        rewrite_src: Callable[[str], str],
+    ) -> str:
+        """Rewrite image ``src`` values while preserving all other attributes."""
+
+        def rewrite_image(full_tag: str, img_src: str) -> str:
+            new_src = rewrite_src(img_src)
+            if new_src == img_src:
+                return full_tag
+            return full_tag.replace(f'src="{img_src}"', f'src="{new_src}"', 1)
+
+        return _rewrite_img_tags(html, rewrite_image)
+
     def _to_data_uri(self, src: str) -> str:
         """Convert an image URL or file path to a base64 data URI.
 
@@ -154,6 +169,13 @@ class PlatformBuilder(ABC):
                 stacklevel=2,
             )
             return src
+
+    def _embed_images_as_data_uris(self, html: str) -> str:
+        """Convert non-data-URI image sources in *html* into data URIs."""
+        return self._rewrite_image_sources(
+            html,
+            lambda src: src if src.startswith("data:") else self._to_data_uri(src),
+        )
 
     @staticmethod
     def _fetch_url_as_data_uri(url: str) -> str:
@@ -248,6 +270,7 @@ class PlatformBuilder(ABC):
 
     def _make_images_copyable(self, html: str) -> str:
         """Wrap each ``<img>`` in a container with an inline copy button."""
+
         def wrap_image(full_tag: str, img_src: str) -> str:
 
             if not img_src.startswith("data:"):

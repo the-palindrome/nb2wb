@@ -22,7 +22,8 @@ from pathlib import Path
 from typing import Any
 
 import nbformat
-import yaml
+
+from ._reader_utils import make_notebook, split_front_matter as _split_front_matter
 
 
 # Standard fenced code block: ```lang [tags...]\n...\n```  (3+ backticks or tildes)
@@ -38,10 +39,6 @@ _NB2WB_COMMENT_RE = re.compile(
     re.MULTILINE,
 )
 
-# YAML front matter at the very start of the file
-_FRONT_MATTER_RE = re.compile(r"\A---[ \t]*\n(.*?)\n---[ \t]*\n", re.DOTALL)
-
-
 def read_md(path: Path) -> nbformat.NotebookNode:
     """
     Parse a ``.md`` file and return an ``nbformat`` notebook.
@@ -56,28 +53,7 @@ def read_md(path: Path) -> nbformat.NotebookNode:
     language = _detect_language(front_matter, text)
 
     cells = _extract_cells(text, language)
-
-    nb = nbformat.v4.new_notebook()
-    nb.metadata["kernelspec"] = {"language": language, "name": language}
-    nb.metadata["language_info"] = {"name": language}
-    nb.cells = cells
-    return nb
-
-
-# ---------------------------------------------------------------------------
-# Front matter
-# ---------------------------------------------------------------------------
-
-def _split_front_matter(text: str) -> tuple[dict[str, Any], str]:
-    """Split YAML front matter from the body, returning (parsed_dict, remaining_text)."""
-    m = _FRONT_MATTER_RE.match(text)
-    if not m:
-        return {}, text
-    try:
-        fm = yaml.safe_load(m.group(1)) or {}
-    except yaml.YAMLError:
-        fm = {}
-    return fm, text[m.end():]
+    return make_notebook(cells, language)
 
 
 def _detect_language(fm: dict[str, Any], text: str) -> str:
