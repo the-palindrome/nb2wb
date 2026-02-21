@@ -287,6 +287,11 @@ class TestRenderOutputText:
 class TestVStackAndPad:
     """Test vertical image stacking."""
 
+    def test_vstack_empty_raises(self, minimal_config):
+        """Empty input list is rejected with a clear error."""
+        with pytest.raises(ValueError, match="png_list must not be empty"):
+            vstack_and_pad([], minimal_config.code)
+
     def test_vstack_single_image(self, minimal_config, mock_font_available):
         """Single image passed through."""
         source = "x = 1"

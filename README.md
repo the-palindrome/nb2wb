@@ -117,7 +117,7 @@ nb2wb <input.{ipynb|qmd|md}> [options]
 | `-o, --output PATH` | Output HTML path |
 | `--open` | Open generated HTML in browser |
 | `--serve` | Extract images, start local server, expose via ngrok |
-| `--execute` | Execute code cells for `.md` files (ignored for `.qmd`, which are always executed) |
+| `--execute` | Execute code cells before rendering (`.ipynb`, `.qmd`, `.md`) |
 
 ---
 
@@ -154,6 +154,11 @@ Requirements:
 - Uses notebook cells and outputs directly.
 - Supports notebook tags in `cell.metadata.tags`.
 - Uses notebook/kernel metadata to infer language for syntax highlighting.
+
+Execution:
+
+- Not executed by default
+- Executed when `--execute` is provided
 
 ### `.md`
 
@@ -193,7 +198,8 @@ Supported features:
 
 Execution:
 
-- `.qmd` code execution is always attempted by design
+- Not executed by default
+- Executed when `--execute` is provided
 
 ---
 
@@ -364,9 +370,15 @@ python -c "from pygments.styles import get_all_styles; print(sorted(get_all_styl
 - SVG outputs are sanitized, then embedded via image data URI
 - Dangerous tags/attributes/URI schemes are stripped or neutralized
 
+### CLI input sanitization
+
+- Input path is validated to be one of: `.ipynb`, `.qmd`, `.md`
+- CLI paths containing control characters are rejected
+
 Important:
 
-- Notebook execution (`.qmd` or `--execute`) runs code. Treat untrusted notebooks as untrusted code.
+- Notebook execution via `--execute` runs code. Treat untrusted notebooks as untrusted code.
+- LaTeX rendering is independent of `--execute`; the external `latex`/`dvipng` path is sanitized and run with `-no-shell-escape`.
 - Sanitization is best-effort, not a browser sandbox.
 
 ---
@@ -418,11 +430,10 @@ isort nb2wb tests
 - Platforms can change paste behavior without notice.
 - Medium/X may still require per-image copy depending editor behavior.
 - Extremely complex custom HTML can be altered by sanitization.
-- `.qmd` execution requires a working Jupyter kernel setup.
+- Execution with `--execute` requires a working Jupyter kernel setup.
 
 ---
 
 ## License
 
 MIT
-

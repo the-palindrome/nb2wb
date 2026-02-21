@@ -3,7 +3,10 @@ Integration tests for Markdown (.md) file conversion.
 
 Tests the complete pipeline: .md file -> md_reader -> converter -> HTML.
 """
+import nbformat
 import pytest
+import subprocess
+from pathlib import Path
 from nb2wb.converter import Converter
 
 
@@ -169,14 +172,167 @@ class TestMarkdownExecutionFlag:
         # Source code is rendered but 'output text' is not executed/shown
         assert "code-cell" in html
 
-    def test_qmd_always_executes(self, minimal_config, tmp_path):
-        """Converter(execute=False) does not affect .qmd execution."""
-        # .qmd execution is always attempted regardless of execute flag
+    def test_md_execute_false_skips_execution(self, minimal_config, tmp_path, monkeypatch):
+        """With execute=False, .md files are parsed but not executed."""
+        md = tmp_path / "test.md"
+        md.write_text("```python\nx = 1\n```\n")
+        called = False
+
+        def fake_execute_cells(nb, cwd):
+            nonlocal called
+            called = True
+            return nb
+
+        monkeypatch.setattr("nb2wb.converter._execute_cells", fake_execute_cells)
+        html = Converter(minimal_config, execute=False).convert(md)
+        assert called is False
+        assert "code-cell" in html
+
+    def test_md_execute_true_runs_execution(self, minimal_config, tmp_path, monkeypatch):
+        """With execute=True, .md files go through notebook execution."""
+        md = tmp_path / "test.md"
+        md.write_text("```python\nx = 1\n```\n")
+        called = False
+
+        def fake_execute_cells(nb, cwd):
+            nonlocal called
+            called = True
+            return nb
+
+        monkeypatch.setattr("nb2wb.converter._execute_cells", fake_execute_cells)
+        Converter(minimal_config, execute=True).convert(md)
+        assert called is True
+
+    def test_qmd_execute_false_skips_execution(self, minimal_config, tmp_path, monkeypatch):
+        """With execute=False, .qmd files are parsed but not executed."""
         qmd = tmp_path / "test.qmd"
         qmd.write_text("# Test\n\n```{python}\nx = 1\n```\n")
+        called = False
+
+        def fake_execute_cells(nb, cwd):
+            nonlocal called
+            called = True
+            return nb
+
+        monkeypatch.setattr("nb2wb.converter._execute_cells", fake_execute_cells)
         converter = Converter(minimal_config, execute=False)
-        # This should not crash; .qmd still goes through _execute_cells
-        try:
-            html = converter.convert(qmd)
-        except Exception:
-            pytest.skip("Jupyter kernel not available for .qmd execution")
+        html = converter.convert(qmd)
+        assert called is False
+        assert "Test" in html
+
+    def test_qmd_execute_true_runs_execution(self, minimal_config, tmp_path, monkeypatch):
+        """With execute=True, .qmd files go through notebook execution."""
+        qmd = tmp_path / "test.qmd"
+        qmd.write_text("# Test\n\n```{python}\nx = 1\n```\n")
+        called = False
+
+        def fake_execute_cells(nb, cwd):
+            nonlocal called
+            called = True
+            return nb
+
+        monkeypatch.setattr("nb2wb.converter._execute_cells", fake_execute_cells)
+        converter = Converter(minimal_config, execute=True)
+        converter.convert(qmd)
+        assert called is True
+
+    def test_ipynb_execute_false_skips_execution(self, minimal_config, tmp_path, monkeypatch):
+        """With execute=False, .ipynb files are rendered without re-executing cells."""
+        nb = nbformat.v4.new_notebook()
+        nb.cells = [nbformat.v4.new_markdown_cell("# Test")]
+        ipynb = tmp_path / "test.ipynb"
+        with open(ipynb, "w") as f:
+            nbformat.write(nb, f)
+
+        called = False
+
+        def fake_execute_cells(nb, cwd):
+            nonlocal called
+            called = True
+            return nb
+
+        monkeypatch.setattr("nb2wb.converter._execute_cells", fake_execute_cells)
+        html = Converter(minimal_config, execute=False).convert(ipynb)
+        assert called is False
+        assert "Test" in html
+
+    def test_ipynb_execute_true_runs_execution(self, minimal_config, tmp_path, monkeypatch):
+        """With execute=True, .ipynb files go through notebook execution."""
+        nb = nbformat.v4.new_notebook()
+        nb.cells = [nbformat.v4.new_markdown_cell("# Test")]
+        ipynb = tmp_path / "test.ipynb"
+        with open(ipynb, "w") as f:
+            nbformat.write(nb, f)
+
+        called = False
+
+        def fake_execute_cells(nb, cwd):
+            nonlocal called
+            called = True
+            return nb
+
+        monkeypatch.setattr("nb2wb.converter._execute_cells", fake_execute_cells)
+        Converter(minimal_config, execute=True).convert(ipynb)
+        assert called is True
+
+    def test_latex_usetex_invoked_when_execute_false(self, minimal_config, tmp_path, monkeypatch):
+        """LaTeX rendering behavior is independent of --execute."""
+        md = tmp_path / "math.md"
+        md.write_text("$$x = 1$$\n")
+        minimal_config.latex.try_usetex = True
+        called = False
+
+        def fake_run(cmd, **kwargs):
+            nonlocal called
+            called = True
+            if cmd[0] == "latex":
+                output_idx = cmd.index("-output-directory") + 1
+                output_dir = Path(cmd[output_idx])
+                (output_dir / "formula.dvi").write_bytes(b"FAKE_DVI")
+            elif cmd[0] == "dvipng":
+                png_idx = cmd.index("-o") + 1
+                png_path = Path(cmd[png_idx])
+                png_data = (
+                    b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01"
+                    b"\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89"
+                    b"\x00\x00\x00\nIDATx\x9cc\xf8\xcf\xc0\x00\x00\x00\x03"
+                    b"\x00\x01\x8e\xea\xfe\x0e\x00\x00\x00\x00IEND\xaeB`\x82"
+                )
+                png_path.write_bytes(png_data)
+            return subprocess.CompletedProcess(cmd, 0, stdout=b"", stderr=b"")
+
+        monkeypatch.setattr("nb2wb.renderers.latex_renderer.subprocess.run", fake_run)
+        html = Converter(minimal_config, execute=False).convert(md)
+        assert called is True
+        assert "data:image/png;base64," in html
+
+    def test_latex_usetex_invoked_when_execute_true(self, minimal_config, tmp_path, monkeypatch):
+        """With --execute, display math rendering may use external LaTeX."""
+        md = tmp_path / "math.md"
+        md.write_text("$$x = 1$$\n")
+        minimal_config.latex.try_usetex = True
+        called = False
+
+        def fake_run(cmd, **kwargs):
+            nonlocal called
+            called = True
+
+            if cmd[0] == "latex":
+                output_idx = cmd.index("-output-directory") + 1
+                output_dir = Path(cmd[output_idx])
+                (output_dir / "formula.dvi").write_bytes(b"FAKE_DVI")
+            elif cmd[0] == "dvipng":
+                png_idx = cmd.index("-o") + 1
+                png_path = Path(cmd[png_idx])
+                png_data = (
+                    b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01"
+                    b"\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89"
+                    b"\x00\x00\x00\nIDATx\x9cc\xf8\xcf\xc0\x00\x00\x00\x03"
+                    b"\x00\x01\x8e\xea\xfe\x0e\x00\x00\x00\x00IEND\xaeB`\x82"
+                )
+                png_path.write_bytes(png_data)
+            return subprocess.CompletedProcess(cmd, 0, stdout=b"", stderr=b"")
+
+        monkeypatch.setattr("nb2wb.renderers.latex_renderer.subprocess.run", fake_run)
+        Converter(minimal_config, execute=True).convert(md)
+        assert called is True

@@ -29,6 +29,42 @@ from PIL import Image, ImageChops, ImageDraw, ImageFont
 from ..config import LatexConfig
 from ._image_utils import round_corners as _round_corners
 
+_CONTROL_CHAR_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+_TEX_COMMAND_RE = re.compile(r"(?<!\\)\\([A-Za-z@]+)\*?")
+_PACKAGE_RE = re.compile(
+    r"(?<!\\)\\(?:usepackage|RequirePackage)(?:\[[^\]]*\])?\{([^}]*)\}",
+    re.IGNORECASE,
+)
+_FORBIDDEN_TEX_COMMANDS = frozenset(
+    {
+        "input",
+        "@@input",
+        "include",
+        "openin",
+        "openout",
+        "closein",
+        "closeout",
+        "read",
+        "write",
+        "write18",
+        "immediate",
+        "special",
+        "catcode",
+        "newread",
+        "newwrite",
+    }
+)
+_FORBIDDEN_PACKAGES = frozenset(
+    {
+        "shellesc",
+        "catchfile",
+        "catchfilebetweentags",
+        "verbatim",
+    }
+)
+_MAX_LATEX_CHARS = 10_000
+_MAX_PREAMBLE_CHARS = 20_000
+
 def extract_display_math(text: str) -> list[tuple[int, int, str]]:
     """
     Return a list of (start, end, latex_content) for every display-math
@@ -82,6 +118,7 @@ def render_latex_block(
 
     if config.try_usetex:
         try:
+            _validate_usetex_inputs(latex, combined_preamble)
             return _render_usetex(latex, config, combined_preamble, tag=tag)
         except Exception:
             pass  # fall through to mathtext
@@ -206,6 +243,28 @@ def _color_to_dvipng(color: str) -> str:
     return f"rgb {r:.6f} {g:.6f} {b:.6f}"
 
 
+def _validate_usetex_inputs(latex: str, preamble: str) -> None:
+    """Validate TeX inputs before invoking external LaTeX tooling."""
+    if _CONTROL_CHAR_RE.search(latex) or _CONTROL_CHAR_RE.search(preamble):
+        raise ValueError("Control characters are not allowed in LaTeX content.")
+    if len(latex) > _MAX_LATEX_CHARS:
+        raise ValueError(f"LaTeX expression exceeds {_MAX_LATEX_CHARS} characters.")
+    if len(preamble) > _MAX_PREAMBLE_CHARS:
+        raise ValueError(f"LaTeX preamble exceeds {_MAX_PREAMBLE_CHARS} characters.")
+
+    for command in _TEX_COMMAND_RE.findall("\n".join([latex, preamble])):
+        if command.lower() in _FORBIDDEN_TEX_COMMANDS:
+            raise ValueError(f"Disallowed LaTeX command in usetex content: \\{command}")
+
+    for match in _PACKAGE_RE.finditer(preamble):
+        packages = [p.strip().lower() for p in match.group(1).split(",") if p.strip()]
+        banned = sorted(pkg for pkg in packages if pkg in _FORBIDDEN_PACKAGES)
+        if banned:
+            raise ValueError(
+                "Disallowed LaTeX package in preamble: " + ", ".join(banned)
+            )
+
+
 def _render_usetex(latex: str, config: LatexConfig, preamble: str = "", tag: int | None = None) -> str:
     """
     Direct latex + dvipng pipeline.
@@ -250,8 +309,14 @@ def _render_usetex(latex: str, config: LatexConfig, preamble: str = "", tag: int
 
         # Step 1: LaTeX → DVI
         result = subprocess.run(
-            ["latex", "-interaction=nonstopmode", "-output-directory", tmpdir,
-             str(tex_path)],
+            [
+                "latex",
+                "-interaction=nonstopmode",
+                "-no-shell-escape",
+                "-output-directory",
+                tmpdir,
+                str(tex_path),
+            ],
             capture_output=True, timeout=30,
         )
         if result.returncode != 0:
