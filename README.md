@@ -314,6 +314,14 @@ latex:
   try_usetex: true
   preamble: ""
   border_radius: 0
+
+safety:
+  max_input_bytes: 20971520
+  max_cells: 2000
+  max_cell_source_chars: 500000
+  max_total_output_bytes: 26214400
+  max_display_math_blocks: 500
+  max_total_latex_chars: 1000000
 ```
 
 Inheritance behavior:
@@ -354,7 +362,7 @@ python -c "from pygments.styles import get_all_styles; print(sorted(get_all_styl
 ### Image URL/file safety
 
 - Only `http` / `https` remote image URLs are allowed
-- Requests to private/loopback hosts are blocked (SSRF protection)
+- Requests to non-public hosts are blocked (SSRF protection)
 - Redirect targets are re-validated (no public-to-private redirect bypass)
 - Download timeout and max size checks are enforced
 - MIME type allowlist is enforced for fetched/read images
@@ -369,11 +377,24 @@ python -c "from pygments.styles import get_all_styles; print(sorted(get_all_styl
 - `text/html` outputs are sanitized
 - SVG outputs are sanitized, then embedded via image data URI
 - Dangerous tags/attributes/URI schemes are stripped or neutralized
+- CSS `url(...)` values are restricted to image data URIs or fragment refs
 
 ### CLI input sanitization
 
 - Input path is validated to be one of: `.ipynb`, `.qmd`, `.md`
 - CLI paths containing control characters are rejected
+
+### Server-safe pipeline
+
+- Uses parser-based strict sanitization for HTML and SVG fragments.
+- Drops image tags whose sources cannot be converted safely (fail-closed).
+- Enforces notebook resource limits:
+  - max input file bytes
+  - max cell count
+  - max chars per cell source
+  - max aggregate output payload bytes
+  - max number of display-math blocks
+  - max aggregate display-math character count
 
 Important:
 

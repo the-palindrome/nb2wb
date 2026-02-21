@@ -10,6 +10,7 @@ from nb2wb.config import (
     Config,
     CodeConfig,
     LatexConfig,
+    SafetyConfig,
     load_config,
     apply_platform_defaults,
 )
@@ -25,6 +26,9 @@ class TestConfigDefaults:
         assert config.border_radius == 14
         assert isinstance(config.code, CodeConfig)
         assert isinstance(config.latex, LatexConfig)
+        assert isinstance(config.safety, SafetyConfig)
+        assert config.safety.max_display_math_blocks == 500
+        assert config.safety.max_total_latex_chars == 1_000_000
 
     def test_code_config_defaults(self):
         """Default CodeConfig has expected values."""
@@ -82,6 +86,9 @@ code:
 latex:
   dpi: 200
   color: "white"
+safety:
+  max_cells: 123
+  max_display_math_blocks: 77
 """)
         config = load_config(config_path)
         assert config.image_width == 1000
@@ -90,6 +97,8 @@ latex:
         assert config.code.theme == "default"
         assert config.latex.dpi == 200
         assert config.latex.color == "white"
+        assert config.safety.max_cells == 123
+        assert config.safety.max_display_math_blocks == 77
 
     def test_load_config_empty_file(self, tmp_path):
         """Empty config file returns defaults."""

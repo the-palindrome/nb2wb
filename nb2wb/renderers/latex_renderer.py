@@ -40,6 +40,10 @@ _FORBIDDEN_TEX_COMMANDS = frozenset(
         "input",
         "@@input",
         "include",
+        "csname",
+        "endcsname",
+        "expandafter",
+        "scantokens",
         "openin",
         "openout",
         "closein",
@@ -64,6 +68,11 @@ _FORBIDDEN_PACKAGES = frozenset(
 )
 _MAX_LATEX_CHARS = 10_000
 _MAX_PREAMBLE_CHARS = 20_000
+
+
+def _strip_tex_comments(text: str) -> str:
+    """Drop unescaped LaTeX comments so validators inspect executable tokens."""
+    return re.sub(r"(?<!\\)%[^\n]*", "", text)
 
 def extract_display_math(text: str) -> list[tuple[int, int, str]]:
     """
@@ -252,11 +261,13 @@ def _validate_usetex_inputs(latex: str, preamble: str) -> None:
     if len(preamble) > _MAX_PREAMBLE_CHARS:
         raise ValueError(f"LaTeX preamble exceeds {_MAX_PREAMBLE_CHARS} characters.")
 
-    for command in _TEX_COMMAND_RE.findall("\n".join([latex, preamble])):
+    normalized = _strip_tex_comments("\n".join([latex, preamble]))
+    for command in _TEX_COMMAND_RE.findall(normalized):
         if command.lower() in _FORBIDDEN_TEX_COMMANDS:
             raise ValueError(f"Disallowed LaTeX command in usetex content: \\{command}")
 
-    for match in _PACKAGE_RE.finditer(preamble):
+    preamble_normalized = _strip_tex_comments(preamble)
+    for match in _PACKAGE_RE.finditer(preamble_normalized):
         packages = [p.strip().lower() for p in match.group(1).split(",") if p.strip()]
         banned = sorted(pkg for pkg in packages if pkg in _FORBIDDEN_PACKAGES)
         if banned:
@@ -317,7 +328,10 @@ def _render_usetex(latex: str, config: LatexConfig, preamble: str = "", tag: int
                 tmpdir,
                 str(tex_path),
             ],
-            capture_output=True, timeout=30,
+            capture_output=True,
+            stdin=subprocess.DEVNULL,
+            cwd=tmpdir,
+            timeout=30,
         )
         if result.returncode != 0:
             raise RuntimeError(
@@ -328,7 +342,10 @@ def _render_usetex(latex: str, config: LatexConfig, preamble: str = "", tag: int
         result = subprocess.run(
             ["dvipng", "--truecolor", f"-D{config.dpi}", "-T", "tight",
              "-bg", bg_dvipng, "-o", str(png_path), str(dvi_path)],
-            capture_output=True, timeout=30,
+            capture_output=True,
+            stdin=subprocess.DEVNULL,
+            cwd=tmpdir,
+            timeout=30,
         )
         if result.returncode != 0:
             raise RuntimeError(

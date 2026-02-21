@@ -403,6 +403,53 @@ class TestCLIExecutionFlag:
         assert called is True
 
 
+class TestCLIServerSafeMode:
+    """Test mandatory server-safe wiring in CLI."""
+
+    def test_cli_uses_server_safe_pipeline(self, tmp_path, monkeypatch):
+        nb = nbformat.v4.new_notebook()
+        nb.cells = [nbformat.v4.new_markdown_cell("# Safe")]
+        notebook_path = tmp_path / "safe.ipynb"
+        with open(notebook_path, "w") as f:
+            nbformat.write(nb, f)
+
+        seen: dict[str, bool] = {}
+
+        class FakeBuilder:
+            name = "Fake"
+
+            def build_page(self, content_html: str) -> str:
+                return content_html
+
+        class FakeConverter:
+            def __init__(self, config, *, execute=False):
+                seen["has_safety_limits"] = (
+                    config.safety.max_input_bytes > 0
+                    and config.safety.max_cells > 0
+                    and config.safety.max_total_output_bytes > 0
+                )
+                self._execute = execute
+
+            def convert(self, notebook_path):
+                return "<p>ok</p>"
+
+        def fake_get_builder(_platform: str):
+            seen["builder_called"] = True
+            return FakeBuilder()
+
+        monkeypatch.setattr("nb2wb.cli.Converter", FakeConverter)
+        monkeypatch.setattr("nb2wb.cli.get_builder", fake_get_builder)
+
+        sys.argv = ["nb2wb", str(notebook_path), "-o", str(tmp_path / "out.html")]
+        try:
+            main()
+        except SystemExit:
+            pass
+
+        assert seen["builder_called"] is True
+        assert seen["has_safety_limits"] is True
+
+
 class TestCLIInputSanitization:
     """Test CLI sanitization and validation of user-provided paths."""
 

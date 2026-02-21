@@ -38,6 +38,18 @@ class LatexConfig:
 
 
 @dataclass
+class SafetyConfig:
+    """Security controls for untrusted server-side conversion workloads."""
+
+    max_input_bytes: int = 20 * 1024 * 1024  # max input document size
+    max_cells: int = 2000  # max number of notebook cells
+    max_cell_source_chars: int = 500_000  # max chars in any single cell source
+    max_total_output_bytes: int = 25 * 1024 * 1024  # max aggregate output payload
+    max_display_math_blocks: int = 500  # max number of display-math blocks rendered
+    max_total_latex_chars: int = 1_000_000  # max aggregate chars across display-math blocks
+
+
+@dataclass
 class Config:
     """Top-level configuration aggregating code and LaTeX rendering settings."""
 
@@ -45,6 +57,7 @@ class Config:
     border_radius: int = 14  # corner radius in pixels for all rendered images
     code: CodeConfig = field(default_factory=CodeConfig)
     latex: LatexConfig = field(default_factory=LatexConfig)
+    safety: SafetyConfig = field(default_factory=SafetyConfig)
 
 
 def load_config(path: Optional[Path]) -> Config:
@@ -72,6 +85,11 @@ def load_config(path: Optional[Path]) -> Config:
         for k, v in data.get("latex", {}).items()
         if k in LatexConfig.__dataclass_fields__
     }
+    safety_fields = {
+        k: v
+        for k, v in data.get("safety", {}).items()
+        if k in SafetyConfig.__dataclass_fields__
+    }
 
     # Sub-configs inherit top-level image_width / border_radius unless overridden
     code_fields.setdefault("image_width", top_width)
@@ -84,6 +102,7 @@ def load_config(path: Optional[Path]) -> Config:
         border_radius=top_radius,
         code=CodeConfig(**code_fields),
         latex=LatexConfig(**latex_fields),
+        safety=SafetyConfig(**safety_fields),
     )
 
 
@@ -129,4 +148,5 @@ def apply_platform_defaults(config: Config, platform: str) -> Config:
         border_radius=config.border_radius,
         code=CodeConfig(**code_fields),
         latex=LatexConfig(**latex_fields),
+        safety=config.safety,
     )

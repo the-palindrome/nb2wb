@@ -7,6 +7,7 @@ import base64
 import ipaddress
 import mimetypes
 import re
+import socket
 import warnings
 import urllib.request
 from abc import ABC, abstractmethod
@@ -65,6 +66,8 @@ def _validate_public_http_url(url: str, *, context: str = "Image URL") -> str:
     parsed = urlparse(url)
     if parsed.scheme not in {"http", "https"}:
         raise ValueError(f"{context} must use http/https: {url}")
+    if parsed.username or parsed.password:
+        raise ValueError(f"{context} must not contain credentials: {url}")
 
     hostname = parsed.hostname or ""
     if not hostname:
@@ -87,23 +90,67 @@ class _SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
 
 
 def _is_private_host(hostname: str) -> bool:
-    """Return True if *hostname* resolves to a private/loopback address."""
+    """Return True if *hostname* is not globally routable."""
+    def _is_non_public(addr: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+        return (
+            addr.is_private
+            or addr.is_loopback
+            or addr.is_link_local
+            or addr.is_multicast
+            or addr.is_reserved
+            or addr.is_unspecified
+            or not addr.is_global
+        )
+
     try:
         addr = ipaddress.ip_address(hostname)
-        return addr.is_private or addr.is_loopback or addr.is_reserved
+        return _is_non_public(addr)
     except ValueError:
         pass
-    # Hostname like "localhost" — resolve it
-    import socket
+
+    # Hostname like "localhost" — resolve and reject if any endpoint is non-global.
     try:
-        infos = socket.getaddrinfo(hostname, None)
+        infos = socket.getaddrinfo(hostname, None, type=socket.SOCK_STREAM)
+        if not infos:
+            return True
         for _family, _type, _proto, _canonname, sockaddr in infos:
             addr = ipaddress.ip_address(sockaddr[0])
-            if addr.is_private or addr.is_loopback or addr.is_reserved:
+            if _is_non_public(addr):
                 return True
     except OSError:
-        pass
+        return True
     return False
+
+
+def _extract_peer_ip(response) -> str | None:
+    """Best-effort peer IP extraction for HTTP responses."""
+    fp = getattr(response, "fp", None)
+    if fp is None:
+        return None
+
+    sockets = []
+    raw = getattr(fp, "raw", None)
+    if raw is not None:
+        sock = getattr(raw, "_sock", None)
+        if sock is not None:
+            sockets.append(sock)
+        conn = getattr(raw, "_connection", None)
+        if conn is not None:
+            conn_sock = getattr(conn, "sock", None)
+            if conn_sock is not None:
+                sockets.append(conn_sock)
+    fp_sock = getattr(fp, "_sock", None)
+    if fp_sock is not None:
+        sockets.append(fp_sock)
+
+    for sock in sockets:
+        try:
+            peer = sock.getpeername()
+        except OSError:
+            continue
+        if isinstance(peer, tuple) and peer:
+            return str(peer[0])
+    return None
 
 
 class PlatformBuilder(ABC):
@@ -144,6 +191,8 @@ class PlatformBuilder(ABC):
 
         def rewrite_image(full_tag: str, img_src: str) -> str:
             new_src = rewrite_src(img_src)
+            if not new_src:
+                return ""
             if new_src == img_src:
                 return full_tag
             return full_tag.replace(f'src="{img_src}"', f'src="{new_src}"', 1)
@@ -168,7 +217,7 @@ class PlatformBuilder(ABC):
                 RuntimeWarning,
                 stacklevel=2,
             )
-            return src
+            return ""
 
     def _embed_images_as_data_uris(self, html: str) -> str:
         """Convert non-data-URI image sources in *html* into data URIs."""
@@ -186,6 +235,11 @@ class PlatformBuilder(ABC):
         req = urllib.request.Request(url)
         with opener.open(req, timeout=_URL_TIMEOUT) as response:
             _validate_public_http_url(response.geturl(), context="Final response URL")
+            peer_ip = _extract_peer_ip(response)
+            if peer_ip and _is_private_host(peer_ip):
+                raise ValueError(
+                    f"Refusing response from private/loopback peer IP: {peer_ip}"
+                )
 
             # Check Content-Length header first (if provided)
             content_length = response.headers.get("Content-Length")
@@ -275,6 +329,8 @@ class PlatformBuilder(ABC):
 
             if not img_src.startswith("data:"):
                 img_src = self._to_data_uri(img_src)
+            if not img_src:
+                return ""
 
             alt_match = _ALT_ATTR_RE.search(full_tag)
             alt_text = alt_match.group(1) if alt_match else "image"

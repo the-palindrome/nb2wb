@@ -392,6 +392,52 @@ class TestUseTexRendering:
         assert called is False
         assert result.startswith("data:image/png;base64,")
 
+    def test_render_usetex_sanitizer_blocks_csname_smuggling(self, minimal_config, monkeypatch):
+        """Dynamic command construction via \\csname is blocked."""
+        called = False
+
+        def fake_run(cmd, **kwargs):
+            nonlocal called
+            called = True
+            raise RuntimeError("subprocess should not be called for blocked input")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        minimal_config.latex.try_usetex = True
+        result = render_latex_block("x = 1", minimal_config.latex, preamble=r"\csname input\endcsname{secret.tex}")
+        assert called is False
+        assert result.startswith("data:image/png;base64,")
+
+    def test_render_usetex_sanitizer_ignores_commented_dangerous_command(self, minimal_config, monkeypatch):
+        """Commented-out dangerous commands should not disable the usetex path."""
+        calls = 0
+
+        def fake_run(cmd, **kwargs):
+            nonlocal calls
+            calls += 1
+
+            if cmd[0] == "latex":
+                output_idx = cmd.index("-output-directory") + 1
+                output_dir = Path(cmd[output_idx])
+                (output_dir / "formula.dvi").write_bytes(b"FAKE_DVI")
+            elif cmd[0] == "dvipng":
+                png_idx = cmd.index("-o") + 1
+                png_path = Path(cmd[png_idx])
+                png_data = (
+                    b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01"
+                    b"\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89"
+                    b"\x00\x00\x00\nIDATx\x9cc\xf8\xcf\xc0\x00\x00\x00\x03"
+                    b"\x00\x01\x8e\xea\xfe\x0e\x00\x00\x00\x00IEND\xaeB`\x82"
+                )
+                png_path.write_bytes(png_data)
+
+            return subprocess.CompletedProcess(cmd, 0, stdout=b"", stderr=b"")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        minimal_config.latex.try_usetex = True
+        result = render_latex_block("x = 1", minimal_config.latex, preamble="% \\input{secret.tex}")
+        assert calls >= 2
+        assert result.startswith("data:image/png;base64,")
+
     def test_render_usetex_sanitizer_blocks_dangerous_package(self, minimal_config, monkeypatch):
         """Dangerous LaTeX packages are blocked before subprocess invocation."""
         called = False

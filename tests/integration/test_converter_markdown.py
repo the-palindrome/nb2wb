@@ -428,3 +428,40 @@ class TestSecuritySanitization:
         assert "<script" not in lowered
         assert "onload=" not in lowered
         assert "<rect" in lowered
+
+    def test_server_safe_strips_slash_prefixed_event_handlers(self, minimal_config, tmp_path):
+        nb = nbformat.v4.new_notebook()
+        nb.cells = [
+            nbformat.v4.new_markdown_cell('<img/onerror=alert(1) src="x.png">')
+        ]
+        notebook_path = tmp_path / "slash_attrs.ipynb"
+        with open(notebook_path, "w") as f:
+            nbformat.write(nb, f)
+
+        html = Converter(minimal_config).convert(notebook_path)
+        lowered = html.lower()
+        assert "onerror=" not in lowered
+        assert "<img" in lowered
+
+    def test_server_safe_sanitizes_svg_slash_attr_payload(self, minimal_config, tmp_path):
+        nb = nbformat.v4.new_notebook()
+        cell = nbformat.v4.new_code_cell("x = 1")
+        cell.outputs = [
+            nbformat.from_dict(
+                {
+                    "output_type": "display_data",
+                    "data": {"image/svg+xml": '<svg/onload=alert(1)><rect width="1" height="1"/></svg>'},
+                    "metadata": {},
+                }
+            )
+        ]
+        nb.cells = [cell]
+        notebook_path = tmp_path / "slash_svg.ipynb"
+        with open(notebook_path, "w") as f:
+            nbformat.write(nb, f)
+
+        html = Converter(minimal_config).convert(notebook_path)
+        m = re.search(r'data:image/svg\+xml;base64,([^"]+)"', html)
+        assert m is not None
+        decoded_svg = base64.b64decode(m.group(1)).decode("utf-8").lower()
+        assert "onload=" not in decoded_svg
