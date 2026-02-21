@@ -63,6 +63,12 @@ class TestIsPrivateHost:
     def test_private_192_range(self):
         assert _is_private_host("192.168.1.1") is True
 
+    def test_cgnat_range(self):
+        assert _is_private_host("100.64.0.1") is True
+
+    def test_multicast_range(self):
+        assert _is_private_host("224.0.0.1") is True
+
     def test_public_ip(self):
         assert _is_private_host("8.8.8.8") is False
 
@@ -71,6 +77,10 @@ class TestIsPrivateHost:
 
     def test_localhost_hostname(self):
         assert _is_private_host("localhost") is True
+
+    def test_unresolvable_hostname_fails_closed(self):
+        with patch("socket.getaddrinfo", side_effect=OSError("dns failure")):
+            assert _is_private_host("unresolvable.example.test") is True
 
 
 # ---------------------------------------------------------------------------
@@ -157,6 +167,14 @@ class TestSSRF:
         with pytest.raises(ValueError, match="must use http/https"):
             PlatformBuilder._fetch_url_as_data_uri("ftp://example.com/image.png")
 
+    def test_rejects_multicast_ip_url(self):
+        with pytest.raises(ValueError, match="private/loopback"):
+            PlatformBuilder._fetch_url_as_data_uri("http://224.0.0.1/stream")
+
+    def test_rejects_url_with_credentials(self):
+        with pytest.raises(ValueError, match="must not contain credentials"):
+            PlatformBuilder._fetch_url_as_data_uri("https://user:pass@example.com/img.png")
+
     def test_redirect_handler_rejects_private_target(self):
         handler = _SafeRedirectHandler()
         req = urllib.request.Request("https://example.com/image.png")
@@ -238,30 +256,47 @@ class TestSizeLimit:
 
 
 class TestToDataUriFallback:
-    """_to_data_uri should return original src on failure, not crash."""
+    """_to_data_uri should fail closed on conversion failures."""
 
-    def test_returns_original_on_traversal(self):
+    def test_returns_empty_on_traversal(self):
         builder = SubstackBuilder()
         result = builder._to_data_uri("../../../etc/passwd")
-        assert result == "../../../etc/passwd"
+        assert result == ""
 
     def test_emits_warning_on_conversion_failure(self):
         builder = SubstackBuilder()
         with pytest.warns(RuntimeWarning, match="Could not convert image"):
             result = builder._to_data_uri("../../../etc/passwd")
-        assert result == "../../../etc/passwd"
+        assert result == ""
 
-    def test_returns_original_on_ssrf(self):
+    def test_returns_empty_on_ssrf(self):
         builder = MediumBuilder()
         result = builder._to_data_uri("http://127.0.0.1/secret")
-        assert result == "http://127.0.0.1/secret"
+        assert result == ""
 
-    def test_returns_original_on_bad_mime(self, tmp_path, monkeypatch):
+    def test_returns_empty_on_bad_mime(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         (tmp_path / "evil.html").write_text("<script>x</script>")
         builder = XArticlesBuilder()
         result = builder._to_data_uri("evil.html")
-        assert result == "evil.html"
+        assert result == ""
+
+
+class TestStrictImageMode:
+    """Strict image mode should fail closed for unsafe sources."""
+
+    def test_strict_mode_drops_unresolvable_image_sources(self):
+        builder = SubstackBuilder()
+        html = '<p><img src="../../../etc/passwd" alt="x"></p>'
+        out = builder._embed_images_as_data_uris(html)
+        assert "<img" not in out
+
+    def test_strict_mode_keeps_valid_data_uri_images(self):
+        builder = MediumBuilder()
+        html = f'<img src="data:image/png;base64,{_TINY_PNG_B64}" alt="ok">'
+        out = builder._make_images_copyable(html)
+        assert "copy-image-btn" in out
+        assert "data:image/png;base64" in out
 
 
 # ---------------------------------------------------------------------------

@@ -32,12 +32,14 @@ import markdown
 import nbformat
 
 from .config import Config
+from .config import SafetyConfig
 from .md_reader import read_md
 from .qmd_reader import read_qmd
 # Platform-specific HTML wrapping is now done in CLI
 from .renderers.code_renderer import render_code, render_output_text, vstack_and_pad
 from .renderers.inline_latex import convert_inline_math
 from .renderers.latex_renderer import extract_display_math, render_latex_block
+from .sanitizer import sanitize_fragment
 
 # Strip ANSI colour codes from tracebacks
 _ANSI = re.compile(r"\x1b\[[0-9;]*[mGKFHJ]")
@@ -59,36 +61,6 @@ _MD_EXTENSIONS = ["extra", "sane_lists", "nl2br"]
 
 _RICH_OUTPUT_MIMES = frozenset({"image/png", "image/svg+xml", "text/html"})
 
-# Best-effort HTML sanitization for notebook-originated dynamic fragments.
-_DANGEROUS_BLOCK_TAG_RE = re.compile(
-    r"<\s*(script|iframe|object|embed)\b[^>]*>.*?<\s*/\s*\1\s*>",
-    re.IGNORECASE | re.DOTALL,
-)
-_DANGEROUS_SINGLE_TAG_RE = re.compile(
-    r"<\s*(script|iframe|object|embed|link|meta)\b[^>]*?/?>",
-    re.IGNORECASE,
-)
-_EVENT_ATTR_RE = re.compile(
-    r"""\s+on[a-zA-Z0-9_-]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)""",
-    re.IGNORECASE,
-)
-_JS_URI_QUOTED_RE = re.compile(
-    r"""(\b(?:href|src|xlink:href)\s*=\s*)(["'])\s*javascript:[^"']*\2""",
-    re.IGNORECASE,
-)
-_JS_URI_UNQUOTED_RE = re.compile(
-    r"""(\b(?:href|src|xlink:href)\s*=\s*)javascript:[^\s>]+""",
-    re.IGNORECASE,
-)
-_DATA_HTML_URI_QUOTED_RE = re.compile(
-    r"""(\b(?:href|src|xlink:href)\s*=\s*)(["'])\s*data:text/html[^"']*\2""",
-    re.IGNORECASE,
-)
-_DATA_HTML_URI_UNQUOTED_RE = re.compile(
-    r"""(\b(?:href|src|xlink:href)\s*=\s*)data:text/html[^\s>]+""",
-    re.IGNORECASE,
-)
-
 
 class Converter:
     """Converts a Jupyter notebook or Quarto document into HTML content fragments."""
@@ -103,7 +75,19 @@ class Converter:
         Reads the notebook, collects LaTeX preamble and equation labels across
         all cells, then renders each markdown and code cell to HTML fragments.
         """
+        _enforce_input_size(notebook_path, self.config.safety)
         nb = _load_notebook(notebook_path, execute=self.execute)
+        return self._convert_loaded_notebook(nb)
+
+    def convert_notebook(self, notebook, *, cwd: Path | None = None) -> str:
+        """Convert an in-memory notebook object (NotebookNode) to HTML."""
+        _enforce_serialized_notebook_size(notebook, self.config.safety)
+        nb = _execute_cells(notebook, cwd or Path.cwd()) if self.execute else notebook
+        return self._convert_loaded_notebook(nb)
+
+    def _convert_loaded_notebook(self, nb) -> str:
+        """Render an already-loaded notebook node to concatenated HTML fragments."""
+        _enforce_notebook_limits(nb, self.config.safety)
         self._lang = _notebook_language(nb)
         self._latex_preamble = _collect_latex_preamble(nb.cells)
         self._eq_labels = _collect_equation_labels(nb.cells)
@@ -172,7 +156,7 @@ class Converter:
 
         # 3. Markdown → HTML
         html = markdown.markdown(src, extensions=_MD_EXTENSIONS)
-        html = _sanitize_html_fragment(html)
+        html = _sanitize_html_fragment(html, profile="html")
         return f'<div class="md-cell">{html}</div>\n'
 
     def _code_cell(self, cell, tags: frozenset[str] = frozenset()) -> str:
@@ -270,7 +254,7 @@ class Converter:
 
         raw_html = _join_text(data.get("text/html"))
         if raw_html:
-            sanitized = _sanitize_html_fragment(raw_html)
+            sanitized = _sanitize_html_fragment(raw_html, profile="html")
             return f'<div class="html-output">{sanitized}</div>\n'
 
         return ""
@@ -287,21 +271,17 @@ def _png_uri(png_bytes: bytes) -> str:
 
 def _svg_data_uri(svg: str) -> str:
     """Encode sanitized SVG markup as a data URI for safe embedding via <img>."""
-    sanitized = _sanitize_html_fragment(svg)
+    sanitized = _sanitize_html_fragment(svg, profile="svg")
     encoded = base64.b64encode(sanitized.encode("utf-8")).decode("ascii")
     return f"data:image/svg+xml;base64,{encoded}"
 
 
-def _sanitize_html_fragment(fragment: str) -> str:
-    """Remove active-content vectors from notebook-provided HTML fragments."""
-    cleaned = _DANGEROUS_BLOCK_TAG_RE.sub("", fragment)
-    cleaned = _DANGEROUS_SINGLE_TAG_RE.sub("", cleaned)
-    cleaned = _EVENT_ATTR_RE.sub("", cleaned)
-    cleaned = _JS_URI_QUOTED_RE.sub(r"\1\2#\2", cleaned)
-    cleaned = _JS_URI_UNQUOTED_RE.sub(r"\1#", cleaned)
-    cleaned = _DATA_HTML_URI_QUOTED_RE.sub(r"\1\2#\2", cleaned)
-    cleaned = _DATA_HTML_URI_UNQUOTED_RE.sub(r"\1#", cleaned)
-    return cleaned
+def _sanitize_html_fragment(fragment: str, *, profile: str = "html") -> str:
+    """Sanitize notebook-provided HTML/SVG fragments with strict parser rules."""
+    try:
+        return sanitize_fragment(fragment, profile=profile)
+    except Exception:
+        return ""
 
 
 def _apply_eq_tag(latex: str, eq_labels: dict[str, int]) -> tuple[str, int | None]:
@@ -410,6 +390,91 @@ def _load_notebook(notebook_path: Path, *, execute: bool) -> Any:
         nb = nbformat.read(str(notebook_path), as_version=4)
 
     return _execute_cells(nb, notebook_path.parent) if execute else nb
+
+
+def _enforce_input_size(path: Path, safety: SafetyConfig) -> None:
+    """Reject oversized input files before parsing."""
+    try:
+        size = path.stat().st_size
+    except OSError as exc:
+        raise ValueError(f"Unable to stat input file '{path}': {exc}") from exc
+    if size > safety.max_input_bytes:
+        raise ValueError(
+            f"Input file exceeds safety limit ({size} bytes > {safety.max_input_bytes})."
+        )
+
+
+def _enforce_serialized_notebook_size(nb, safety: SafetyConfig) -> None:
+    """Reject oversized in-memory notebooks using serialized JSON byte size."""
+    try:
+        serialized = nbformat.writes(nb)
+    except Exception as exc:
+        raise ValueError(f"Unable to serialize notebook payload: {exc}") from exc
+    size = len(serialized.encode("utf-8", errors="ignore"))
+    if size > safety.max_input_bytes:
+        raise ValueError(
+            f"Notebook payload exceeds safety limit ({size} bytes > {safety.max_input_bytes})."
+        )
+
+
+def _enforce_notebook_limits(nb, safety: SafetyConfig) -> None:
+    """Apply server-safe notebook limits for resource usage and payload size."""
+    cells = getattr(nb, "cells", [])
+    if len(cells) > safety.max_cells:
+        raise ValueError(
+            f"Notebook has too many cells ({len(cells)} > {safety.max_cells})."
+        )
+
+    total_output_bytes = 0
+    total_display_math_blocks = 0
+    total_latex_chars = 0
+    for idx, cell in enumerate(cells):
+        source = _join_text(getattr(cell, "source", ""))
+        if len(source) > safety.max_cell_source_chars:
+            raise ValueError(
+                f"Cell {idx} source too large "
+                f"({len(source)} > {safety.max_cell_source_chars} chars)."
+            )
+
+        if getattr(cell, "cell_type", "") == "markdown":
+            blocks = extract_display_math(source)
+            total_display_math_blocks += len(blocks)
+            total_latex_chars += sum(len(latex) for _, _, latex in blocks)
+            if total_display_math_blocks > safety.max_display_math_blocks:
+                raise ValueError(
+                    "Notebook has too many display-math blocks "
+                    f"({total_display_math_blocks} > {safety.max_display_math_blocks})."
+                )
+            if total_latex_chars > safety.max_total_latex_chars:
+                raise ValueError(
+                    "Notebook has too much display-math content "
+                    f"({total_latex_chars} > {safety.max_total_latex_chars} chars)."
+                )
+
+        for output in cell.get("outputs", []):
+            total_output_bytes += _estimate_payload_size(output)
+            if total_output_bytes > safety.max_total_output_bytes:
+                raise ValueError(
+                    "Notebook outputs exceed safety limit "
+                    f"({total_output_bytes} > {safety.max_total_output_bytes} bytes)."
+                )
+
+
+def _estimate_payload_size(value: Any) -> int:
+    """Best-effort size estimate for nested notebook output payloads."""
+    if value is None:
+        return 0
+    if isinstance(value, bytes):
+        return len(value)
+    if isinstance(value, str):
+        return len(value.encode("utf-8", errors="ignore"))
+    if isinstance(value, (int, float, bool)):
+        return 8
+    if isinstance(value, list):
+        return sum(_estimate_payload_size(v) for v in value)
+    if isinstance(value, dict):
+        return sum(_estimate_payload_size(k) + _estimate_payload_size(v) for k, v in value.items())
+    return 0
 
 
 def _notebook_language(nb) -> str:

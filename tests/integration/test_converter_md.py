@@ -336,3 +336,50 @@ class TestMarkdownExecutionFlag:
         monkeypatch.setattr("nb2wb.renderers.latex_renderer.subprocess.run", fake_run)
         Converter(minimal_config, execute=True).convert(md)
         assert called is True
+
+
+class TestServerSafeLimits:
+    """Server-safe mode applies hard notebook size limits."""
+
+    def test_server_safe_rejects_too_many_cells(self, minimal_config, tmp_path):
+        nb = nbformat.v4.new_notebook()
+        nb.cells = [
+            nbformat.v4.new_markdown_cell("A"),
+            nbformat.v4.new_markdown_cell("B"),
+            nbformat.v4.new_markdown_cell("C"),
+        ]
+        ipynb = tmp_path / "many.ipynb"
+        with open(ipynb, "w") as f:
+            nbformat.write(nb, f)
+
+        minimal_config.safety.max_cells = 2
+
+        with pytest.raises(ValueError, match="too many cells"):
+            Converter(minimal_config).convert(ipynb)
+
+    def test_server_safe_rejects_large_cell_source(self, minimal_config, tmp_path):
+        md = tmp_path / "large.md"
+        md.write_text("```python\n" + ("x" * 64) + "\n```\n")
+
+        minimal_config.safety.max_cell_source_chars = 8
+
+        with pytest.raises(ValueError, match="source too large"):
+            Converter(minimal_config).convert(md)
+
+    def test_server_safe_rejects_too_many_display_math_blocks(self, minimal_config, tmp_path):
+        md = tmp_path / "many_math.md"
+        md.write_text(" ".join(["$$x$$"] * 6))
+
+        minimal_config.safety.max_display_math_blocks = 5
+
+        with pytest.raises(ValueError, match="too many display-math blocks"):
+            Converter(minimal_config).convert(md)
+
+    def test_server_safe_rejects_excessive_total_latex_chars(self, minimal_config, tmp_path):
+        md = tmp_path / "large_math.md"
+        md.write_text("$$" + ("x" * 40) + "$$")
+
+        minimal_config.safety.max_total_latex_chars = 10
+
+        with pytest.raises(ValueError, match="too much display-math content"):
+            Converter(minimal_config).convert(md)

@@ -403,6 +403,44 @@ class TestCLIExecutionFlag:
         assert called is True
 
 
+class TestCLIServerSafeMode:
+    """Test mandatory server-safe wiring in CLI."""
+
+    def test_cli_uses_server_safe_pipeline(self, tmp_path, monkeypatch):
+        nb = nbformat.v4.new_notebook()
+        nb.cells = [nbformat.v4.new_markdown_cell("# Safe")]
+        notebook_path = tmp_path / "safe.ipynb"
+        with open(notebook_path, "w") as f:
+            nbformat.write(nb, f)
+
+        seen: dict[str, bool] = {}
+
+        def fake_convert(notebook, *, config, target, execute):
+            from nb2wb.config import load_config
+
+            resolved = load_config(config)
+            seen["api_called"] = True
+            seen["target"] = target
+            seen["has_safety_limits"] = (
+                resolved.safety.max_input_bytes > 0
+                and resolved.safety.max_cells > 0
+                and resolved.safety.max_total_output_bytes > 0
+            )
+            return "<html><body><p>ok</p></body></html>"
+
+        monkeypatch.setattr("nb2wb.cli.convert_notebook", fake_convert)
+
+        sys.argv = ["nb2wb", str(notebook_path), "-o", str(tmp_path / "out.html")]
+        try:
+            main()
+        except SystemExit:
+            pass
+
+        assert seen["api_called"] is True
+        assert seen["target"] == "substack"
+        assert seen["has_safety_limits"] is True
+
+
 class TestCLIInputSanitization:
     """Test CLI sanitization and validation of user-provided paths."""
 

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import yaml
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 from typing import Optional
 
 
@@ -38,6 +40,18 @@ class LatexConfig:
 
 
 @dataclass
+class SafetyConfig:
+    """Security controls for untrusted server-side conversion workloads."""
+
+    max_input_bytes: int = 20 * 1024 * 1024  # max input document size
+    max_cells: int = 2000  # max number of notebook cells
+    max_cell_source_chars: int = 500_000  # max chars in any single cell source
+    max_total_output_bytes: int = 25 * 1024 * 1024  # max aggregate output payload
+    max_display_math_blocks: int = 500  # max number of display-math blocks rendered
+    max_total_latex_chars: int = 1_000_000  # max aggregate chars across display-math blocks
+
+
+@dataclass
 class Config:
     """Top-level configuration aggregating code and LaTeX rendering settings."""
 
@@ -45,6 +59,19 @@ class Config:
     border_radius: int = 14  # corner radius in pixels for all rendered images
     code: CodeConfig = field(default_factory=CodeConfig)
     latex: LatexConfig = field(default_factory=LatexConfig)
+    safety: SafetyConfig = field(default_factory=SafetyConfig)
+
+
+def load_config_from_dict(data: Mapping[str, Any] | None) -> Config:
+    """Load config from an in-memory mapping using the same schema as YAML config files."""
+    if data is None:
+        return Config()
+    if not isinstance(data, Mapping):
+        raise TypeError("Config data must be a mapping (dict-like object).")
+
+    # Copy to a plain dict so .get() behavior is predictable even for custom mappings.
+    raw: dict[str, Any] = dict(data)
+    return _build_config_from_mapping(raw)
 
 
 def load_config(path: Optional[Path]) -> Config:
@@ -59,6 +86,14 @@ def load_config(path: Optional[Path]) -> Config:
     with open(path, "r") as f:
         data = yaml.safe_load(f) or {}
 
+    if not isinstance(data, dict):
+        raise TypeError("Config YAML root must be a mapping/object.")
+
+    return _build_config_from_mapping(data)
+
+
+def _build_config_from_mapping(data: dict[str, Any]) -> Config:
+    """Build Config from a parsed config mapping."""
     top_width = data.get("image_width", 1920)
     top_radius = data.get("border_radius", 0)
 
@@ -72,6 +107,11 @@ def load_config(path: Optional[Path]) -> Config:
         for k, v in data.get("latex", {}).items()
         if k in LatexConfig.__dataclass_fields__
     }
+    safety_fields = {
+        k: v
+        for k, v in data.get("safety", {}).items()
+        if k in SafetyConfig.__dataclass_fields__
+    }
 
     # Sub-configs inherit top-level image_width / border_radius unless overridden
     code_fields.setdefault("image_width", top_width)
@@ -84,6 +124,7 @@ def load_config(path: Optional[Path]) -> Config:
         border_radius=top_radius,
         code=CodeConfig(**code_fields),
         latex=LatexConfig(**latex_fields),
+        safety=SafetyConfig(**safety_fields),
     )
 
 
@@ -129,4 +170,5 @@ def apply_platform_defaults(config: Config, platform: str) -> Config:
         border_radius=config.border_radius,
         code=CodeConfig(**code_fields),
         latex=LatexConfig(**latex_fields),
+        safety=config.safety,
     )
