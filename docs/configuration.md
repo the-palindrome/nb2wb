@@ -39,14 +39,24 @@ table:
   mode: "native"          # "native" (HTML table) or "image" (render table as PNG)
   font_size: 34
   font: "DejaVu Sans"
-  color: "#222222"
-  header_color: "#111111"
+  color: "#1f2937"
+  header_color: "#0f172a"
   background: "white"
-  header_background: "#f4f4f4"
-  border_color: "#d9d9d9"
+  header_background: "#eef2ff"
+  stripe_background: "#f8fafc"
+  border_color: "#dbe4ee"
   border_width: 1
-  cell_padding_x: 20
-  cell_padding_y: 12
+  cell_padding_x: 24
+  cell_padding_y: 14
+  outer_padding: 20
+  canvas_background: "white"
+  zebra_striping: true
+  shadow: true
+  shadow_color: "#0f172a"
+  shadow_alpha: 24
+  shadow_offset_x: 0
+  shadow_offset_y: 8
+  shadow_blur: 18
   image_width: 1920
   border_radius: 0
 

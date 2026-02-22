@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageColor, ImageDraw, ImageFilter, ImageFont
 
 from ..config import TableConfig
 from ._image_utils import round_corners as _round_corners
@@ -150,31 +150,49 @@ def render_table_html(table_html: str, config: TableConfig) -> str:
         raise ValueError("No table rows found.")
 
     col_count = max(len(row) for row in rows)
-    rows = [row + [_Cell(text="", align="left", is_header=False)] * (col_count - len(row)) for row in rows]
+    rows = [
+        row
+        + [
+            _Cell(
+                text="",
+                align="left",
+                is_header=any(cell.is_header for cell in row),
+            )
+        ]
+        * (col_count - len(row))
+        for row in rows
+    ]
 
     border_w = max(1, int(config.border_width))
     font = _load_font(config.font, config.font_size)
+    header_font = _load_font(config.font, max(config.font_size + 1, int(config.font_size * 1.06)))
     dummy = Image.new("RGB", (16, 16), config.background)
     measure = ImageDraw.Draw(dummy)
+    outer_pad = max(0, int(config.outer_padding))
+    shadow_extent = _shadow_extent(config)
 
-    col_widths = _initial_col_widths(rows, col_count, config, measure, font)
+    col_widths = _initial_col_widths(rows, col_count, config, measure, font, header_font)
+    min_inner = col_count * (_MIN_COL_WIDTH + 2 * config.cell_padding_x)
+    min_table_w = min_inner + (col_count + 1) * border_w
+    available_table_w = max(config.image_width - 2 * (outer_pad + shadow_extent), min_table_w)
     target_inner = max(
-        config.image_width - (col_count + 1) * border_w,
-        col_count * (_MIN_COL_WIDTH + 2 * config.cell_padding_x),
+        available_table_w - (col_count + 1) * border_w,
+        min_inner,
     )
     col_widths = _fit_col_widths(col_widths, target_inner, _MIN_COL_WIDTH + 2 * config.cell_padding_x)
 
-    line_h = _line_height(font)
-    wrapped_rows: list[list[list[str]]] = []
+    wrapped_rows: list[list[tuple[list[str], ImageFont.ImageFont, int]]] = []
     row_heights: list[int] = []
     for row in rows:
-        wrapped_row: list[list[str]] = []
+        wrapped_row: list[tuple[list[str], ImageFont.ImageFont, int]] = []
         row_h = 0
         for idx, cell in enumerate(row):
+            cell_font = header_font if cell.is_header else font
+            cell_line_h = _line_height(cell_font)
             inner_w = max(1, col_widths[idx] - 2 * config.cell_padding_x)
-            lines = _wrap_text(cell.text, inner_w, measure, font)
-            wrapped_row.append(lines)
-            cell_h = max(line_h, len(lines) * line_h) + 2 * config.cell_padding_y
+            lines = _wrap_text(cell.text, inner_w, measure, cell_font)
+            wrapped_row.append((lines, cell_font, cell_line_h))
+            cell_h = max(cell_line_h, len(lines) * cell_line_h) + 2 * config.cell_padding_y
             row_h = max(row_h, cell_h)
         wrapped_rows.append(wrapped_row)
         row_heights.append(row_h)
@@ -182,35 +200,46 @@ def render_table_html(table_html: str, config: TableConfig) -> str:
     table_w = sum(col_widths) + (col_count + 1) * border_w
     table_h = sum(row_heights) + (len(rows) + 1) * border_w
 
-    canvas_w = max(config.image_width, table_w)
-    canvas = Image.new("RGB", (canvas_w, table_h), config.background)
-    draw = ImageDraw.Draw(canvas)
+    canvas_w = max(config.image_width, table_w + 2 * (outer_pad + shadow_extent))
+    canvas_h = table_h + 2 * (outer_pad + shadow_extent)
+    canvas = _new_canvas(canvas_w, canvas_h, config.canvas_background)
 
     table_x = (canvas_w - table_w) // 2
+    table_y = (canvas_h - table_h) // 2
+
+    if config.shadow and config.shadow_alpha > 0:
+        _draw_shadow(
+            canvas,
+            (table_x, table_y, table_x + table_w - 1, table_y + table_h - 1),
+            config,
+        )
+
+    table_img = Image.new("RGBA", (table_w, table_h), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(table_img)
     _draw_cells(
         draw,
         rows,
         wrapped_rows,
         row_heights,
         col_widths,
-        table_x=table_x,
+        table_x=0,
         border_width=border_w,
         config=config,
-        font=font,
-        line_height=line_h,
     )
     _draw_grid(
         draw,
         row_heights,
         col_widths,
-        table_x=table_x,
+        table_x=0,
         table_height=table_h,
         border_width=border_w,
         border_color=config.border_color,
     )
 
     if config.border_radius:
-        canvas = _round_corners(canvas, config.border_radius)
+        table_img = _round_corners(table_img, config.border_radius)
+
+    canvas.alpha_composite(table_img, (table_x, table_y))
 
     out = io.BytesIO()
     canvas.save(out, format="PNG")
@@ -251,11 +280,13 @@ def _initial_col_widths(
     config: TableConfig,
     draw: ImageDraw.ImageDraw,
     font: ImageFont.ImageFont,
+    header_font: ImageFont.ImageFont,
 ) -> list[int]:
     widths = [_MIN_COL_WIDTH + 2 * config.cell_padding_x for _ in range(col_count)]
     for row in rows:
         for idx, cell in enumerate(row):
-            width = _max_line_width(cell.text.splitlines() or [cell.text], draw, font)
+            cell_font = header_font if cell.is_header else font
+            width = _max_line_width(cell.text.splitlines() or [cell.text], draw, cell_font)
             widths[idx] = max(widths[idx], int(width) + 2 * config.cell_padding_x)
     return widths
 
@@ -372,42 +403,50 @@ def _break_long_word(
 def _draw_cells(
     draw: ImageDraw.ImageDraw,
     rows: list[list[_Cell]],
-    wrapped_rows: list[list[list[str]]],
+    wrapped_rows: list[list[tuple[list[str], ImageFont.ImageFont, int]]],
     row_heights: list[int],
     col_widths: list[int],
     *,
     table_x: int,
     border_width: int,
     config: TableConfig,
-    font: ImageFont.ImageFont,
-    line_height: int,
 ) -> None:
     y = border_width
+    body_row_idx = 0
     for row_idx, row in enumerate(rows):
+        is_header_row = any(cell.is_header for cell in row)
         x = table_x + border_width
         row_h = row_heights[row_idx]
         for col_idx, cell in enumerate(row):
             cell_w = col_widths[col_idx]
-            fill = config.header_background if cell.is_header else config.background
+            if cell.is_header:
+                fill = config.header_background
+            elif config.zebra_striping and (body_row_idx % 2 == 1):
+                fill = config.stripe_background
+            else:
+                fill = config.background
             draw.rectangle(
                 (x, y, x + cell_w - 1, y + row_h - 1),
                 fill=fill,
             )
             text_color = config.header_color if cell.is_header else config.color
+            lines, cell_font, line_height = wrapped_rows[row_idx][col_idx]
             _draw_cell_text(
                 draw,
-                wrapped_rows[row_idx][col_idx],
+                lines,
                 x,
                 y,
                 cell_w,
                 row_h,
                 align=cell.align,
                 color=text_color,
-                font=font,
+                font=cell_font,
                 line_height=line_height,
                 pad_x=config.cell_padding_x,
             )
             x += cell_w + border_width
+        if not is_header_row:
+            body_row_idx += 1
         y += row_h + border_width
 
 
@@ -532,3 +571,48 @@ def _candidate_fonts() -> list[str]:
     if platform == "darwin":
         return _FONT_CANDIDATES["darwin"]
     return _FONT_CANDIDATES["win32"]
+
+
+def _shadow_extent(config: TableConfig) -> int:
+    if not config.shadow or config.shadow_alpha <= 0:
+        return 0
+    return max(
+        0,
+        int(config.shadow_blur) + abs(int(config.shadow_offset_x)),
+        int(config.shadow_blur) + abs(int(config.shadow_offset_y)),
+    )
+
+
+def _new_canvas(width: int, height: int, background: str) -> Image.Image:
+    if background.strip().lower() == "transparent":
+        return Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    r, g, b = ImageColor.getrgb(background)
+    return Image.new("RGBA", (width, height), (r, g, b, 255))
+
+
+def _draw_shadow(canvas: Image.Image, box: tuple[int, int, int, int], config: TableConfig) -> None:
+    layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(layer)
+    x0, y0, x1, y1 = box
+    ox = int(config.shadow_offset_x)
+    oy = int(config.shadow_offset_y)
+    fill = _color_with_alpha(config.shadow_color, config.shadow_alpha)
+    radius = max(0, int(config.border_radius))
+    rect = (x0 + ox, y0 + oy, x1 + ox, y1 + oy)
+
+    if radius:
+        draw.rounded_rectangle(rect, radius=radius, fill=fill)
+    else:
+        draw.rectangle(rect, fill=fill)
+
+    blur = max(0, int(config.shadow_blur))
+    if blur:
+        layer = layer.filter(ImageFilter.GaussianBlur(blur))
+
+    canvas.alpha_composite(layer)
+
+
+def _color_with_alpha(color: str, alpha: int) -> tuple[int, int, int, int]:
+    r, g, b = ImageColor.getrgb(color)
+    a = max(0, min(255, int(alpha)))
+    return (r, g, b, a)

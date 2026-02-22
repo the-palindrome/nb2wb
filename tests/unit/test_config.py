@@ -66,14 +66,24 @@ class TestConfigDefaults:
         assert table.mode == "native"
         assert table.font_size == 34
         assert table.font == "DejaVu Sans"
-        assert table.color == "#222222"
-        assert table.header_color == "#111111"
+        assert table.color == "#1f2937"
+        assert table.header_color == "#0f172a"
         assert table.background == "white"
-        assert table.header_background == "#f4f4f4"
-        assert table.border_color == "#d9d9d9"
+        assert table.header_background == "#eef2ff"
+        assert table.stripe_background == "#f8fafc"
+        assert table.border_color == "#dbe4ee"
         assert table.border_width == 1
-        assert table.cell_padding_x == 20
-        assert table.cell_padding_y == 12
+        assert table.cell_padding_x == 24
+        assert table.cell_padding_y == 14
+        assert table.outer_padding == 20
+        assert table.canvas_background == "white"
+        assert table.zebra_striping is True
+        assert table.shadow is True
+        assert table.shadow_color == "#0f172a"
+        assert table.shadow_alpha == 24
+        assert table.shadow_offset_x == 0
+        assert table.shadow_offset_y == 8
+        assert table.shadow_blur == 18
         assert table.image_width == 1920
         assert table.border_radius == 0
 
@@ -288,6 +298,8 @@ class TestPlatformDefaults:
         assert result.code.font_size == config.code.font_size
         assert result.latex.font_size == config.latex.font_size
         assert result.table.mode == "image"
+        assert result.table.border_radius == 12
+        assert result.table.outer_padding == 20
 
     def test_x_platform_smaller_dimensions(self):
         """X platform has smaller dimensions for mobile."""
@@ -309,6 +321,9 @@ class TestPlatformDefaults:
         assert result.table.mode == "image"
         assert result.table.font_size == 30
         assert result.table.image_width == 1200
+        assert result.table.outer_padding == 14
+        assert result.table.border_radius == 10
+        assert result.table.shadow_alpha == 20
 
     def test_x_platform_preserves_theme(self):
         """X platform preserves custom theme."""
@@ -372,10 +387,20 @@ table:
   header_color: "#000000"
   background: "#ffffff"
   header_background: "#f0f0f0"
+  stripe_background: "#f7f9fb"
   border_color: "#cccccc"
   border_width: 2
   cell_padding_x: 12
   cell_padding_y: 8
+  outer_padding: 10
+  canvas_background: "#ffffff"
+  zebra_striping: true
+  shadow: true
+  shadow_color: "#111827"
+  shadow_alpha: 28
+  shadow_offset_x: 1
+  shadow_offset_y: 9
+  shadow_blur: 20
   image_width: 1400
   border_radius: 30
 """)
@@ -412,10 +437,20 @@ table:
         assert config.table.header_color == "#000000"
         assert config.table.background == "#ffffff"
         assert config.table.header_background == "#f0f0f0"
+        assert config.table.stripe_background == "#f7f9fb"
         assert config.table.border_color == "#cccccc"
         assert config.table.border_width == 2
         assert config.table.cell_padding_x == 12
         assert config.table.cell_padding_y == 8
+        assert config.table.outer_padding == 10
+        assert config.table.canvas_background == "#ffffff"
+        assert config.table.zebra_striping is True
+        assert config.table.shadow is True
+        assert config.table.shadow_color == "#111827"
+        assert config.table.shadow_alpha == 28
+        assert config.table.shadow_offset_x == 1
+        assert config.table.shadow_offset_y == 9
+        assert config.table.shadow_blur == 20
         assert config.table.image_width == 1400
         assert config.table.border_radius == 30
 

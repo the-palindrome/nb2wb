@@ -48,14 +48,24 @@ class TableConfig:
     mode: str = "native"  # "native" keeps HTML tables, "image" renders tables to PNG
     font_size: int = 34
     font: str = "DejaVu Sans"
-    color: str = "#222222"
-    header_color: str = "#111111"
+    color: str = "#1f2937"
+    header_color: str = "#0f172a"
     background: str = "white"
-    header_background: str = "#f4f4f4"
-    border_color: str = "#d9d9d9"
+    header_background: str = "#eef2ff"
+    stripe_background: str = "#f8fafc"
+    border_color: str = "#dbe4ee"
     border_width: int = 1
-    cell_padding_x: int = 20
-    cell_padding_y: int = 12
+    cell_padding_x: int = 24
+    cell_padding_y: int = 14
+    outer_padding: int = 20  # spacing around table card inside the output image
+    canvas_background: str = "white"
+    zebra_striping: bool = True
+    shadow: bool = True
+    shadow_color: str = "#0f172a"
+    shadow_alpha: int = 24
+    shadow_offset_x: int = 0
+    shadow_offset_y: int = 8
+    shadow_blur: int = 18
     image_width: int = 1920  # canvas width in pixels for rendered table images
     border_radius: int = 0  # corner radius in pixels (0 = square corners)
 
@@ -167,7 +177,11 @@ def _build_config_from_mapping(data: dict[str, Any]) -> Config:
 # changed; everything else is inherited from the user's config.
 _PLATFORM_DEFAULTS: dict[str, dict] = {
     "substack": {
-        "table": {"mode": "image"},
+        "table": {
+            "mode": "image",
+            "border_radius": 12,
+            "outer_padding": 20,
+        },
     },
     "x": {
         "image_width": 680,
@@ -185,6 +199,11 @@ _PLATFORM_DEFAULTS: dict[str, dict] = {
             "image_width": 1200,
             "cell_padding_x": 16,
             "cell_padding_y": 10,
+            "outer_padding": 14,
+            "border_radius": 10,
+            "shadow_alpha": 20,
+            "shadow_blur": 14,
+            "shadow_offset_y": 6,
         },
     },
     "medium": {
@@ -203,6 +222,11 @@ _PLATFORM_DEFAULTS: dict[str, dict] = {
             "image_width": 1200,
             "cell_padding_x": 16,
             "cell_padding_y": 10,
+            "outer_padding": 16,
+            "border_radius": 10,
+            "shadow_alpha": 20,
+            "shadow_blur": 14,
+            "shadow_offset_y": 6,
         },
     },
 }
