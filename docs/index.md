@@ -18,6 +18,13 @@ platforms
 security
 server-integration
 troubleshooting
+```
+
+```{toctree}
+:maxdepth: 2
+:caption: Maintainers
+
+for-maintainers
 development
 ```
 
@@ -35,3 +42,4 @@ development
 - Python API entrypoint: `nb2wb/api.py`
 - Conversion pipeline: `nb2wb/converter.py`
 - Security sanitizer: `nb2wb/sanitizer.py`
+- Maintainer overview: `docs/for-maintainers.md`

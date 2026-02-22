@@ -1,5 +1,8 @@
 # Development
 
+For architecture, internal contracts, and full repository layout, see
+[For Maintainers](for-maintainers.md).
+
 ## Local Setup
 
 ```bash
