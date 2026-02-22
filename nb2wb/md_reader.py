@@ -49,6 +49,11 @@ def read_md(path: Path) -> nbformat.NotebookNode:
     for per-cell syntax highlighting.
     """
     text = path.read_text(encoding="utf-8")
+    return read_md_text(text)
+
+
+def read_md_text(text: str) -> nbformat.NotebookNode:
+    """Parse in-memory Markdown text into an ``nbformat`` notebook."""
     front_matter, text = _split_front_matter(text)
     language = _detect_language(front_matter, text)
 

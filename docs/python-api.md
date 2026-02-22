@@ -22,10 +22,17 @@ html = nb2wb.convert(
 
 - `str` or `pathlib.Path`
   - must point to `.ipynb`, `.qmd`, or `.md`
+  - if a `str` contains newlines, it is treated as in-memory Markdown/Quarto text
 - `dict` (JSON/JSONB parsed notebook payload)
 - `nbformat.NotebookNode`
+- in-memory text payload mapping:
+  - `{"format": "md", "content": "<markdown text>"}`
+  - `{"format": "qmd", "content": "<quarto text>"}`
+  - aliases: `format="markdown"` and `format="quarto"`
+  - `source` or `text` can be used instead of `content`
 
 In-memory notebook payloads are validated against nbformat schema before conversion.
+In-memory `.md` / `.qmd` payloads use the same readers as path-based input.
 
 ## `config` Input Types
 
@@ -77,6 +84,30 @@ html = nb2wb.convert(
     },
     target="substack",
     execute=False,
+)
+```
+
+## In-Memory Markdown / Quarto Examples
+
+```python
+import nb2wb
+
+# Raw markdown string payload
+md_html = nb2wb.convert(
+    "# Title\n\nBody text.",
+    target="substack",
+)
+
+# Raw qmd string payload
+qmd_html = nb2wb.convert(
+    "# Report\n\n```{python}\nprint('hello')\n```",
+    target="medium",
+)
+
+# Explicit mapping payload (recommended when format is ambiguous)
+md_html2 = nb2wb.convert(
+    {"format": "md", "content": "One-line markdown without newline"},
+    target="substack",
 )
 ```
 

@@ -75,6 +75,93 @@ class TestPublicApi:
 
         assert "NotebookNode Input" in html
 
+    def test_convert_accepts_in_memory_markdown_string(self):
+        markdown_text = "# In-memory MD\n\nBody from payload."
+
+        html = nb2wb.convert(
+            markdown_text,
+            config={"latex": {"try_usetex": False}},
+            target="substack",
+            execute=False,
+        )
+
+        assert "In-memory MD" in html
+        assert "Body from payload" in html
+        assert "<html" in html.lower()
+
+    def test_convert_accepts_in_memory_qmd_string(self):
+        qmd_text = (
+            "# In-memory QMD\n\n"
+            "```{python}\n"
+            "x = 1\n"
+            "print(x)\n"
+            "```\n"
+        )
+
+        html = nb2wb.convert(
+            qmd_text,
+            config={"latex": {"try_usetex": False}},
+            target="substack",
+            execute=False,
+        )
+
+        assert "In-memory QMD" in html
+        assert "<html" in html.lower()
+
+    def test_convert_accepts_in_memory_markdown_payload_mapping(self):
+        payload = {
+            "format": "md",
+            "content": "# Mapping MD\n\nBody text.",
+        }
+
+        html = nb2wb.convert(
+            payload,
+            config={"latex": {"try_usetex": False}},
+            target="substack",
+            execute=False,
+        )
+
+        assert "Mapping MD" in html
+        assert "Body text." in html
+
+    def test_convert_accepts_in_memory_qmd_payload_mapping(self):
+        payload = {
+            "format": "qmd",
+            "content": "# Mapping QMD\n\n```{python}\nprint('ok')\n```\n",
+        }
+
+        html = nb2wb.convert(payload, config={"latex": {"try_usetex": False}})
+
+        assert "Mapping QMD" in html
+
+    def test_convert_accepts_markdown_alias_and_source_field(self):
+        payload = {
+            "format": "markdown",
+            "source": "# Alias format\n\nWorks.",
+        }
+
+        html = nb2wb.convert(payload, config={"latex": {"try_usetex": False}})
+
+        assert "Alias format" in html
+
+    def test_convert_rejects_in_memory_text_payload_with_invalid_format(self):
+        payload = {"format": "txt", "content": "# nope"}
+
+        try:
+            nb2wb.convert(payload)
+            raise AssertionError("Expected TypeError for invalid in-memory text format")
+        except TypeError as exc:
+            assert "format" in str(exc)
+
+    def test_convert_rejects_in_memory_text_payload_without_content(self):
+        payload = {"format": "md"}
+
+        try:
+            nb2wb.convert(payload)
+            raise AssertionError("Expected TypeError for missing in-memory text content")
+        except TypeError as exc:
+            assert "content" in str(exc)
+
     def test_convert_rejects_invalid_notebook_payload(self):
         invalid_payload = {
             "cells": [],
@@ -97,6 +184,13 @@ class TestPublicApi:
             raise AssertionError("Expected ValueError for unsupported input extension")
         except ValueError as exc:
             assert "must use one of" in str(exc)
+
+    def test_convert_nonexistent_path_still_errors(self):
+        try:
+            nb2wb.convert("missing_article.md")
+            raise AssertionError("Expected FileNotFoundError for missing input path")
+        except FileNotFoundError as exc:
+            assert "missing_article.md" in str(exc)
 
     def test_convert_forwards_execute_flag(self, tmp_path, monkeypatch):
         md = tmp_path / "article.md"

@@ -12,10 +12,19 @@ import nbformat
 
 from .config import Config, apply_platform_defaults, load_config, load_config_from_dict
 from .converter import Converter
+from .md_reader import read_md_text
 from .platforms import get_builder, list_platforms
+from .qmd_reader import read_qmd_text
 
 _CONTROL_CHAR_RE = re.compile(r"[\x00-\x1f\x7f]")
 _ALLOWED_INPUT_SUFFIXES = frozenset({".ipynb", ".qmd", ".md"})
+_TEXT_PAYLOAD_ALIASES: dict[str, str] = {
+    "md": "md",
+    "markdown": "md",
+    "qmd": "qmd",
+    "quarto": "qmd",
+}
+_QMD_CHUNK_RE = re.compile(r"^```\{(\w[\w.-]*)", re.MULTILINE)
 
 
 def convert(
@@ -31,7 +40,10 @@ def convert(
     Args:
         notebook: Either:
             - path to an ``.ipynb``, ``.qmd``, or ``.md`` file, or
-            - in-memory Jupyter notebook payload (dict/NotebookNode)
+            - in-memory Markdown/Quarto text (string), or
+            - in-memory Jupyter notebook payload (dict/NotebookNode), or
+            - in-memory text payload mapping:
+                ``{"format": "md"|"qmd", "content": "<document text>"}``
         config: Conversion config as one of:
             - ``None`` (use defaults)
             - ``Config`` instance
@@ -50,11 +62,22 @@ def convert(
     builder = get_builder(target)
     converter = Converter(resolved_config, execute=execute)
 
-    if isinstance(notebook, (str, Path)):
+    if isinstance(notebook, Path):
         notebook_path = _sanitize_input_path(notebook)
         content_html = converter.convert(notebook_path)
+    elif isinstance(notebook, str):
+        text_node = _coerce_text_string_payload(notebook)
+        if text_node is not None:
+            content_html = converter.convert_notebook(
+                text_node,
+                cwd=_resolve_working_dir(working_dir),
+            )
+        else:
+            notebook_path = _sanitize_input_path(notebook)
+            content_html = converter.convert(notebook_path)
     else:
-        notebook_node = _coerce_notebook_node(notebook)
+        text_node = _coerce_text_mapping_payload(notebook)
+        notebook_node = text_node if text_node is not None else _coerce_notebook_node(notebook)
         content_html = converter.convert_notebook(
             notebook_node,
             cwd=_resolve_working_dir(working_dir),
@@ -134,6 +157,53 @@ def _coerce_notebook_node(
     except Exception as exc:
         raise ValueError(f"Invalid Jupyter notebook payload: {exc}") from exc
     return node
+
+
+def _coerce_text_string_payload(text: str) -> nbformat.NotebookNode | None:
+    """Parse raw in-memory Markdown/Quarto text when the input is clearly not a path."""
+    # Keep existing path behavior for one-line strings.
+    if "\n" not in text and "\r" not in text:
+        return None
+
+    # Quarto chunk fences are the strongest signal for .qmd.
+    if _QMD_CHUNK_RE.search(text):
+        return read_qmd_text(text)
+    return read_md_text(text)
+
+
+def _coerce_text_mapping_payload(
+    notebook: Mapping[str, Any] | nbformat.NotebookNode,
+) -> nbformat.NotebookNode | None:
+    """Parse explicit in-memory text payload mappings for Markdown/Quarto content."""
+    if not isinstance(notebook, Mapping):
+        return None
+
+    # Notebook payloads take precedence.
+    if "cells" in notebook or "nbformat" in notebook:
+        return None
+
+    fmt_raw = notebook.get("format")
+    if fmt_raw is None:
+        return None
+    if not isinstance(fmt_raw, str):
+        raise TypeError("In-memory text payload field 'format' must be a string.")
+
+    fmt = _TEXT_PAYLOAD_ALIASES.get(fmt_raw.strip().lower().lstrip("."))
+    if fmt is None:
+        raise TypeError(
+            "In-memory text payload 'format' must be one of: md, markdown, qmd, quarto."
+        )
+
+    content = notebook.get("content", notebook.get("source", notebook.get("text")))
+    if not isinstance(content, str):
+        raise TypeError(
+            "In-memory text payload must include string content via 'content' "
+            "(or 'source'/'text')."
+        )
+
+    if fmt == "qmd":
+        return read_qmd_text(content)
+    return read_md_text(content)
 
 
 def _resolve_working_dir(path_like: str | Path | None) -> Path:
