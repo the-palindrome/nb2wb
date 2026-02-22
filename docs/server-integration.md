@@ -1,14 +1,14 @@
-# Server Integration (FastAPI + Nuxt)
+# Server Integration (FastAPI + API Clients)
 
-This guide describes the recommended architecture when a Nuxt app sends notebook payloads to a Python backend.
+This guide describes a recommended architecture for handling notebook-to-HTML conversion through API calls.
 
 ## Recommended Architecture
 
-1. Nuxt API route receives notebook payload from client.
-2. Nuxt forwards notebook JSON/JSONB payload to your FastAPI service.
+1. Client sends notebook payload to your API endpoint.
+2. API service forwards notebook JSON/JSONB payload to your FastAPI conversion service.
 3. FastAPI calls `nb2wb.convert(notebook_payload, ...)`.
 4. FastAPI returns generated HTML.
-5. Nuxt stores/serves rendered HTML.
+5. API service stores or serves rendered HTML.
 
 ## FastAPI Example
 
@@ -45,9 +45,9 @@ def render(req: RenderRequest) -> dict[str, str]:
     return {"html": html}
 ```
 
-## Nuxt Request Shape
+## Request Shape
 
-Your Nuxt backend/client can send:
+Any HTTP client can send:
 
 ```json
 {

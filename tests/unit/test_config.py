@@ -10,6 +10,7 @@ from nb2wb.config import (
     Config,
     CodeConfig,
     LatexConfig,
+    TableConfig,
     SafetyConfig,
     load_config,
     load_config_from_dict,
@@ -27,6 +28,7 @@ class TestConfigDefaults:
         assert config.border_radius == 14
         assert isinstance(config.code, CodeConfig)
         assert isinstance(config.latex, LatexConfig)
+        assert isinstance(config.table, TableConfig)
         assert isinstance(config.safety, SafetyConfig)
         assert config.safety.max_display_math_blocks == 500
         assert config.safety.max_total_latex_chars == 1_000_000
@@ -58,6 +60,33 @@ class TestConfigDefaults:
         assert latex.preamble == ""
         assert latex.border_radius == 0
 
+    def test_table_config_defaults(self):
+        """Default TableConfig has expected values."""
+        table = TableConfig()
+        assert table.mode == "native"
+        assert table.font_size == 34
+        assert table.font == "DejaVu Sans"
+        assert table.color == "#1f2937"
+        assert table.header_color == "#0f172a"
+        assert table.background == "white"
+        assert table.header_background == "#eef2ff"
+        assert table.stripe_background == "#f8fafc"
+        assert table.border_color == "#dbe4ee"
+        assert table.border_width == 1
+        assert table.cell_padding_x == 24
+        assert table.cell_padding_y == 14
+        assert table.outer_padding == 20
+        assert table.canvas_background == "white"
+        assert table.zebra_striping is True
+        assert table.shadow is True
+        assert table.shadow_color == "#0f172a"
+        assert table.shadow_alpha == 24
+        assert table.shadow_offset_x == 0
+        assert table.shadow_offset_y == 8
+        assert table.shadow_blur == 18
+        assert table.image_width == 1920
+        assert table.border_radius == 0
+
 
 class TestConfigLoading:
     """Test loading configuration from YAML files."""
@@ -74,6 +103,7 @@ class TestConfigLoading:
         assert config.image_width == 1920
         assert isinstance(config.code, CodeConfig)
         assert isinstance(config.latex, LatexConfig)
+        assert isinstance(config.table, TableConfig)
 
     def test_load_config_from_temp_file(self, tmp_path):
         """Load config from temporary YAML file."""
@@ -87,6 +117,9 @@ code:
 latex:
   dpi: 200
   color: "white"
+table:
+  mode: "image"
+  font_size: 24
 safety:
   max_cells: 123
   max_display_math_blocks: 77
@@ -98,6 +131,8 @@ safety:
         assert config.code.theme == "default"
         assert config.latex.dpi == 200
         assert config.latex.color == "white"
+        assert config.table.mode == "image"
+        assert config.table.font_size == 24
         assert config.safety.max_cells == 123
         assert config.safety.max_display_math_blocks == 77
 
@@ -138,6 +173,11 @@ safety:
         with pytest.raises(TypeError):
             load_config_from_dict(["not", "a", "mapping"])
 
+    def test_invalid_table_mode_falls_back_to_native(self):
+        """Unknown table mode falls back to native rendering."""
+        config = load_config_from_dict({"table": {"mode": "unsupported"}})
+        assert config.table.mode == "native"
+
 
 class TestConfigInheritance:
     """Test configuration inheritance from top-level to sub-configs."""
@@ -150,6 +190,7 @@ class TestConfigInheritance:
         assert config.image_width == 2000
         assert config.code.image_width == 2000
         assert config.latex.image_width == 2000
+        assert config.table.image_width == 2000
 
     def test_border_radius_inheritance(self, tmp_path):
         """Top-level border_radius inherited by code and latex configs."""
@@ -159,6 +200,7 @@ class TestConfigInheritance:
         assert config.border_radius == 15
         assert config.code.border_radius == 15
         assert config.latex.border_radius == 15
+        assert config.table.border_radius == 15
 
     def test_override_inherited_image_width(self, tmp_path):
         """Sub-config can override inherited image_width."""
@@ -172,6 +214,7 @@ code:
         assert config.image_width == 2000
         assert config.code.image_width == 1500  # Override
         assert config.latex.image_width == 2000  # Inherited
+        assert config.table.image_width == 2000  # Inherited
 
     def test_override_inherited_border_radius(self, tmp_path):
         """Sub-config can override inherited border_radius."""
@@ -185,6 +228,7 @@ latex:
         assert config.border_radius == 15
         assert config.code.border_radius == 15  # Inherited
         assert config.latex.border_radius == 0  # Override
+        assert config.table.border_radius == 15  # Inherited
 
 
 class TestPartialConfigOverrides:
@@ -236,21 +280,26 @@ latex:
         assert config.code.theme == "github"
         assert config.code.line_numbers is False
         assert config.latex.try_usetex is False
+        assert config.table.mode == "native"
         # Inherited
         assert config.code.image_width == 1500
         assert config.latex.image_width == 1500
+        assert config.table.image_width == 1500
 
 
 class TestPlatformDefaults:
     """Test platform-specific default adjustments."""
 
-    def test_substack_platform_unchanged(self):
-        """Substack platform returns config unchanged."""
+    def test_substack_platform_enables_table_images(self):
+        """Substack defaults enable table image fallback while preserving core sizing."""
         config = Config()
         result = apply_platform_defaults(config, "substack")
         assert result.image_width == config.image_width
         assert result.code.font_size == config.code.font_size
         assert result.latex.font_size == config.latex.font_size
+        assert result.table.mode == "image"
+        assert result.table.border_radius == 12
+        assert result.table.outer_padding == 20
 
     def test_x_platform_smaller_dimensions(self):
         """X platform has smaller dimensions for mobile."""
@@ -268,6 +317,13 @@ class TestPlatformDefaults:
         assert result.latex.font_size == 35
         assert result.latex.image_width == 1200
         assert result.latex.padding == 50
+        # Table config should use image fallback defaults
+        assert result.table.mode == "image"
+        assert result.table.font_size == 30
+        assert result.table.image_width == 1200
+        assert result.table.outer_padding == 14
+        assert result.table.border_radius == 10
+        assert result.table.shadow_alpha == 20
 
     def test_x_platform_preserves_theme(self):
         """X platform preserves custom theme."""
@@ -323,6 +379,30 @@ latex:
   try_usetex: false
   preamble: "\\\\usepackage{amsmath}"
   border_radius: 30
+table:
+  mode: "image"
+  font_size: 28
+  font: "Arial"
+  color: "#1a1a1a"
+  header_color: "#000000"
+  background: "#ffffff"
+  header_background: "#f0f0f0"
+  stripe_background: "#f7f9fb"
+  border_color: "#cccccc"
+  border_width: 2
+  cell_padding_x: 12
+  cell_padding_y: 8
+  outer_padding: 10
+  canvas_background: "#ffffff"
+  zebra_striping: true
+  shadow: true
+  shadow_color: "#111827"
+  shadow_alpha: 28
+  shadow_offset_x: 1
+  shadow_offset_y: 9
+  shadow_blur: 20
+  image_width: 1400
+  border_radius: 30
 """)
         config = load_config(config_path)
         # Top-level
@@ -349,6 +429,30 @@ latex:
         assert config.latex.try_usetex is False
         assert config.latex.preamble == "\\usepackage{amsmath}"
         assert config.latex.border_radius == 30
+        # Table config
+        assert config.table.mode == "image"
+        assert config.table.font_size == 28
+        assert config.table.font == "Arial"
+        assert config.table.color == "#1a1a1a"
+        assert config.table.header_color == "#000000"
+        assert config.table.background == "#ffffff"
+        assert config.table.header_background == "#f0f0f0"
+        assert config.table.stripe_background == "#f7f9fb"
+        assert config.table.border_color == "#cccccc"
+        assert config.table.border_width == 2
+        assert config.table.cell_padding_x == 12
+        assert config.table.cell_padding_y == 8
+        assert config.table.outer_padding == 10
+        assert config.table.canvas_background == "#ffffff"
+        assert config.table.zebra_striping is True
+        assert config.table.shadow is True
+        assert config.table.shadow_color == "#111827"
+        assert config.table.shadow_alpha == 28
+        assert config.table.shadow_offset_x == 1
+        assert config.table.shadow_offset_y == 9
+        assert config.table.shadow_blur == 20
+        assert config.table.image_width == 1400
+        assert config.table.border_radius == 30
 
     def test_config_with_extra_fields_ignored(self, tmp_path):
         """Extra unknown fields in YAML ignored gracefully."""
@@ -378,6 +482,7 @@ code:
         # X platform defaults applied
         assert result.image_width == 680
         assert result.code.font_size == 42
+        assert result.table.mode == "image"
         # Custom settings preserved
         assert result.border_radius == 20
         assert result.code.theme == "github"

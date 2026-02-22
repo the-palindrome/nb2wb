@@ -1,13 +1,26 @@
 """
 Integration tests for Markdown (.md) file conversion.
 
-Tests the complete pipeline: .md file -> md_reader -> converter -> HTML.
+Tests the complete pipeline: filesystem source -> reader -> converter -> HTML.
 """
 import nbformat
 import pytest
 import subprocess
 from pathlib import Path
 from nb2wb.converter import Converter
+from nb2wb.md_reader import read_md
+from nb2wb.qmd_reader import read_qmd
+
+
+def _convert_path(converter: Converter, path: Path) -> str:
+    suffix = path.suffix.lower()
+    if suffix == ".md":
+        notebook = read_md(path)
+    elif suffix == ".qmd":
+        notebook = read_qmd(path)
+    else:
+        notebook = nbformat.read(path, as_version=4)
+    return converter.convert_notebook(notebook, cwd=path.parent)
 
 
 class TestMarkdownFileConversion:
@@ -16,20 +29,20 @@ class TestMarkdownFileConversion:
     def test_md_file_converts_to_html(self, temp_md, minimal_config):
         """Basic .md file produces valid HTML output."""
         converter = Converter(minimal_config)
-        html = converter.convert(temp_md)
+        html = _convert_path(converter, temp_md)
         assert "<h1>" in html or "Test" in html
         assert "md-cell" in html
 
     def test_md_prose_preserved(self, temp_md, minimal_config):
         """Prose content from .md file appears in HTML."""
         converter = Converter(minimal_config)
-        html = converter.convert(temp_md)
+        html = _convert_path(converter, temp_md)
         assert "Some text" in html
 
     def test_md_code_block_to_image(self, temp_md, minimal_config):
         """Code blocks in .md files are rendered as images."""
         converter = Converter(minimal_config)
-        html = converter.convert(temp_md)
+        html = _convert_path(converter, temp_md)
         assert "code-cell" in html
         assert "data:image/png;base64," in html
 
@@ -38,7 +51,7 @@ class TestMarkdownFileConversion:
         md = tmp_path / "inline.md"
         md.write_text("The equation $x^2$ is simple.\n")
         converter = Converter(minimal_config)
-        html = converter.convert(md)
+        html = _convert_path(converter, md)
         assert "equation" in html
         # Dollar sign should be processed (no raw $x^2$)
         assert "$x^2$" not in html
@@ -49,7 +62,7 @@ class TestMarkdownFileConversion:
         md.write_text("$$E = mc^2$$\n")
         minimal_config.latex.try_usetex = False
         converter = Converter(minimal_config)
-        html = converter.convert(md)
+        html = _convert_path(converter, md)
         assert "data:image/png;base64," in html
         assert "<img" in html
 
@@ -66,7 +79,7 @@ class TestMarkdownFileConversion:
         md.write_text(content)
         minimal_config.latex.try_usetex = False
         converter = Converter(minimal_config)
-        html = converter.convert(md)
+        html = _convert_path(converter, md)
         # Preamble cell should not appear in output
         assert "usepackage" not in html
         # Display math should be rendered
@@ -75,7 +88,7 @@ class TestMarkdownFileConversion:
     def test_md_hide_input_directive(self, md_with_directives, minimal_config):
         """hide-input directive hides the code source in .md files."""
         converter = Converter(minimal_config)
-        html = converter.convert(md_with_directives)
+        html = _convert_path(converter, md_with_directives)
         # With hide-input and no outputs, the code cell should produce
         # nothing visible (no code image since input is hidden, no output
         # since there's no execution)
@@ -86,7 +99,7 @@ class TestMarkdownFileConversion:
         md = tmp_path / "noexec.md"
         md.write_text("```python\nprint('hello')\n```\n")
         converter = Converter(minimal_config, execute=False)
-        html = converter.convert(md)
+        html = _convert_path(converter, md)
         # Code image should exist (the source is rendered)
         assert "code-cell" in html
         # But 'hello' should NOT be in the output (no execution)
@@ -98,7 +111,7 @@ class TestMarkdownFileConversion:
         md = tmp_path / "mixed.md"
         md.write_text(content)
         converter = Converter(minimal_config)
-        html = converter.convert(md)
+        html = _convert_path(converter, md)
         # Both code cells should be rendered as images
         assert html.count("code-cell") == 2
 
@@ -112,7 +125,7 @@ class TestTextSnippet:
         md = tmp_path / "snippet.md"
         md.write_text(content)
         converter = Converter(minimal_config)
-        html = converter.convert(md)
+        html = _convert_path(converter, md)
         assert "<pre><code>" in html
         assert "x = 1 + 1" in html
         assert "print(x)" in html
@@ -125,7 +138,7 @@ class TestTextSnippet:
         md = tmp_path / "escape.md"
         md.write_text(content)
         converter = Converter(minimal_config)
-        html = converter.convert(md)
+        html = _convert_path(converter, md)
         assert "&lt;" in html
         assert "&amp;" in html
         assert "&gt;" in html
@@ -136,7 +149,7 @@ class TestTextSnippet:
         md = tmp_path / "hidden_snippet.md"
         md.write_text(content)
         converter = Converter(minimal_config)
-        html = converter.convert(md)
+        html = _convert_path(converter, md)
         assert "hidden" not in html
 
     def test_text_snippet_via_directive(self, minimal_config, tmp_path):
@@ -145,7 +158,7 @@ class TestTextSnippet:
         md = tmp_path / "directive_snippet.md"
         md.write_text(content)
         converter = Converter(minimal_config)
-        html = converter.convert(md)
+        html = _convert_path(converter, md)
         assert "<pre><code>" in html
         assert "x = 1" in html
 
@@ -155,7 +168,7 @@ class TestTextSnippet:
         md = tmp_path / "normal.md"
         md.write_text(content)
         converter = Converter(minimal_config)
-        html = converter.convert(md)
+        html = _convert_path(converter, md)
         assert "data:image/png" in html
         assert "<pre><code>" not in html
 
@@ -168,7 +181,7 @@ class TestMarkdownExecutionFlag:
         md = tmp_path / "noexec.md"
         md.write_text("```python\nprint('output text')\n```\n")
         converter = Converter(minimal_config, execute=False)
-        html = converter.convert(md)
+        html = _convert_path(converter, md)
         # Source code is rendered but 'output text' is not executed/shown
         assert "code-cell" in html
 
@@ -184,7 +197,7 @@ class TestMarkdownExecutionFlag:
             return nb
 
         monkeypatch.setattr("nb2wb.converter._execute_cells", fake_execute_cells)
-        html = Converter(minimal_config, execute=False).convert(md)
+        html = _convert_path(Converter(minimal_config, execute=False), md)
         assert called is False
         assert "code-cell" in html
 
@@ -200,7 +213,7 @@ class TestMarkdownExecutionFlag:
             return nb
 
         monkeypatch.setattr("nb2wb.converter._execute_cells", fake_execute_cells)
-        Converter(minimal_config, execute=True).convert(md)
+        _convert_path(Converter(minimal_config, execute=True), md)
         assert called is True
 
     def test_qmd_execute_false_skips_execution(self, minimal_config, tmp_path, monkeypatch):
@@ -216,7 +229,7 @@ class TestMarkdownExecutionFlag:
 
         monkeypatch.setattr("nb2wb.converter._execute_cells", fake_execute_cells)
         converter = Converter(minimal_config, execute=False)
-        html = converter.convert(qmd)
+        html = _convert_path(converter, qmd)
         assert called is False
         assert "Test" in html
 
@@ -233,7 +246,7 @@ class TestMarkdownExecutionFlag:
 
         monkeypatch.setattr("nb2wb.converter._execute_cells", fake_execute_cells)
         converter = Converter(minimal_config, execute=True)
-        converter.convert(qmd)
+        _convert_path(converter, qmd)
         assert called is True
 
     def test_ipynb_execute_false_skips_execution(self, minimal_config, tmp_path, monkeypatch):
@@ -252,7 +265,7 @@ class TestMarkdownExecutionFlag:
             return nb
 
         monkeypatch.setattr("nb2wb.converter._execute_cells", fake_execute_cells)
-        html = Converter(minimal_config, execute=False).convert(ipynb)
+        html = _convert_path(Converter(minimal_config, execute=False), ipynb)
         assert called is False
         assert "Test" in html
 
@@ -272,7 +285,7 @@ class TestMarkdownExecutionFlag:
             return nb
 
         monkeypatch.setattr("nb2wb.converter._execute_cells", fake_execute_cells)
-        Converter(minimal_config, execute=True).convert(ipynb)
+        _convert_path(Converter(minimal_config, execute=True), ipynb)
         assert called is True
 
     def test_latex_usetex_invoked_when_execute_false(self, minimal_config, tmp_path, monkeypatch):
@@ -302,7 +315,7 @@ class TestMarkdownExecutionFlag:
             return subprocess.CompletedProcess(cmd, 0, stdout=b"", stderr=b"")
 
         monkeypatch.setattr("nb2wb.renderers.latex_renderer.subprocess.run", fake_run)
-        html = Converter(minimal_config, execute=False).convert(md)
+        html = _convert_path(Converter(minimal_config, execute=False), md)
         assert called is True
         assert "data:image/png;base64," in html
 
@@ -334,7 +347,7 @@ class TestMarkdownExecutionFlag:
             return subprocess.CompletedProcess(cmd, 0, stdout=b"", stderr=b"")
 
         monkeypatch.setattr("nb2wb.renderers.latex_renderer.subprocess.run", fake_run)
-        Converter(minimal_config, execute=True).convert(md)
+        _convert_path(Converter(minimal_config, execute=True), md)
         assert called is True
 
 
@@ -355,7 +368,7 @@ class TestServerSafeLimits:
         minimal_config.safety.max_cells = 2
 
         with pytest.raises(ValueError, match="too many cells"):
-            Converter(minimal_config).convert(ipynb)
+            _convert_path(Converter(minimal_config), ipynb)
 
     def test_server_safe_rejects_large_cell_source(self, minimal_config, tmp_path):
         md = tmp_path / "large.md"
@@ -364,7 +377,7 @@ class TestServerSafeLimits:
         minimal_config.safety.max_cell_source_chars = 8
 
         with pytest.raises(ValueError, match="source too large"):
-            Converter(minimal_config).convert(md)
+            _convert_path(Converter(minimal_config), md)
 
     def test_server_safe_rejects_too_many_display_math_blocks(self, minimal_config, tmp_path):
         md = tmp_path / "many_math.md"
@@ -373,7 +386,7 @@ class TestServerSafeLimits:
         minimal_config.safety.max_display_math_blocks = 5
 
         with pytest.raises(ValueError, match="too many display-math blocks"):
-            Converter(minimal_config).convert(md)
+            _convert_path(Converter(minimal_config), md)
 
     def test_server_safe_rejects_excessive_total_latex_chars(self, minimal_config, tmp_path):
         md = tmp_path / "large_math.md"
@@ -382,4 +395,4 @@ class TestServerSafeLimits:
         minimal_config.safety.max_total_latex_chars = 10
 
         with pytest.raises(ValueError, match="too much display-math content"):
-            Converter(minimal_config).convert(md)
+            _convert_path(Converter(minimal_config), md)

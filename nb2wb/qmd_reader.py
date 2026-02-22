@@ -44,6 +44,11 @@ def read_qmd(path: Path) -> nbformat.NotebookNode:
     cell tags.
     """
     text = path.read_text(encoding="utf-8")
+    return read_qmd_text(text)
+
+
+def read_qmd_text(text: str) -> nbformat.NotebookNode:
+    """Parse in-memory Quarto Markdown text into an ``nbformat`` notebook."""
     front_matter, text = _split_front_matter(text)
     language = _detect_language(front_matter, text)
 

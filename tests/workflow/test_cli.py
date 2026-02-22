@@ -413,14 +413,16 @@ class TestCLIServerSafeMode:
         with open(notebook_path, "w") as f:
             nbformat.write(nb, f)
 
-        seen: dict[str, bool] = {}
+        seen: dict[str, object] = {}
 
-        def fake_convert(notebook, *, config, target, execute):
+        def fake_convert(notebook, *, config, target, execute, working_dir):
             from nb2wb.config import load_config
 
             resolved = load_config(config)
             seen["api_called"] = True
             seen["target"] = target
+            seen["payload_type"] = type(notebook).__name__
+            seen["working_dir"] = str(working_dir)
             seen["has_safety_limits"] = (
                 resolved.safety.max_input_bytes > 0
                 and resolved.safety.max_cells > 0
@@ -438,6 +440,8 @@ class TestCLIServerSafeMode:
 
         assert seen["api_called"] is True
         assert seen["target"] == "substack"
+        assert seen["payload_type"] == "NotebookNode"
+        assert seen["working_dir"] == str(notebook_path.parent)
         assert seen["has_safety_limits"] is True
 
 

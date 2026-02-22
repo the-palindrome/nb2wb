@@ -61,6 +61,22 @@ Python API accepts parsed notebook objects directly:
 
 These payloads are normalized and validated before conversion.
 
+## In-Memory `.md` / `.qmd` Payloads
+
+Python API also accepts in-memory text documents:
+
+- raw `str` payload (auto-detected as Markdown or Quarto)
+- mapping payloads:
+  - `{"format": "md", "content": "<markdown text>"}`
+  - `{"format": "qmd", "content": "<quarto text>"}`
+
+Notes:
+
+- mapping `format` aliases: `markdown`, `quarto`
+- mapping `source` or `text` may be used instead of `content`
+- when auto-detection is ambiguous, prefer explicit mapping payloads
+- file paths are loaded via `nb2wb.load_input_payload()` (or typed loader helpers), then passed to `nb2wb.convert()`
+
 ## Cell Tags
 
 | Tag | Behavior |

@@ -20,12 +20,32 @@ html = nb2wb.convert(
 
 `notebook` accepts:
 
-- `str` or `pathlib.Path`
-  - must point to `.ipynb`, `.qmd`, or `.md`
+- `str` (in-memory Markdown or Quarto text)
 - `dict` (JSON/JSONB parsed notebook payload)
 - `nbformat.NotebookNode`
+- in-memory text payload mapping:
+  - `{"format": "md", "content": "<markdown text>"}`
+  - `{"format": "qmd", "content": "<quarto text>"}`
+  - aliases: `format="markdown"` and `format="quarto"`
+  - `source` or `text` can be used instead of `content`
 
 In-memory notebook payloads are validated against nbformat schema before conversion.
+In-memory `.md` / `.qmd` payloads use the same readers as file-based input.
+
+`nb2wb.convert()` is strict content-only. It does not accept paths.
+All string values are treated as content payloads (including path-like strings).
+
+## Path Loader Helpers
+
+Use helpers when your source is on disk:
+
+- `nb2wb.load_input_payload(path)`:
+  - `.ipynb` -> validated `NotebookNode`
+  - `.md` -> `{"format": "md", "content": "..."}`
+  - `.qmd` -> `{"format": "qmd", "content": "..."}`
+- `nb2wb.load_notebook_payload(path)` (`.ipynb` only)
+- `nb2wb.load_markdown_payload(path)` (`.md` only)
+- `nb2wb.load_quarto_payload(path)` (`.qmd` only)
 
 ## `config` Input Types
 
@@ -54,10 +74,12 @@ print(nb2wb.supported_targets())
 ```python
 import nb2wb
 
+payload = nb2wb.load_input_payload("post.ipynb")
 html = nb2wb.convert(
-    "post.ipynb",
+    payload,
     config="config.yaml",
     target="substack",
+    working_dir=".",  # optional; useful with execute=True
 )
 ```
 
@@ -80,6 +102,30 @@ html = nb2wb.convert(
 )
 ```
 
+## In-Memory Markdown / Quarto Examples
+
+```python
+import nb2wb
+
+# Raw markdown string payload
+md_html = nb2wb.convert(
+    "# Title\n\nBody text.",
+    target="substack",
+)
+
+# Raw qmd string payload
+qmd_html = nb2wb.convert(
+    "# Report\n\n```{python}\nprint('hello')\n```",
+    target="medium",
+)
+
+# Explicit mapping payload (recommended when format is ambiguous)
+md_html2 = nb2wb.convert(
+    {"format": "md", "content": "One-line markdown without newline"},
+    target="substack",
+)
+```
+
 ## Execution Working Directory
 
 For in-memory payloads with `execute=True`, set `working_dir` to control relative imports/paths during execution:
@@ -92,18 +138,15 @@ html = nb2wb.convert(
 )
 ```
 
-For path-based inputs, `working_dir` is ignored and notebook parent directory is used.
-
 ## Exceptions
 
 Common failures raised by the API:
 
 - `ValueError`
   - invalid notebook/config payload
-  - unsupported path suffix
   - safety limit violations
 - `FileNotFoundError`
-  - missing input path or `working_dir`
+  - missing loader input path or `working_dir`
 - `TypeError`
   - unsupported object types for `notebook` or `config`
 

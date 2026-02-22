@@ -25,3 +25,28 @@ latex:
   # preamble: |           # extra LaTeX preamble added to every formula (usetex only)
   #   \usepackage{xcolor}
   #   \definecolor{accent}{HTML}{E8C547}
+
+table:
+  mode: "image"           # "native" keeps HTML tables; "image" renders tables as PNG
+  font_size: 34           # table text size
+  font: "DejaVu Sans"     # font hint/path for table rendering
+  color: "#1f2937"        # body text color
+  header_color: "#0f172a" # header text color
+  background: "white"     # body cell background color
+  header_background: "#eef2ff"  # header cell background color
+  stripe_background: "#f8fafc"  # alternating row background
+  border_color: "#dbe4ee" # grid line color
+  border_width: 1         # grid line width in pixels
+  cell_padding_x: 24      # horizontal cell padding in pixels
+  cell_padding_y: 14      # vertical cell padding in pixels
+  outer_padding: 20       # padding around the rendered table card
+  canvas_background: "white"  # image background ("transparent" also supported)
+  zebra_striping: true    # alternate body-row backgrounds
+  shadow: true            # subtle card shadow
+  shadow_color: "#0f172a" # shadow color
+  shadow_alpha: 24        # shadow opacity (0-255)
+  shadow_offset_x: 0      # horizontal shadow offset in pixels
+  shadow_offset_y: 8      # vertical shadow offset in pixels
+  shadow_blur: 18         # Gaussian shadow blur radius
+  # image_width: 1920     # override top-level image width for tables only
+  # border_radius: 20     # override top-level corner radius for table images only

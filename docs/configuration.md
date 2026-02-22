@@ -35,6 +35,31 @@ latex:
   preamble: ""
   border_radius: 0
 
+table:
+  mode: "native"          # "native" (HTML table) or "image" (render table as PNG)
+  font_size: 34
+  font: "DejaVu Sans"
+  color: "#1f2937"
+  header_color: "#0f172a"
+  background: "white"
+  header_background: "#eef2ff"
+  stripe_background: "#f8fafc"
+  border_color: "#dbe4ee"
+  border_width: 1
+  cell_padding_x: 24
+  cell_padding_y: 14
+  outer_padding: 20
+  canvas_background: "white"
+  zebra_striping: true
+  shadow: true
+  shadow_color: "#0f172a"
+  shadow_alpha: 24
+  shadow_offset_x: 0
+  shadow_offset_y: 8
+  shadow_blur: 18
+  image_width: 1920
+  border_radius: 0
+
 safety:
   max_input_bytes: 20971520
   max_cells: 2000
@@ -46,8 +71,8 @@ safety:
 
 ## Inheritance Rules
 
-- `code.image_width` and `latex.image_width` inherit top-level `image_width` unless overridden.
-- `code.border_radius` and `latex.border_radius` inherit top-level `border_radius` unless overridden.
+- `code.image_width`, `latex.image_width`, and `table.image_width` inherit top-level `image_width` unless overridden.
+- `code.border_radius`, `latex.border_radius`, and `table.border_radius` inherit top-level `border_radius` unless overridden.
 
 ## Platform Defaults
 
@@ -61,7 +86,11 @@ Examples:
 - `latex.font_size`: `35`
 - `latex.padding`: `50`
 
-Substack keeps base defaults unless overridden by your config.
+Table fallback defaults by platform:
+
+- `substack`: `table.mode: "image"`
+- `medium`: `table.mode: "image"` (+ smaller table font/padding defaults)
+- `x`: `table.mode: "image"` (+ smaller table font/padding defaults)
 
 ## API Dict Example
 

@@ -1,6 +1,6 @@
 # nb2wb Documentation
 
-`nb2wb` converts notebooks and notebook-like documents into platform-ready HTML for copy/paste publishing.
+`nb2wb` converts Jupyter Notebooks and notebook-like documents into platform-ready HTML for copy/paste publishing.
 
 Use this documentation for end-to-end usage: local CLI runs, Python API integration, server-side deployment, and security hardening.
 
@@ -18,6 +18,13 @@ platforms
 security
 server-integration
 troubleshooting
+```
+
+```{toctree}
+:maxdepth: 2
+:caption: Maintainers
+
+for-maintainers
 development
 ```
 
@@ -35,3 +42,4 @@ development
 - Python API entrypoint: `nb2wb/api.py`
 - Conversion pipeline: `nb2wb/converter.py`
 - Security sanitizer: `nb2wb/sanitizer.py`
+- Maintainer overview: `docs/for-maintainers.md`
