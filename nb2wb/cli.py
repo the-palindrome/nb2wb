@@ -13,6 +13,7 @@ from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 
 from .api import convert as convert_notebook
+from .api import load_input_payload
 from .platforms import list_platforms, MIME_TO_EXT
 
 _CONTROL_CHAR_RE = re.compile(r"[\x00-\x1f\x7f]")
@@ -203,11 +204,13 @@ def main() -> None:
 
     print(f"Converting '{notebook_path}' for {args.target} …")
     try:
+        payload = load_input_payload(notebook_path)
         html = convert_notebook(
-            notebook_path,
+            payload,
             config=config_path,
             target=args.target,
             execute=args.execute,
+            working_dir=notebook_path.parent,
         )
     except Exception as exc:
         print(f"Conversion failed: {exc}", file=sys.stderr)

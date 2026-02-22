@@ -36,11 +36,14 @@ nb2wb notebook.ipynb --open
 ```python
 import nb2wb
 
+payload = nb2wb.load_input_payload("notebook.ipynb")
 html = nb2wb.convert(
-    "notebook.ipynb",
+    payload,
     target="substack",
 )
 ```
+
+`nb2wb.convert()` accepts in-memory payloads; use loader helpers for path-based sources.
 
 In-memory notebook payload:
 

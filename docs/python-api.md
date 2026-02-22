@@ -20,9 +20,7 @@ html = nb2wb.convert(
 
 `notebook` accepts:
 
-- `str` or `pathlib.Path`
-  - must point to `.ipynb`, `.qmd`, or `.md`
-  - if a `str` contains newlines, it is treated as in-memory Markdown/Quarto text
+- `str` (in-memory Markdown or Quarto text)
 - `dict` (JSON/JSONB parsed notebook payload)
 - `nbformat.NotebookNode`
 - in-memory text payload mapping:
@@ -32,7 +30,21 @@ html = nb2wb.convert(
   - `source` or `text` can be used instead of `content`
 
 In-memory notebook payloads are validated against nbformat schema before conversion.
-In-memory `.md` / `.qmd` payloads use the same readers as path-based input.
+In-memory `.md` / `.qmd` payloads use the same readers as file-based input.
+
+`nb2wb.convert()` is strict content-only. It does not accept paths.
+
+## Path Loader Helpers
+
+Use helpers when your source is on disk:
+
+- `nb2wb.load_input_payload(path)`:
+  - `.ipynb` -> validated `NotebookNode`
+  - `.md` -> `{"format": "md", "content": "..."}`
+  - `.qmd` -> `{"format": "qmd", "content": "..."}`
+- `nb2wb.load_notebook_payload(path)` (`.ipynb` only)
+- `nb2wb.load_markdown_payload(path)` (`.md` only)
+- `nb2wb.load_quarto_payload(path)` (`.qmd` only)
 
 ## `config` Input Types
 
@@ -61,10 +73,12 @@ print(nb2wb.supported_targets())
 ```python
 import nb2wb
 
+payload = nb2wb.load_input_payload("post.ipynb")
 html = nb2wb.convert(
-    "post.ipynb",
+    payload,
     config="config.yaml",
     target="substack",
+    working_dir=".",  # optional; useful with execute=True
 )
 ```
 
@@ -123,18 +137,15 @@ html = nb2wb.convert(
 )
 ```
 
-For path-based inputs, `working_dir` is ignored and notebook parent directory is used.
-
 ## Exceptions
 
 Common failures raised by the API:
 
 - `ValueError`
   - invalid notebook/config payload
-  - unsupported path suffix
   - safety limit violations
 - `FileNotFoundError`
-  - missing input path or `working_dir`
+  - missing loader input path or `working_dir`
 - `TypeError`
   - unsupported object types for `notebook` or `config`
 

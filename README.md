@@ -2,7 +2,7 @@
 
 **Write in notebooks. Publish anywhere.**
 
-`nb2wb` converts notebook-style content into publishable HTML for Substack, Medium, and X Articles.
+`nb2wb` converts Jupyter Notebooks and other notebook-style content into publishable HTML for Substack, Medium, and X Articles.
 
 Supported inputs:
 
@@ -56,9 +56,10 @@ nb2wb report.qmd --execute
 ```python
 import nb2wb
 
-# Path input
+# Path input via loader helper
+payload = nb2wb.load_input_payload("notebook.ipynb")
 html = nb2wb.convert(
-    "notebook.ipynb",
+    payload,
     target="substack",
     config={"latex": {"try_usetex": True}},
 )
@@ -70,6 +71,8 @@ html = nb2wb.convert(
     execute=False,
 )
 ```
+
+`nb2wb.convert()` is content-only; use `load_input_payload()` (or typed loaders) for filesystem inputs.
 
 ## Security at a Glance
 
