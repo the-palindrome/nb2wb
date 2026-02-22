@@ -108,7 +108,7 @@ html = nb2wb.convert(notebook_payload, config={"safety": {"max_cells": 1500}})
 - [Configuration](docs/configuration.md)
 - [Platforms](docs/platforms.md)
 - [Security Model](docs/security.md)
-- [FastAPI/Nuxt Integration](docs/server-integration.md)
+- [FastAPI/API Integration](docs/server-integration.md)
 - [Troubleshooting](docs/troubleshooting.md)
 
 ## Development
