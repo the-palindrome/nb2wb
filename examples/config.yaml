@@ -25,3 +25,18 @@ latex:
   # preamble: |           # extra LaTeX preamble added to every formula (usetex only)
   #   \usepackage{xcolor}
   #   \definecolor{accent}{HTML}{E8C547}
+
+table:
+  mode: "image"           # "native" keeps HTML tables; "image" renders tables as PNG
+  font_size: 34           # table text size
+  font: "DejaVu Sans"     # font hint/path for table rendering
+  color: "#222222"        # body text color
+  header_color: "#111111" # header text color
+  background: "white"     # body cell background color
+  header_background: "#f4f4f4"  # header cell background color
+  border_color: "#d9d9d9" # grid line color
+  border_width: 1         # grid line width in pixels
+  cell_padding_x: 20      # horizontal cell padding in pixels
+  cell_padding_y: 12      # vertical cell padding in pixels
+  # image_width: 1920     # override top-level image width for tables only
+  # border_radius: 20     # override top-level corner radius for table images only

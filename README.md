@@ -21,7 +21,7 @@ Supported inputs:
 1. **Load notebook content** from file or in-memory payload.
 2. **Optionally execute code cells** (`--execute` / `execute=True`).
 3. **Render markdown, math, code, and outputs** into platform-safe HTML fragments.
-4. **Convert display math and code to images** for high-fidelity publishing.
+4. **Convert display math, code, and (optionally) tables to images** for high-fidelity publishing.
 5. **Sanitize rich HTML/SVG output** and enforce server-side safety limits.
 6. **Wrap output for your target platform** (`substack`, `medium`, `x`).
 

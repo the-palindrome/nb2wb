@@ -39,6 +39,7 @@ from .qmd_reader import read_qmd
 from .renderers.code_renderer import render_code, render_output_text, vstack_and_pad
 from .renderers.inline_latex import convert_inline_math
 from .renderers.latex_renderer import extract_display_math, render_latex_block
+from .renderers.table_renderer import render_tables_as_images
 from .sanitizer import sanitize_fragment
 
 # Strip ANSI colour codes from tracebacks
@@ -156,6 +157,8 @@ class Converter:
 
         # 3. Markdown → HTML
         html = markdown.markdown(src, extensions=_MD_EXTENSIONS)
+        if str(self.config.table.mode).lower() == "image":
+            html = render_tables_as_images(html, self.config.table)
         html = _sanitize_html_fragment(html, profile="html")
         return f'<div class="md-cell">{html}</div>\n'
 

@@ -35,6 +35,21 @@ latex:
   preamble: ""
   border_radius: 0
 
+table:
+  mode: "native"          # "native" (HTML table) or "image" (render table as PNG)
+  font_size: 34
+  font: "DejaVu Sans"
+  color: "#222222"
+  header_color: "#111111"
+  background: "white"
+  header_background: "#f4f4f4"
+  border_color: "#d9d9d9"
+  border_width: 1
+  cell_padding_x: 20
+  cell_padding_y: 12
+  image_width: 1920
+  border_radius: 0
+
 safety:
   max_input_bytes: 20971520
   max_cells: 2000
@@ -46,8 +61,8 @@ safety:
 
 ## Inheritance Rules
 
-- `code.image_width` and `latex.image_width` inherit top-level `image_width` unless overridden.
-- `code.border_radius` and `latex.border_radius` inherit top-level `border_radius` unless overridden.
+- `code.image_width`, `latex.image_width`, and `table.image_width` inherit top-level `image_width` unless overridden.
+- `code.border_radius`, `latex.border_radius`, and `table.border_radius` inherit top-level `border_radius` unless overridden.
 
 ## Platform Defaults
 
@@ -61,7 +76,11 @@ Examples:
 - `latex.font_size`: `35`
 - `latex.padding`: `50`
 
-Substack keeps base defaults unless overridden by your config.
+Table fallback defaults by platform:
+
+- `substack`: `table.mode: "image"`
+- `medium`: `table.mode: "image"` (+ smaller table font/padding defaults)
+- `x`: `table.mode: "image"` (+ smaller table font/padding defaults)
 
 ## API Dict Example
 

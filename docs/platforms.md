@@ -12,17 +12,20 @@
 
 - best fit for direct copy/paste with embedded data URI images
 - includes copy toolbar for article content
+- markdown tables default to image fallback for reliable paste fidelity
 
 ## Medium
 
 - copy/paste-friendly wrapper
 - per-image copy controls included
 - medium editor behavior may still require per-image insertion depending on editor changes
+- markdown tables default to image fallback for reliable rendering
 
 ## X Articles
 
 - similar workflow to Medium
 - includes copy controls for reliable transfer
+- markdown tables default to image fallback for reliable rendering
 
 ## `--serve` Mode for Medium/X
 

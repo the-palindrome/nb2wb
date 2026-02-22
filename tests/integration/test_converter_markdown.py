@@ -219,6 +219,30 @@ class TestMarkdownCellProcessing:
         # Table should be converted to HTML
         assert "<table>" in html or "<th>" in html
 
+    def test_markdown_table_can_render_as_image(self, minimal_config, tmp_path):
+        """Table HTML can be replaced by a rendered image when configured."""
+        nb = nbformat.v4.new_notebook()
+        nb.cells = [
+            nbformat.v4.new_markdown_cell(
+                "| Name | Value |\n"
+                "|:-----|------:|\n"
+                "| Foo  |   123 |\n"
+                "| Bar  |   456 |"
+            )
+        ]
+
+        notebook_path = tmp_path / "test.ipynb"
+        with open(notebook_path, "w") as f:
+            nbformat.write(nb, f)
+
+        minimal_config.table.mode = "image"
+        converter = Converter(minimal_config)
+        html = converter.convert(notebook_path)
+
+        assert "<table" not in html.lower()
+        assert 'alt="table"' in html
+        assert "data:image/png;base64," in html
+
     def test_empty_markdown_cell(self, minimal_config, tmp_path):
         """Empty markdown cells handled gracefully."""
         nb = nbformat.v4.new_notebook()

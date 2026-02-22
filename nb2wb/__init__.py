@@ -3,7 +3,7 @@ from __future__ import annotations
 from importlib.metadata import PackageNotFoundError, version
 
 from .api import convert, supported_targets
-from .config import CodeConfig, Config, LatexConfig, SafetyConfig
+from .config import CodeConfig, Config, LatexConfig, SafetyConfig, TableConfig
 
 try:
     __version__ = version("nb2wb")
@@ -15,6 +15,7 @@ __all__ = [
     "CodeConfig",
     "Config",
     "LatexConfig",
+    "TableConfig",
     "SafetyConfig",
     "convert",
     "supported_targets",
