@@ -7,7 +7,13 @@ import base64
 import re
 
 import nbformat
+from pathlib import Path
 from nb2wb.converter import Converter
+
+
+def _convert_path(converter: Converter, path: Path) -> str:
+    notebook = nbformat.read(path, as_version=4)
+    return converter.convert_notebook(notebook, cwd=path.parent)
 
 
 class TestMarkdownCellProcessing:
@@ -25,7 +31,7 @@ class TestMarkdownCellProcessing:
             nbformat.write(nb, f)
 
         converter = Converter(minimal_config)
-        html = converter.convert(notebook_path)
+        html = _convert_path(converter, notebook_path)
 
         assert "<h1>Heading</h1>" in html
         assert "Paragraph text" in html
@@ -42,7 +48,7 @@ class TestMarkdownCellProcessing:
             nbformat.write(nb, f)
 
         converter = Converter(minimal_config)
-        html = converter.convert(notebook_path)
+        html = _convert_path(converter, notebook_path)
 
         # Inline math should be converted
         assert "$" not in html or "data:image" in html  # Either no $ or it's in base64
@@ -61,7 +67,7 @@ class TestMarkdownCellProcessing:
 
         minimal_config.latex.try_usetex = False  # Use mathtext
         converter = Converter(minimal_config)
-        html = converter.convert(notebook_path)
+        html = _convert_path(converter, notebook_path)
 
         # Should contain image tag with base64 data
         assert "<img" in html
@@ -83,7 +89,7 @@ class TestMarkdownCellProcessing:
 
         minimal_config.latex.try_usetex = False
         converter = Converter(minimal_config)
-        html = converter.convert(notebook_path)
+        html = _convert_path(converter, notebook_path)
 
         assert "Consider the equation" in html
         assert "<img" in html  # Display math
@@ -103,7 +109,7 @@ class TestMarkdownCellProcessing:
             nbformat.write(nb, f)
 
         converter = Converter(minimal_config)
-        html = converter.convert(notebook_path)
+        html = _convert_path(converter, notebook_path)
 
         # Code block should be preserved
         assert "```" not in html  # Converted to HTML
@@ -125,7 +131,7 @@ class TestMarkdownCellProcessing:
             nbformat.write(nb, f)
 
         converter = Converter(minimal_config)
-        html = converter.convert(notebook_path)
+        html = _convert_path(converter, notebook_path)
 
         # The dollar-sign expression should appear literally inside <code>
         assert "<code>$E = mc^2$</code>" in html
@@ -146,7 +152,7 @@ class TestMarkdownCellProcessing:
             nbformat.write(nb, f)
 
         converter = Converter(minimal_config)
-        html = converter.convert(notebook_path)
+        html = _convert_path(converter, notebook_path)
 
         # The LaTeX inside double backticks should be literal
         assert "<code>" in html
@@ -167,7 +173,7 @@ class TestMarkdownCellProcessing:
             nbformat.write(nb, f)
 
         converter = Converter(minimal_config)
-        html = converter.convert(notebook_path)
+        html = _convert_path(converter, notebook_path)
 
         # Backtick-protected $x$ should appear literally
         assert "<code>$x$</code>" in html
@@ -189,7 +195,7 @@ class TestMarkdownCellProcessing:
             nbformat.write(nb, f)
 
         converter = Converter(minimal_config)
-        html = converter.convert(notebook_path)
+        html = _convert_path(converter, notebook_path)
 
         # All three headers should appear in order
         first_pos = html.find("First")
@@ -214,7 +220,7 @@ class TestMarkdownCellProcessing:
             nbformat.write(nb, f)
 
         converter = Converter(minimal_config)
-        html = converter.convert(notebook_path)
+        html = _convert_path(converter, notebook_path)
 
         # Table should be converted to HTML
         assert "<table>" in html or "<th>" in html
@@ -237,7 +243,7 @@ class TestMarkdownCellProcessing:
 
         minimal_config.table.mode = "image"
         converter = Converter(minimal_config)
-        html = converter.convert(notebook_path)
+        html = _convert_path(converter, notebook_path)
 
         assert "<table" not in html.lower()
         assert 'alt="table"' in html
@@ -256,7 +262,7 @@ class TestMarkdownCellProcessing:
             nbformat.write(nb, f)
 
         converter = Converter(minimal_config)
-        html = converter.convert(notebook_path)
+        html = _convert_path(converter, notebook_path)
 
         # Should not crash
         assert "Not Empty" in html
@@ -278,7 +284,7 @@ class TestEquationReferences:
 
         minimal_config.latex.try_usetex = False
         converter = Converter(minimal_config)
-        html = converter.convert(notebook_path)
+        html = _convert_path(converter, notebook_path)
 
         # Should contain image (equation rendered)
         assert "data:image/png;base64," in html
@@ -297,7 +303,7 @@ class TestEquationReferences:
 
         minimal_config.latex.try_usetex = False
         converter = Converter(minimal_config)
-        html = converter.convert(notebook_path)
+        html = _convert_path(converter, notebook_path)
 
         # eqref should be replaced with (1)
         assert "(1)" in html
@@ -318,7 +324,7 @@ class TestEquationReferences:
 
         minimal_config.latex.try_usetex = False
         converter = Converter(minimal_config)
-        html = converter.convert(notebook_path)
+        html = _convert_path(converter, notebook_path)
 
         # All three equations should be rendered
         assert html.count("data:image/png;base64,") == 3
@@ -339,7 +345,7 @@ class TestEdgeCases:
             nbformat.write(nb, f)
 
         converter = Converter(minimal_config)
-        html = converter.convert(notebook_path)
+        html = _convert_path(converter, notebook_path)
 
         assert "世界" in html or "&#" in html  # Unicode preserved or escaped
 
@@ -355,7 +361,7 @@ class TestEdgeCases:
             nbformat.write(nb, f)
 
         converter = Converter(minimal_config)
-        html = converter.convert(notebook_path)
+        html = _convert_path(converter, notebook_path)
 
         # HTML should be preserved or escaped safely
         assert "Bold" in html
@@ -378,7 +384,7 @@ class TestSecuritySanitization:
         with open(notebook_path, "w") as f:
             nbformat.write(nb, f)
 
-        html = Converter(minimal_config).convert(notebook_path)
+        html = _convert_path(Converter(minimal_config), notebook_path)
         lowered = html.lower()
         assert "<script" not in lowered
         assert "onclick=" not in lowered
@@ -410,7 +416,7 @@ class TestSecuritySanitization:
         with open(notebook_path, "w") as f:
             nbformat.write(nb, f)
 
-        html = Converter(minimal_config).convert(notebook_path)
+        html = _convert_path(Converter(minimal_config), notebook_path)
         lowered = html.lower()
         assert "html-output" in html
         assert "<script" not in lowered
@@ -443,7 +449,7 @@ class TestSecuritySanitization:
         with open(notebook_path, "w") as f:
             nbformat.write(nb, f)
 
-        html = Converter(minimal_config).convert(notebook_path)
+        html = _convert_path(Converter(minimal_config), notebook_path)
         m = re.search(r'data:image/svg\+xml;base64,([^"]+)"', html)
         assert m is not None
 
@@ -462,7 +468,7 @@ class TestSecuritySanitization:
         with open(notebook_path, "w") as f:
             nbformat.write(nb, f)
 
-        html = Converter(minimal_config).convert(notebook_path)
+        html = _convert_path(Converter(minimal_config), notebook_path)
         lowered = html.lower()
         assert "onerror=" not in lowered
         assert "<img" in lowered
@@ -484,7 +490,7 @@ class TestSecuritySanitization:
         with open(notebook_path, "w") as f:
             nbformat.write(nb, f)
 
-        html = Converter(minimal_config).convert(notebook_path)
+        html = _convert_path(Converter(minimal_config), notebook_path)
         m = re.search(r'data:image/svg\+xml;base64,([^"]+)"', html)
         assert m is not None
         decoded_svg = base64.b64decode(m.group(1)).decode("utf-8").lower()

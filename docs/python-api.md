@@ -33,6 +33,7 @@ In-memory notebook payloads are validated against nbformat schema before convers
 In-memory `.md` / `.qmd` payloads use the same readers as file-based input.
 
 `nb2wb.convert()` is strict content-only. It does not accept paths.
+All string values are treated as content payloads (including path-like strings).
 
 ## Path Loader Helpers
 

@@ -1,5 +1,5 @@
 """
-Main conversion orchestrator: reads a .ipynb and produces an HTML string.
+Main conversion orchestrator for in-memory notebook models.
 
 Cell handling
 -------------
@@ -33,8 +33,6 @@ import nbformat
 
 from .config import Config
 from .config import SafetyConfig
-from .md_reader import read_md
-from .qmd_reader import read_qmd
 # Platform-specific HTML wrapping is now done in CLI
 from .renderers.code_renderer import render_code, render_output_text, vstack_and_pad
 from .renderers.inline_latex import convert_inline_math
@@ -64,30 +62,16 @@ _RICH_OUTPUT_MIMES = frozenset({"image/png", "image/svg+xml", "text/html"})
 
 
 class Converter:
-    """Converts a Jupyter notebook or Quarto document into HTML content fragments."""
+    """Converts an in-memory Jupyter notebook model into HTML content fragments."""
 
     def __init__(self, config: Config, *, execute: bool = False) -> None:
         self.config = config
         self.execute = execute
 
-    def convert(self, notebook_path: Path) -> str:
-        """Convert a ``.ipynb``, ``.qmd``, or ``.md`` file to a concatenated HTML string.
-
-        Reads the notebook, collects LaTeX preamble and equation labels across
-        all cells, then renders each markdown and code cell to HTML fragments.
-        """
-        _enforce_input_size(notebook_path, self.config.safety)
-        nb = _load_notebook(notebook_path, execute=self.execute)
-        return self._convert_loaded_notebook(nb)
-
     def convert_notebook(self, notebook, *, cwd: Path | None = None) -> str:
         """Convert an in-memory notebook object (NotebookNode) to HTML."""
         _enforce_serialized_notebook_size(notebook, self.config.safety)
         nb = _execute_cells(notebook, cwd or Path.cwd()) if self.execute else notebook
-        return self._convert_loaded_notebook(nb)
-
-    def _convert_loaded_notebook(self, nb) -> str:
-        """Render an already-loaded notebook node to concatenated HTML fragments."""
         _enforce_notebook_limits(nb, self.config.safety)
         self._lang = _notebook_language(nb)
         self._latex_preamble = _collect_latex_preamble(nb.cells)
@@ -380,31 +364,6 @@ def _collect_equation_labels(cells) -> dict[str, int]:
                 labels[label] = counter
                 counter += 1
     return labels
-
-
-def _load_notebook(notebook_path: Path, *, execute: bool) -> Any:
-    """Load and optionally execute notebook-like sources."""
-    suffix = notebook_path.suffix.lower()
-    if suffix == ".qmd":
-        nb = read_qmd(notebook_path)
-    elif suffix == ".md":
-        nb = read_md(notebook_path)
-    else:
-        nb = nbformat.read(str(notebook_path), as_version=4)
-
-    return _execute_cells(nb, notebook_path.parent) if execute else nb
-
-
-def _enforce_input_size(path: Path, safety: SafetyConfig) -> None:
-    """Reject oversized input files before parsing."""
-    try:
-        size = path.stat().st_size
-    except OSError as exc:
-        raise ValueError(f"Unable to stat input file '{path}': {exc}") from exc
-    if size > safety.max_input_bytes:
-        raise ValueError(
-            f"Input file exceeds safety limit ({size} bytes > {safety.max_input_bytes})."
-        )
 
 
 def _enforce_serialized_notebook_size(nb, safety: SafetyConfig) -> None:

@@ -218,8 +218,11 @@ class TestConverterFeature:
             nbformat.write(nb, f)
 
         # Convert
+        from nb2wb.api import load_input_payload
+
         converter = Converter(minimal_config)
-        html = converter.convert(notebook_path)
+        payload = load_input_payload(notebook_path)
+        html = converter.convert_notebook(payload, cwd=notebook_path.parent)
 
         # Verify output
         assert "Test" in html

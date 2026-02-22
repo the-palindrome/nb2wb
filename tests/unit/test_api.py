@@ -183,12 +183,9 @@ class TestPublicApi:
         except TypeError as exc:
             assert "load_input_payload" in str(exc)
 
-    def test_convert_rejects_path_like_string(self):
-        try:
-            nb2wb.convert("missing_article.md")
-            raise AssertionError("Expected TypeError for path-like string input")
-        except TypeError as exc:
-            assert "load_input_payload" in str(exc)
+    def test_convert_treats_path_like_string_as_content(self):
+        html = nb2wb.convert("missing_article.md")
+        assert "missing_article.md" in html
 
     def test_load_input_payload_reads_markdown_file(self, tmp_path):
         md = tmp_path / "article.md"

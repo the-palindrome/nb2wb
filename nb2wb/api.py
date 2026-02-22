@@ -154,11 +154,6 @@ def _coerce_api_payload(
         )
 
     if isinstance(notebook, str):
-        if _looks_like_supported_path(notebook):
-            raise TypeError(
-                "convert() accepts in-memory content payloads only. "
-                "Use load_input_payload(path) to read files first."
-            )
         return _coerce_text_string_payload(notebook)
 
     text_node = _coerce_text_mapping_payload(notebook)
@@ -259,15 +254,6 @@ def _text_payload_from_path(path: Path, *, fmt: str) -> Mapping[str, str]:
         "format": fmt,
         "content": path.read_text(encoding="utf-8"),
     }
-
-
-def _looks_like_supported_path(text: str) -> bool:
-    if "\n" in text or "\r" in text:
-        return False
-    stripped = text.strip()
-    if not stripped:
-        return False
-    return Path(stripped).suffix.lower() in _ALLOWED_INPUT_SUFFIXES
 
 
 def _resolve_working_dir(path_like: str | Path | None) -> Path:
