@@ -48,8 +48,6 @@ _THEME = {
     "table-header-background": "#f4f4f4",
     "hr-border": "#ddd",
     "link-color": "inherit",
-    "footer-border": "#eee",
-    "footer-color": "#aaa",
 }
 
 _EXTRA_CSS = """\

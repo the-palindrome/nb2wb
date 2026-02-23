@@ -107,6 +107,16 @@ class TestPublicApi:
         assert "In-memory QMD" in html
         assert "<html" in html.lower()
 
+    def test_convert_outputs_do_not_append_nb2wb_footer_tag(self):
+        for target in ("substack", "medium", "x"):
+            html = nb2wb.convert(
+                "# Footerless Output",
+                target=target,
+                config={"latex": {"try_usetex": False}},
+            )
+            assert 'class="nb2wb-footer"' not in html
+            assert "Made with <a href=\"https://github.com/the-palindrome/nb2wb\">nb2wb</a>" not in html
+
     def test_convert_accepts_in_memory_markdown_payload_mapping(self):
         payload = {
             "format": "md",

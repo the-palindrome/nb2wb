@@ -49,8 +49,6 @@ _BASE_THEME: dict[str, str] = {
     "table-header-background": "#f4f4f4",
     "hr-border": "#ddd",
     "link-color": "inherit",
-    "footer-border": "#eee",
-    "footer-color": "#aaa",
     "copy-image-button-background": "rgba(26, 137, 23, 0.9)",
     "copy-image-button-hover-background": "rgba(13, 95, 11, 0.95)",
     "copy-image-button-copied-background": "#0d5f0b",
@@ -79,10 +77,6 @@ COPYABLE_SCRIPT = """\
             container.replaceWith(img);
           }
         });
-
-        // Remove footer from copied content.
-        var footer = content.querySelector(".nb2wb-footer");
-        if (footer) footer.remove();
 
         var html = content.innerHTML;
         var blob = new Blob([html], { type: "text/html" });
@@ -319,19 +313,6 @@ $theme_vars
     th { background: var(--table-header-background); font-weight: 600; }
     hr { border: none; border-top: 1px solid var(--hr-border); margin: 2em 0; }
     a { color: var(--link-color); text-decoration: underline; }
-    .nb2wb-footer {
-      margin-top: 3em;
-      padding-top: 1em;
-      border-top: 1px solid var(--footer-border);
-      text-align: center;
-      font-size: 0.8em;
-      color: var(--footer-color);
-    }
-    .nb2wb-footer a {
-      color: var(--footer-color);
-      text-decoration: none;
-    }
-    .nb2wb-footer a:hover { text-decoration: underline; }
 $extra_css
   </style>
 </head>
@@ -342,9 +323,6 @@ $extra_css
   </div>
   <div id="content">
 $content_html
-  <div class="nb2wb-footer">
-    Made with <a href="https://github.com/the-palindrome/nb2wb">nb2wb</a>
-  </div>
   </div><!-- #content -->
   <script>
 $script

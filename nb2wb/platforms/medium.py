@@ -48,8 +48,6 @@ _THEME = {
     "table-header-background": "#f9f9f9",
     "hr-border": "#e0e0e0",
     "link-color": "inherit",
-    "footer-border": "#e6e6e6",
-    "footer-color": "#999",
     "copy-image-button-background": "rgba(26, 137, 23, 0.9)",
     "copy-image-button-hover-background": "rgba(13, 95, 11, 0.95)",
     "copy-image-button-copied-background": "#0d5f0b",
