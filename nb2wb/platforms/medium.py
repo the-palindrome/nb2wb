@@ -61,13 +61,17 @@ class MediumBuilder(PlatformBuilder):
     def name(self) -> str:
         return "Medium"
 
-    def build_page(self, content_html: str) -> str:
+    def build_page(self, content_html: str, *, raw_mode: bool = False) -> str:
         """Wrap content in Medium-optimized HTML page."""
-        content_html = self._make_images_copyable(content_html)
+        if raw_mode:
+            content_html = self._embed_images_as_data_uris(content_html)
+        else:
+            content_html = self._make_images_copyable(content_html)
         return build_page(
             content_html,
             title="nb2wb — Medium Preview",
             toolbar_message="Paste into Medium. If images are missing, hover each one to copy it.",
             script=COPYABLE_SCRIPT,
+            raw_mode=raw_mode,
             theme_overrides=_THEME,
         )

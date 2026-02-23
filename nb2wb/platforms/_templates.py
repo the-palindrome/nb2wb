@@ -317,16 +317,11 @@ $extra_css
   </style>
 </head>
 <body>
-  <div id="toolbar">
-    <button id="copy-btn" onclick="copyContent()">&#128203; Copy to clipboard</button>
-    <p>$toolbar_message</p>
-  </div>
+$toolbar_html
   <div id="content">
 $content_html
   </div><!-- #content -->
-  <script>
-$script
-  </script>
+$script_html
 </body>
 </html>
 """
@@ -339,6 +334,7 @@ def build_page(
     title: str,
     toolbar_message: str,
     script: str,
+    raw_mode: bool = False,
     theme_overrides: Mapping[str, str] | None = None,
     extra_css: str = "",
 ) -> str:
@@ -349,11 +345,26 @@ def build_page(
     theme_vars = "\n".join(
         f"      --{name}: {value};" for name, value in theme.items()
     )
+    toolbar_html = ""
+    if not raw_mode:
+        toolbar_html = (
+            "  <div id=\"toolbar\">\n"
+            "    <button id=\"copy-btn\" onclick=\"copyContent()\">&#128203; Copy to clipboard</button>\n"
+            f"    <p>{toolbar_message}</p>\n"
+            "  </div>"
+        )
+    script_html = ""
+    if not raw_mode:
+        script_html = (
+            "  <script>\n"
+            f"{script}\n"
+            "  </script>"
+        )
     return _PAGE_TEMPLATE.substitute(
         title=title,
         theme_vars=theme_vars,
-        toolbar_message=toolbar_message,
+        toolbar_html=toolbar_html,
         content_html=content_html,
-        script=script,
+        script_html=script_html,
         extra_css=extra_css,
     )

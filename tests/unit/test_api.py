@@ -107,15 +107,31 @@ class TestPublicApi:
         assert "In-memory QMD" in html
         assert "<html" in html.lower()
 
-    def test_convert_outputs_do_not_append_nb2wb_footer_tag(self):
-        for target in ("substack", "medium", "x"):
+    def test_convert_raw_mode_omits_toolbar_header(self):
+        html = nb2wb.convert(
+            "# Raw Output",
+            target="substack",
+            raw_mode=True,
+            config={"latex": {"try_usetex": False}},
+        )
+        assert 'id="toolbar"' not in html
+        assert "Copy to clipboard" not in html
+        assert "<script" not in html.lower()
+
+    def test_convert_raw_mode_medium_and_x_use_plain_images_without_copy_containers(self):
+        markdown = "![table](data:image/png;base64,abcd)"
+        for target in ("medium", "x"):
             html = nb2wb.convert(
-                "# Footerless Output",
+                markdown,
                 target=target,
+                raw_mode=True,
                 config={"latex": {"try_usetex": False}},
             )
-            assert 'class="nb2wb-footer"' not in html
-            assert "Made with <a href=\"https://github.com/the-palindrome/nb2wb\">nb2wb</a>" not in html
+            assert "data:image/png;base64,abcd" in html
+            assert 'alt="table"' in html
+            assert 'class="image-container"' not in html
+            assert 'class="copy-image-btn"' not in html
+            assert "<script" not in html.lower()
 
     def test_convert_accepts_in_memory_markdown_payload_mapping(self):
         payload = {
@@ -280,16 +296,18 @@ class TestPublicApi:
         class DummyBuilder:
             name = "Dummy"
 
-            def build_page(self, content_html: str) -> str:
+            def build_page(self, content_html: str, *, raw_mode: bool = False) -> str:
+                seen["raw_mode"] = raw_mode
                 return f"<html><body>{content_html}</body></html>"
 
         monkeypatch.setattr(api, "Converter", DummyConverter)
         monkeypatch.setattr(api, "get_builder", lambda target: DummyBuilder())
 
-        html = api.convert("# Execute flag", execute=True)
+        html = api.convert("# Execute flag", execute=True, raw_mode=True)
 
         assert seen["execute"] is True
         assert seen["config_type"] == "Config"
         assert seen["notebook_type"] == "NotebookNode"
         assert seen["cwd"]
+        assert seen["raw_mode"] is True
         assert "<html>" in html

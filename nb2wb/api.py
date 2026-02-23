@@ -37,6 +37,7 @@ def convert(
     target: str = "substack",
     execute: bool = False,
     working_dir: str | Path | None = None,
+    raw_mode: bool = False,
 ) -> str:
     """Convert an input notebook/document into platform-ready HTML.
 
@@ -55,6 +56,7 @@ def convert(
         execute: Whether to execute code cells before rendering.
         working_dir: Execution working directory for in-memory payloads.
             Defaults to current working directory.
+        raw_mode: When True, omit the preview toolbar/header from output HTML.
 
     Returns:
         Full HTML page ready for the selected target.
@@ -69,7 +71,7 @@ def convert(
         notebook_node,
         cwd=_resolve_working_dir(working_dir),
     )
-    return builder.build_page(content_html)
+    return builder.build_page(content_html, raw_mode=raw_mode)
 
 
 def supported_targets() -> list[str]:
