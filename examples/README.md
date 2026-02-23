@@ -57,6 +57,6 @@ nb2wb examples/notebook.ipynb -t medium --serve
 ## Notes
 
 - `.md` examples only produce code outputs when `--execute` is enabled.
-- `.qmd` examples are always executed by design.
+- `.qmd` examples execute only when `--execute` is enabled, unless outputs are provided via `{output}` chunks.
 - SVG/HTML examples intentionally include unsafe constructs (`<script>`,
   inline events, `javascript:`) so you can verify sanitization behavior.

@@ -20,20 +20,20 @@ Use `--raw` (CLI) or `raw_mode=True` (Python API) to remove preview chrome from 
 ## Substack
 
 - best fit for direct copy/paste with embedded data URI images
-- includes copy toolbar for article content
+- includes copy toolbar for article content in normal mode
 - markdown tables default to image fallback for reliable paste fidelity
 
 ## Medium
 
-- copy/paste-friendly wrapper
-- per-image copy controls included
+- copy/paste-friendly wrapper in normal mode
+- per-image copy controls included in normal mode
 - medium editor behavior may still require per-image insertion depending on editor changes
 - markdown tables default to image fallback for reliable rendering
 
 ## X Articles
 
 - similar workflow to Medium
-- includes copy controls for reliable transfer
+- includes copy controls for reliable transfer in normal mode
 - markdown tables default to image fallback for reliable rendering
 
 ## `--serve` Mode for Medium/X

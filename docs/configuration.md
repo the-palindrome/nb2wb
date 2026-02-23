@@ -10,7 +10,7 @@ Pass config through either:
 ```yaml
 # Global defaults
 image_width: 1920
-border_radius: 14
+border_radius: 0
 
 code:
   font_size: 48
@@ -22,7 +22,7 @@ code:
   padding_y: 100
   separator: 0
   background: ""
-  border_radius: 14
+  border_radius: 0
 
 latex:
   font_size: 48
@@ -73,6 +73,11 @@ safety:
 
 - `code.image_width`, `latex.image_width`, and `table.image_width` inherit top-level `image_width` unless overridden.
 - `code.border_radius`, `latex.border_radius`, and `table.border_radius` inherit top-level `border_radius` unless overridden.
+
+## Default Behavior
+
+- If top-level `border_radius` is omitted, it defaults to `0`.
+- Sub-config border radii inherit that value unless explicitly set.
 
 ## Platform Defaults
 

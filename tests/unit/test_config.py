@@ -25,7 +25,7 @@ class TestConfigDefaults:
         """Default Config has expected values."""
         config = Config()
         assert config.image_width == 1920
-        assert config.border_radius == 14
+        assert config.border_radius == 0
         assert isinstance(config.code, CodeConfig)
         assert isinstance(config.latex, LatexConfig)
         assert isinstance(config.table, TableConfig)
@@ -45,7 +45,7 @@ class TestConfigDefaults:
         assert code.padding_y == 100
         assert code.separator == 0
         assert code.background == ""
-        assert code.border_radius == 14
+        assert code.border_radius == 0
 
     def test_latex_config_defaults(self):
         """Default LatexConfig has expected values."""
@@ -95,12 +95,13 @@ class TestConfigLoading:
         """Missing config file returns defaults."""
         config = load_config(Path("/nonexistent/config.yaml"))
         assert config.image_width == 1920  # Default value
-        assert config.border_radius == 14
+        assert config.border_radius == 0
 
     def test_load_config_none_path(self):
         """None path returns defaults."""
         config = load_config(None)
         assert config.image_width == 1920
+        assert config.border_radius == 0
         assert isinstance(config.code, CodeConfig)
         assert isinstance(config.latex, LatexConfig)
         assert isinstance(config.table, TableConfig)

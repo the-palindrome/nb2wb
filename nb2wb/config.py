@@ -23,7 +23,7 @@ class CodeConfig:
     background: str = (
         ""  # outer padding background colour; empty = use theme background
     )
-    border_radius: int = 14  # corner radius in pixels (0 = square corners)
+    border_radius: int = 0  # corner radius in pixels (0 = square corners)
 
 
 @dataclass
@@ -89,7 +89,7 @@ class Config:
     """Top-level configuration aggregating render and safety settings."""
 
     image_width: int = 1920  # default canvas width for all rendered images
-    border_radius: int = 14  # corner radius in pixels for all rendered images
+    border_radius: int = 0  # corner radius in pixels for all rendered images
     code: CodeConfig = field(default_factory=CodeConfig)
     latex: LatexConfig = field(default_factory=LatexConfig)
     table: TableConfig = field(default_factory=TableConfig)

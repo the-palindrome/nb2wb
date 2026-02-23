@@ -45,7 +45,8 @@ Only raise limits as needed.
 If embedded base64 images are stripped by editors:
 
 - use `--serve` mode for public image URLs
-- use per-image copy controls in generated pages
+- in normal mode, use per-image copy controls in generated pages
+- in raw mode, copy controls are intentionally removed; prefer `--serve` or manual image handling
 
 ## Python API rejects notebook dict
 
