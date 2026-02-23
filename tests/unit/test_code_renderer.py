@@ -558,7 +558,7 @@ class TestImageProcessing:
         source = "x = 1"
         png = render_code(source, "python", minimal_config.code, apply_padding=False)
 
-        padded = _outer_pad(png, 50, 50, "white")
+        padded = _outer_pad(png, 50, 50, "#ffffff")
 
         img_orig = Image.open(io.BytesIO(png))
         img_padded = Image.open(io.BytesIO(padded))
@@ -572,7 +572,7 @@ class TestImageProcessing:
         source = "x = 1"
         png = render_code(source, "python", minimal_config.code, apply_padding=False)
 
-        padded = _outer_pad(png, 0, 0, "white")
+        padded = _outer_pad(png, 0, 0, "#ffffff")
 
         img_orig = Image.open(io.BytesIO(png))
         img_padded = Image.open(io.BytesIO(padded))

@@ -157,8 +157,8 @@ class TestMathTextRendering:
         config = LatexConfig(
             font_size=24,
             dpi=72,
-            color="red",
-            background="white",
+            color="#ff0000",
+            background="#ffffff",
             padding=10,
             image_width=800,
         )
@@ -221,10 +221,10 @@ class TestImageProcessing:
     def test_trim_and_pad_basic(self, minimal_config):
         """Trim and pad basic image."""
         # Create a small test image
-        img = Image.new("RGB", (100, 50), "white")
+        img = Image.new("RGB", (100, 50), "#ffffff")
         from PIL import ImageDraw
         draw = ImageDraw.Draw(img)
-        draw.rectangle([40, 20, 60, 30], fill="black")
+        draw.rectangle([40, 20, 60, 30], fill="#000000")
 
         buf = io.BytesIO()
         img.save(buf, format="PNG")
@@ -238,7 +238,7 @@ class TestImageProcessing:
 
     def test_trim_and_pad_with_tag(self, minimal_config):
         """Trim and pad with equation tag."""
-        img = Image.new("RGB", (100, 50), "white")
+        img = Image.new("RGB", (100, 50), "#ffffff")
         buf = io.BytesIO()
         img.save(buf, format="PNG")
         png_bytes = buf.getvalue()
@@ -251,14 +251,14 @@ class TestImageProcessing:
 
     def test_draw_tag_on_canvas(self, minimal_config):
         """Draw equation tag on canvas."""
-        canvas = Image.new("RGB", (800, 100), "white")
+        canvas = Image.new("RGB", (800, 100), "#ffffff")
         _draw_tag(canvas, 5, minimal_config.latex)
         # Tag should be drawn (function should not crash)
         # Actual text rendering depends on font availability
 
     def test_round_corners_basic(self):
         """Apply rounded corners to image."""
-        img = Image.new("RGB", (100, 100), "white")
+        img = Image.new("RGB", (100, 100), "#ffffff")
         result = _round_corners(img, 10)
 
         # Should be RGBA with transparency
@@ -267,7 +267,7 @@ class TestImageProcessing:
 
     def test_round_corners_zero_radius(self):
         """Zero radius should still work."""
-        img = Image.new("RGB", (100, 100), "white")
+        img = Image.new("RGB", (100, 100), "#ffffff")
         result = _round_corners(img, 0)
         assert result.mode == "RGBA"
 
@@ -325,7 +325,7 @@ class TestUseTexRendering:
     def test_render_usetex_with_color(self, minimal_config, mock_latex_available):
         """Render with custom colors using usetex (mocked)."""
         minimal_config.latex.try_usetex = True
-        minimal_config.latex.color = "red"
+        minimal_config.latex.color = "#ff0000"
         latex = r"x = 1"
         result = render_latex_block(latex, minimal_config.latex)
         assert result.startswith("data:image/png;base64,")
@@ -494,8 +494,8 @@ class TestEdgeCases:
         config = LatexConfig(
             font_size=24,
             dpi=72,
-            color="black",
-            background="white",
+            color="#000000",
+            background="#ffffff",
             padding=10,
             image_width=800,
             try_usetex=False,
