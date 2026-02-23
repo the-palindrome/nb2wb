@@ -26,6 +26,7 @@ class RenderRequest(BaseModel):
     notebook: dict[str, Any]
     target: str = "substack"
     execute: bool = False
+    raw_mode: bool = False
     config: dict[str, Any] | None = None
 
 
@@ -36,6 +37,7 @@ def render(req: RenderRequest) -> dict[str, str]:
             req.notebook,
             target=req.target,
             execute=req.execute,
+            raw_mode=req.raw_mode,
             config=req.config,
             working_dir="/srv/nb2wb/jobs",  # only needed when execute=True
         )
@@ -54,6 +56,7 @@ Any HTTP client can send:
   "notebook": { "nbformat": 4, "nbformat_minor": 5, "metadata": {}, "cells": [] },
   "target": "substack",
   "execute": false,
+  "raw_mode": false,
   "config": {
     "safety": {
       "max_cells": 1500
