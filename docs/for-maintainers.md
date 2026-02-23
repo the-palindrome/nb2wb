@@ -136,11 +136,10 @@ The list below reflects tracked files in git (excluding generated build/cache ar
 ├── examples/
 │   ├── README.md
 │   ├── config.yaml
+│   ├── convert_notebook_api.py
 │   ├── image.png
 │   ├── markdown.md
-│   ├── notebook.html
 │   ├── notebook.ipynb
-│   ├── quarto.html
 │   ├── quarto.qmd
 │   └── x_article.ipynb
 ├── nb2wb/
