@@ -128,6 +128,7 @@ class TestCLIBasics:
         assert 'id="toolbar"' not in html
         assert "Copy to clipboard" not in html
         assert "<script" not in html.lower()
+        assert "<head" not in html.lower()
 
 
 class TestCLIPlatformSelection:

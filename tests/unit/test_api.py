@@ -117,6 +117,7 @@ class TestPublicApi:
         assert 'id="toolbar"' not in html
         assert "Copy to clipboard" not in html
         assert "<script" not in html.lower()
+        assert "<head" not in html.lower()
 
     def test_convert_raw_mode_medium_and_x_use_plain_images_without_copy_containers(self):
         markdown = "![table](data:image/png;base64,abcd)"
@@ -132,6 +133,7 @@ class TestPublicApi:
             assert 'class="image-container"' not in html
             assert 'class="copy-image-btn"' not in html
             assert "<script" not in html.lower()
+            assert "<head" not in html.lower()
 
     def test_convert_accepts_in_memory_markdown_payload_mapping(self):
         payload = {
