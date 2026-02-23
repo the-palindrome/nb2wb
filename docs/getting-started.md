@@ -29,6 +29,7 @@ nb2wb notebook.ipynb -t medium
 nb2wb notebook.ipynb -t x
 nb2wb notebook.ipynb -o article.html
 nb2wb notebook.ipynb --open
+nb2wb notebook.ipynb --raw -o article_raw.html
 ```
 
 ## First Conversion (Python API)
@@ -52,6 +53,16 @@ import nb2wb
 
 html = nb2wb.convert(notebook_payload_dict, target="substack")
 ```
+
+Raw mode from API:
+
+```python
+import nb2wb
+
+html = nb2wb.convert(notebook_payload_dict, target="medium", raw_mode=True)
+```
+
+In raw mode, output omits `<head>`, toolbar/header controls, and JavaScript.
 
 ## Local Serve Mode (for Medium/X workflows)
 

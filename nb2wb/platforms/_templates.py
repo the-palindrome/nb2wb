@@ -49,8 +49,6 @@ _BASE_THEME: dict[str, str] = {
     "table-header-background": "#f4f4f4",
     "hr-border": "#ddd",
     "link-color": "inherit",
-    "footer-border": "#eee",
-    "footer-color": "#aaa",
     "copy-image-button-background": "rgba(26, 137, 23, 0.9)",
     "copy-image-button-hover-background": "rgba(13, 95, 11, 0.95)",
     "copy-image-button-copied-background": "#0d5f0b",
@@ -79,10 +77,6 @@ COPYABLE_SCRIPT = """\
             container.replaceWith(img);
           }
         });
-
-        // Remove footer from copied content.
-        var footer = content.querySelector(".nb2wb-footer");
-        if (footer) footer.remove();
 
         var html = content.innerHTML;
         var blob = new Blob([html], { type: "text/html" });
@@ -177,10 +171,8 @@ SIMPLE_COPY_SCRIPT = """\
     }
 """
 
-_PAGE_TEMPLATE = Template(
+_HEAD_TEMPLATE = Template(
     """\
-<!DOCTYPE html>
-<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -319,36 +311,23 @@ $theme_vars
     th { background: var(--table-header-background); font-weight: 600; }
     hr { border: none; border-top: 1px solid var(--hr-border); margin: 2em 0; }
     a { color: var(--link-color); text-decoration: underline; }
-    .nb2wb-footer {
-      margin-top: 3em;
-      padding-top: 1em;
-      border-top: 1px solid var(--footer-border);
-      text-align: center;
-      font-size: 0.8em;
-      color: var(--footer-color);
-    }
-    .nb2wb-footer a {
-      color: var(--footer-color);
-      text-decoration: none;
-    }
-    .nb2wb-footer a:hover { text-decoration: underline; }
 $extra_css
   </style>
 </head>
+"""
+)
+
+_PAGE_TEMPLATE = Template(
+    """\
+<!DOCTYPE html>
+<html lang="en">
+$head_html
 <body>
-  <div id="toolbar">
-    <button id="copy-btn" onclick="copyContent()">&#128203; Copy to clipboard</button>
-    <p>$toolbar_message</p>
-  </div>
+$toolbar_html
   <div id="content">
 $content_html
-  <div class="nb2wb-footer">
-    Made with <a href="https://github.com/the-palindrome/nb2wb">nb2wb</a>
-  </div>
   </div><!-- #content -->
-  <script>
-$script
-  </script>
+$script_html
 </body>
 </html>
 """
@@ -361,21 +340,40 @@ def build_page(
     title: str,
     toolbar_message: str,
     script: str,
+    raw_mode: bool = False,
     theme_overrides: Mapping[str, str] | None = None,
     extra_css: str = "",
 ) -> str:
     """Build a complete HTML preview page."""
-    theme = dict(_BASE_THEME)
-    if theme_overrides:
-        theme.update(theme_overrides)
-    theme_vars = "\n".join(
-        f"      --{name}: {value};" for name, value in theme.items()
-    )
+    toolbar_html = ""
+    script_html = ""
+    head_html = ""
+    if not raw_mode:
+        theme = dict(_BASE_THEME)
+        if theme_overrides:
+            theme.update(theme_overrides)
+        theme_vars = "\n".join(
+            f"      --{name}: {value};" for name, value in theme.items()
+        )
+        head_html = _HEAD_TEMPLATE.substitute(
+            title=title,
+            theme_vars=theme_vars,
+            extra_css=extra_css,
+        )
+        toolbar_html = (
+            "  <div id=\"toolbar\">\n"
+            "    <button id=\"copy-btn\" onclick=\"copyContent()\">&#128203; Copy to clipboard</button>\n"
+            f"    <p>{toolbar_message}</p>\n"
+            "  </div>"
+        )
+        script_html = (
+            "  <script>\n"
+            f"{script}\n"
+            "  </script>"
+        )
     return _PAGE_TEMPLATE.substitute(
-        title=title,
-        theme_vars=theme_vars,
-        toolbar_message=toolbar_message,
+        head_html=head_html,
+        toolbar_html=toolbar_html,
         content_html=content_html,
-        script=script,
-        extra_css=extra_css,
+        script_html=script_html,
     )

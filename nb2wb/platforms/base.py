@@ -168,12 +168,13 @@ class PlatformBuilder(ABC):
         pass
 
     @abstractmethod
-    def build_page(self, content_html: str) -> str:
+    def build_page(self, content_html: str, *, raw_mode: bool = False) -> str:
         """
         Wrap converted cell content in a complete HTML page.
 
         Args:
             content_html: HTML fragments from converted notebook cells
+            raw_mode: When True, omit preview-only toolbar chrome.
 
         Returns:
             Complete HTML document ready for the platform

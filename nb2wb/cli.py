@@ -183,6 +183,11 @@ def main() -> None:
         action="store_true",
         help="Execute code blocks via Jupyter kernel before rendering (.ipynb, .qmd, .md).",
     )
+    parser.add_argument(
+        "--raw",
+        action="store_true",
+        help="Emit raw article HTML without the preview toolbar/header.",
+    )
 
     args = parser.parse_args()
 
@@ -211,6 +216,7 @@ def main() -> None:
             target=args.target,
             execute=args.execute,
             working_dir=notebook_path.parent,
+            raw_mode=args.raw,
         )
     except Exception as exc:
         print(f"Conversion failed: {exc}", file=sys.stderr)

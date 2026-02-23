@@ -80,7 +80,9 @@ When target is `medium` or `x`, platform defaults adjust canvas sizes and paddin
 
 Examples:
 
-- top-level `image_width`: `680`
+- top-level `image_width`:
+  - `700` for `medium`
+  - `680` for `x`
 - `code.font_size`: `42`
 - `code.image_width`: `1200`
 - `latex.font_size`: `35`

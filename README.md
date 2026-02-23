@@ -48,6 +48,7 @@ nb2wb notebook.ipynb -t x
 nb2wb notebook.ipynb -o article.html
 nb2wb notebook.ipynb --open
 nb2wb notebook.ipynb --serve
+nb2wb notebook.ipynb --raw -o article_raw.html
 nb2wb report.qmd --execute
 ```
 
@@ -69,6 +70,13 @@ html = nb2wb.convert(
     notebook_payload,
     target="substack",
     execute=False,
+)
+
+# Raw-mode output (no <head>, toolbar, or JavaScript)
+html = nb2wb.convert(
+    notebook_payload,
+    target="medium",
+    raw_mode=True,
 )
 ```
 

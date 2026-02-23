@@ -48,8 +48,6 @@ _THEME = {
     "table-header-background": "#f7f9f9",
     "hr-border": "#eff3f4",
     "link-color": "inherit",
-    "footer-border": "#eff3f4",
-    "footer-color": "#536471",
     "copy-image-button-background": "rgba(29, 155, 240, 0.9)",
     "copy-image-button-hover-background": "rgba(20, 120, 190, 0.95)",
     "copy-image-button-copied-background": "#1478be",
@@ -63,13 +61,17 @@ class XArticlesBuilder(PlatformBuilder):
     def name(self) -> str:
         return "X Articles"
 
-    def build_page(self, content_html: str) -> str:
+    def build_page(self, content_html: str, *, raw_mode: bool = False) -> str:
         """Wrap content in X Articles-optimized HTML page."""
-        content_html = self._make_images_copyable(content_html)
+        if raw_mode:
+            content_html = self._embed_images_as_data_uris(content_html)
+        else:
+            content_html = self._make_images_copyable(content_html)
         return build_page(
             content_html,
             title="nb2wb — X Articles Preview",
             toolbar_message="Paste into X Articles. If images are missing, hover each one to copy it.",
             script=COPYABLE_SCRIPT,
+            raw_mode=raw_mode,
             theme_overrides=_THEME,
         )

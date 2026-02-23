@@ -32,7 +32,7 @@ After cell conversion, content is wrapped for one of:
 - `medium`
 - `x`
 
-Each wrapper provides copy/paste-friendly layout and controls.
+Each wrapper provides copy/paste-friendly layout and controls (unless raw mode is enabled).
 
 ## 4. Equation Labels and References
 

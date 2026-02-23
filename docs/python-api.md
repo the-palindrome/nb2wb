@@ -13,6 +13,7 @@ html = nb2wb.convert(
     target="substack",
     execute=False,
     working_dir=None,
+    raw_mode=False,
 )
 ```
 
@@ -59,6 +60,25 @@ Use helpers when your source is on disk:
 ## Return Value
 
 Returns one string: full HTML document for the selected target.
+
+## Raw Mode
+
+Set `raw_mode=True` to emit a stripped-down HTML wrapper:
+
+- removes `<head>...</head>`
+- removes toolbar/header copy controls
+- removes all JavaScript (`<script>` blocks)
+- for `medium` and `x`, emits standard `<img ...>` tags (no `.image-container` wrappers)
+
+```python
+import nb2wb
+
+html = nb2wb.convert(
+    notebook_payload,
+    target="medium",
+    raw_mode=True,
+)
+```
 
 ## `supported_targets()`
 

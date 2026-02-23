@@ -106,6 +106,30 @@ class TestCLIBasics:
 
         assert output_path.exists()
 
+    def test_cli_raw_mode_omits_toolbar(self, tmp_path):
+        """CLI --raw omits preview toolbar/header in output HTML."""
+        nb = nbformat.v4.new_notebook()
+        nb.cells = [nbformat.v4.new_markdown_cell("# Raw CLI")]
+
+        notebook_path = tmp_path / "test.ipynb"
+        with open(notebook_path, "w") as f:
+            nbformat.write(nb, f)
+
+        output_path = tmp_path / "raw.html"
+        sys.argv = ["nb2wb", str(notebook_path), "--raw", "-o", str(output_path)]
+
+        try:
+            main()
+        except SystemExit:
+            pass
+
+        assert output_path.exists()
+        html = output_path.read_text()
+        assert 'id="toolbar"' not in html
+        assert "Copy to clipboard" not in html
+        assert "<script" not in html.lower()
+        assert "<head" not in html.lower()
+
 
 class TestCLIPlatformSelection:
     """Test platform-specific output."""
@@ -320,6 +344,18 @@ class TestCLIMarkdownSupport:
         captured = capsys.readouterr()
         assert "--execute" in captured.out
 
+    def test_cli_raw_flag_in_help(self, capsys):
+        """--raw flag appears in CLI help text."""
+        sys.argv = ["nb2wb", "--help"]
+
+        try:
+            main()
+        except SystemExit:
+            pass
+
+        captured = capsys.readouterr()
+        assert "--raw" in captured.out
+
     def test_cli_md_help_mentions_md(self, capsys):
         """CLI help text mentions .md files."""
         sys.argv = ["nb2wb", "--help"]
@@ -415,7 +451,7 @@ class TestCLIServerSafeMode:
 
         seen: dict[str, object] = {}
 
-        def fake_convert(notebook, *, config, target, execute, working_dir):
+        def fake_convert(notebook, *, config, target, execute, working_dir, raw_mode):
             from nb2wb.config import load_config
 
             resolved = load_config(config)
@@ -423,6 +459,7 @@ class TestCLIServerSafeMode:
             seen["target"] = target
             seen["payload_type"] = type(notebook).__name__
             seen["working_dir"] = str(working_dir)
+            seen["raw_mode"] = raw_mode
             seen["has_safety_limits"] = (
                 resolved.safety.max_input_bytes > 0
                 and resolved.safety.max_cells > 0
@@ -442,7 +479,31 @@ class TestCLIServerSafeMode:
         assert seen["target"] == "substack"
         assert seen["payload_type"] == "NotebookNode"
         assert seen["working_dir"] == str(notebook_path.parent)
+        assert seen["raw_mode"] is False
         assert seen["has_safety_limits"] is True
+
+    def test_cli_forwards_raw_flag_to_api(self, tmp_path, monkeypatch):
+        nb = nbformat.v4.new_notebook()
+        nb.cells = [nbformat.v4.new_markdown_cell("# Raw")]
+        notebook_path = tmp_path / "raw.ipynb"
+        with open(notebook_path, "w") as f:
+            nbformat.write(nb, f)
+
+        seen: dict[str, object] = {}
+
+        def fake_convert(notebook, *, config, target, execute, working_dir, raw_mode):
+            seen["raw_mode"] = raw_mode
+            return "<html><body><p>ok</p></body></html>"
+
+        monkeypatch.setattr("nb2wb.cli.convert_notebook", fake_convert)
+
+        sys.argv = ["nb2wb", str(notebook_path), "--raw", "-o", str(tmp_path / "out.html")]
+        try:
+            main()
+        except SystemExit:
+            pass
+
+        assert seen["raw_mode"] is True
 
 
 class TestCLIInputSanitization:

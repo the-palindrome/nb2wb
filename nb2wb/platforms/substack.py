@@ -48,8 +48,6 @@ _THEME = {
     "table-header-background": "#f4f4f4",
     "hr-border": "#ddd",
     "link-color": "inherit",
-    "footer-border": "#eee",
-    "footer-color": "#aaa",
 }
 
 _EXTRA_CSS = """\
@@ -66,7 +64,7 @@ class SubstackBuilder(PlatformBuilder):
     def name(self) -> str:
         return "Substack"
 
-    def build_page(self, content_html: str) -> str:
+    def build_page(self, content_html: str, *, raw_mode: bool = False) -> str:
         """Wrap content in Substack-optimized HTML page."""
         content_html = self._embed_images_as_data_uris(content_html)
         return build_page(
@@ -74,6 +72,7 @@ class SubstackBuilder(PlatformBuilder):
             title="nb2wb — Substack Preview",
             toolbar_message="Then paste directly into your Substack draft.",
             script=SIMPLE_COPY_SCRIPT,
+            raw_mode=raw_mode,
             theme_overrides=_THEME,
             extra_css=_EXTRA_CSS,
         )

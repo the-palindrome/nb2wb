@@ -8,6 +8,15 @@
 - `medium`
 - `x`
 
+## Raw Mode Across Targets
+
+Use `--raw` (CLI) or `raw_mode=True` (Python API) to remove preview chrome from output:
+
+- no `<head>` section
+- no toolbar/header copy controls
+- no JavaScript blocks
+- for `medium` and `x`, images are plain `<img ...>` tags without copy-button wrappers
+
 ## Substack
 
 - best fit for direct copy/paste with embedded data URI images
