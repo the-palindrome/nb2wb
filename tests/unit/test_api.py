@@ -65,6 +65,35 @@ class TestPublicApi:
         assert "Dict Notebook" in html
         assert "<html" in html.lower()
 
+    def test_convert_accepts_notebook_payload_with_cell_ids_from_minor_v4(self):
+        notebook_dict = {
+            "cells": [
+                {
+                    "cell_type": "markdown",
+                    "metadata": {},
+                    "id": "c9ab1105",
+                    "source": "# Cell IDs on minor v4",
+                }
+            ],
+            "metadata": {
+                "kernelspec": {"name": "python3", "language": "python"},
+                "language_info": {"name": "python"},
+            },
+            "nbformat": 4,
+            "nbformat_minor": 4,
+        }
+
+        html = nb2wb.convert(
+            notebook_dict,
+            config={"latex": {"try_usetex": False}},
+            target="substack",
+            execute=False,
+        )
+
+        assert "Cell IDs on minor v4" in html
+        normalized = api._coerce_notebook_node(notebook_dict)
+        assert normalized["nbformat_minor"] >= 5
+
     def test_convert_accepts_notebooknode_payload(self):
         nb = nbformat.v4.new_notebook()
         nb.cells = [nbformat.v4.new_markdown_cell("# NotebookNode Input")]

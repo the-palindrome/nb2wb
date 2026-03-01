@@ -180,12 +180,27 @@ def _coerce_notebook_node(
 
     # Normalization for common real-world payloads:
     # - add cell ids when omitted
+    # - bump nbformat_minor to 5 when cell ids are present (cell ids are 4.5+)
     # - add kernelspec.display_name when kernelspec.name exists
+    has_cell_ids = False
     cells = node.get("cells", [])
     if isinstance(cells, list):
         for cell in cells:
-            if isinstance(cell, Mapping) and not cell.get("id"):
-                cell["id"] = uuid4().hex[:8]
+            if not isinstance(cell, Mapping):
+                continue
+            if cell.get("id"):
+                has_cell_ids = True
+                continue
+            cell["id"] = uuid4().hex[:8]
+            has_cell_ids = True
+
+    if has_cell_ids and node.get("nbformat") == 4:
+        try:
+            minor = int(node.get("nbformat_minor", 0))
+        except (TypeError, ValueError):
+            minor = 0
+        if minor < 5:
+            node["nbformat_minor"] = 5
 
     metadata = node.get("metadata", {})
     if isinstance(metadata, Mapping):
