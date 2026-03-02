@@ -47,8 +47,16 @@ Required notebook fields after normalization/validation include:
 Behavior:
 
 - payload is normalized and validated via `nbformat`
-- missing cell ids are filled
+- payloads are canonicalized to internal `nbformat=4`, `nbformat_minor=5`
+- legacy major versions (for example v3 `worksheets` payloads) are upgraded to v4
+- conservative legacy repairs are applied for known lossless patterns:
+  - `code.input` -> `code.source` (when `source` missing)
+  - `prompt_number` -> `execution_count` (when missing)
+  - stream outputs `stream` -> `name` (when missing)
+  - output aliases `pyout` -> `execute_result`, `pyerr` -> `error`
+- missing or duplicate/invalid cell ids are repaired deterministically
 - missing `kernelspec.display_name` is derived from `kernelspec.name` when available
+- unsupported major versions and unknown non-legacy schema fields fail with actionable `ValueError`
 
 ### 2. In-Memory Text Payloads
 

@@ -94,6 +94,194 @@ class TestPublicApi:
         normalized = api._coerce_notebook_node(notebook_dict)
         assert normalized["nbformat_minor"] >= 5
 
+    def test_convert_accepts_v3_notebook_payload_with_worksheets(self):
+        notebook_dict = {
+            "nbformat": 3,
+            "nbformat_minor": 0,
+            "metadata": {"name": "legacy"},
+            "worksheets": [
+                {
+                    "cells": [
+                        {
+                            "cell_type": "markdown",
+                            "metadata": {},
+                            "source": "# Legacy V3",
+                        }
+                    ],
+                    "metadata": {},
+                }
+            ],
+        }
+
+        html = nb2wb.convert(
+            notebook_dict,
+            config={"latex": {"try_usetex": False}},
+            target="substack",
+            execute=False,
+        )
+
+        assert "Legacy V3" in html
+        normalized = api._coerce_notebook_node(notebook_dict)
+        assert normalized["nbformat"] == 4
+        assert normalized["nbformat_minor"] == 5
+        assert len(normalized["cells"]) == 1
+
+    def test_convert_accepts_mislabeled_v3_payload_marked_as_v4(self):
+        notebook_dict = {
+            "nbformat": 4,
+            "nbformat_minor": 0,
+            "metadata": {"name": "legacy"},
+            "worksheets": [
+                {
+                    "cells": [
+                        {
+                            "cell_type": "markdown",
+                            "metadata": {},
+                            "source": "# Mislabeled V3",
+                        }
+                    ],
+                    "metadata": {},
+                }
+            ],
+        }
+
+        html = nb2wb.convert(
+            notebook_dict,
+            config={"latex": {"try_usetex": False}},
+            target="substack",
+            execute=False,
+        )
+
+        assert "Mislabeled V3" in html
+        normalized = api._coerce_notebook_node(notebook_dict)
+        assert normalized["nbformat"] == 4
+        assert normalized["nbformat_minor"] == 5
+
+    def test_convert_repairs_legacy_v4_code_and_output_fields(self):
+        notebook_dict = {
+            "nbformat": 4,
+            "nbformat_minor": 2,
+            "metadata": {},
+            "cells": [
+                {
+                    "cell_type": "code",
+                    "metadata": {},
+                    "input": "print('hi')",
+                    "prompt_number": 7,
+                    "outputs": [
+                        {
+                            "output_type": "stream",
+                            "stream": "stdout",
+                            "text": "hi\n",
+                        },
+                        {
+                            "output_type": "pyerr",
+                            "ename": "ValueError",
+                            "evalue": "boom",
+                            "traceback": ["Traceback..."],
+                        },
+                        {
+                            "output_type": "pyout",
+                            "prompt_number": 7,
+                            "metadata": {},
+                            "text": "7",
+                        },
+                    ],
+                }
+            ],
+        }
+
+        html = nb2wb.convert(
+            notebook_dict,
+            config={"latex": {"try_usetex": False}},
+            target="substack",
+            execute=False,
+        )
+
+        assert "<html" in html.lower()
+        normalized = api._coerce_notebook_node(notebook_dict)
+        code = normalized["cells"][0]
+        assert code["source"] == "print('hi')"
+        assert code["execution_count"] == 7
+        assert code["outputs"][0]["name"] == "stdout"
+        assert code["outputs"][1]["output_type"] == "error"
+        assert code["outputs"][2]["output_type"] == "execute_result"
+        assert "data" in code["outputs"][2]
+
+    def test_convert_moves_top_level_orig_nbformat_fields_into_metadata(self):
+        notebook_dict = {
+            "nbformat": 4,
+            "nbformat_minor": 5,
+            "orig_nbformat": 3,
+            "orig_nbformat_minor": 0,
+            "metadata": {},
+            "cells": [
+                {
+                    "cell_type": "markdown",
+                    "metadata": {},
+                    "source": "# Legacy markers",
+                }
+            ],
+        }
+
+        normalized = api._coerce_notebook_node(notebook_dict)
+        assert "orig_nbformat" not in normalized
+        assert "orig_nbformat_minor" not in normalized
+        assert normalized["metadata"]["orig_nbformat"] == 3
+        assert normalized["metadata"]["orig_nbformat_minor"] == 0
+
+    def test_convert_normalizes_duplicate_cell_ids(self):
+        notebook_dict = {
+            "nbformat": 4,
+            "nbformat_minor": 5,
+            "metadata": {},
+            "cells": [
+                {
+                    "cell_type": "markdown",
+                    "metadata": {},
+                    "id": "dup-id",
+                    "source": "# A",
+                },
+                {
+                    "cell_type": "markdown",
+                    "metadata": {},
+                    "id": "dup-id",
+                    "source": "# B",
+                },
+            ],
+        }
+
+        normalized = api._coerce_notebook_node(notebook_dict)
+        ids = [cell["id"] for cell in normalized["cells"]]
+        assert len(ids) == len(set(ids))
+
+    def test_convert_rejects_unsupported_nbformat_major(self):
+        notebook_dict = {
+            "nbformat": 5,
+            "nbformat_minor": 0,
+            "metadata": {},
+            "cells": [],
+        }
+        try:
+            nb2wb.convert(notebook_dict)
+            raise AssertionError("Expected ValueError for unsupported major version")
+        except ValueError as exc:
+            assert "unsupported major version" in str(exc)
+
+    def test_convert_rejects_unknown_top_level_fields_with_actionable_error(self):
+        notebook_dict = {
+            "nbformat": 4,
+            "nbformat_minor": 5,
+            "metadata": {},
+            "cells": [],
+            "unexpected_field": True,
+        }
+        try:
+            nb2wb.convert(notebook_dict)
+            raise AssertionError("Expected ValueError for unsupported top-level fields")
+        except ValueError as exc:
+            assert "unsupported top-level fields" in str(exc)
+
     def test_convert_accepts_notebooknode_payload(self):
         nb = nbformat.v4.new_notebook()
         nb.cells = [nbformat.v4.new_markdown_cell("# NotebookNode Input")]
