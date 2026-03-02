@@ -161,7 +161,7 @@ with plt.style.context("seaborn-v0_8-white"):
     # Generate points using list comprehension
     X = [x / 50.0 - 1 for x in range(101)]  # 101 points from -1 to 1
     y = [x**2 for x in X]
-    plt.plot(X, y, color="red")
+    plt.plot(X, y, color="#ff0000")
 
     plt.tight_layout()
     plt.show()

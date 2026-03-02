@@ -25,7 +25,7 @@ class TestConfigDefaults:
         """Default Config has expected values."""
         config = Config()
         assert config.image_width == 1920
-        assert config.border_radius == 14
+        assert config.border_radius == 0
         assert isinstance(config.code, CodeConfig)
         assert isinstance(config.latex, LatexConfig)
         assert isinstance(config.table, TableConfig)
@@ -45,15 +45,15 @@ class TestConfigDefaults:
         assert code.padding_y == 100
         assert code.separator == 0
         assert code.background == ""
-        assert code.border_radius == 14
+        assert code.border_radius == 0
 
     def test_latex_config_defaults(self):
         """Default LatexConfig has expected values."""
         latex = LatexConfig()
         assert latex.font_size == 48
         assert latex.dpi == 150
-        assert latex.color == "black"
-        assert latex.background == "white"
+        assert latex.color == "#000000"
+        assert latex.background == "#ffffff"
         assert latex.padding == 68
         assert latex.image_width == 1920
         assert latex.try_usetex is True
@@ -68,7 +68,7 @@ class TestConfigDefaults:
         assert table.font == "DejaVu Sans"
         assert table.color == "#1f2937"
         assert table.header_color == "#0f172a"
-        assert table.background == "white"
+        assert table.background == "#ffffff"
         assert table.header_background == "#eef2ff"
         assert table.stripe_background == "#f8fafc"
         assert table.border_color == "#dbe4ee"
@@ -76,7 +76,7 @@ class TestConfigDefaults:
         assert table.cell_padding_x == 24
         assert table.cell_padding_y == 14
         assert table.outer_padding == 20
-        assert table.canvas_background == "white"
+        assert table.canvas_background == "#ffffff"
         assert table.zebra_striping is True
         assert table.shadow is True
         assert table.shadow_color == "#0f172a"
@@ -95,12 +95,13 @@ class TestConfigLoading:
         """Missing config file returns defaults."""
         config = load_config(Path("/nonexistent/config.yaml"))
         assert config.image_width == 1920  # Default value
-        assert config.border_radius == 14
+        assert config.border_radius == 0
 
     def test_load_config_none_path(self):
         """None path returns defaults."""
         config = load_config(None)
         assert config.image_width == 1920
+        assert config.border_radius == 0
         assert isinstance(config.code, CodeConfig)
         assert isinstance(config.latex, LatexConfig)
         assert isinstance(config.table, TableConfig)
@@ -116,7 +117,7 @@ code:
   theme: "default"
 latex:
   dpi: 200
-  color: "white"
+  color: "#ffffff"
 table:
   mode: "image"
   font_size: 24
@@ -130,7 +131,7 @@ safety:
         assert config.code.font_size == 36
         assert config.code.theme == "default"
         assert config.latex.dpi == 200
-        assert config.latex.color == "white"
+        assert config.latex.color == "#ffffff"
         assert config.table.mode == "image"
         assert config.table.font_size == 24
         assert config.safety.max_cells == 123
@@ -253,13 +254,13 @@ code:
         config_path = tmp_path / "config.yaml"
         config_path.write_text("""
 latex:
-  color: "red"
-  background: "black"
+  color: "#ff0000"
+  background: "#000000"
 """)
         config = load_config(config_path)
         # Overridden
-        assert config.latex.color == "red"
-        assert config.latex.background == "black"
+        assert config.latex.color == "#ff0000"
+        assert config.latex.background == "#000000"
         # Defaults preserved
         assert config.latex.font_size == 48
         assert config.latex.dpi == 150
@@ -367,13 +368,13 @@ code:
   padding_x: 80
   padding_y: 80
   separator: 80
-  background: "black"
+  background: "#000000"
   border_radius: 30
 latex:
   font_size: 42
   dpi: 180
-  color: "white"
-  background: "black"
+  color: "#ffffff"
+  background: "#000000"
   padding: 60
   image_width: 1600
   try_usetex: false
@@ -417,13 +418,13 @@ table:
         assert config.code.padding_x == 80
         assert config.code.padding_y == 80
         assert config.code.separator == 80
-        assert config.code.background == "black"
+        assert config.code.background == "#000000"
         assert config.code.border_radius == 30
         # LaTeX config
         assert config.latex.font_size == 42
         assert config.latex.dpi == 180
-        assert config.latex.color == "white"
-        assert config.latex.background == "black"
+        assert config.latex.color == "#ffffff"
+        assert config.latex.background == "#000000"
         assert config.latex.padding == 60
         assert config.latex.image_width == 1600
         assert config.latex.try_usetex is False

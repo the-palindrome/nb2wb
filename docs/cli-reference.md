@@ -41,6 +41,7 @@ nb2wb report.ipynb --raw -o post_raw.html
 - Raw output omits the entire `<head>` section.
 - Raw output omits all JavaScript (`<script>` blocks).
 - For `medium` and `x` targets, raw mode emits plain `<img ...>` tags (no `.image-container` / copy-image button wrappers).
+- `--raw --serve` is supported: image data URIs are still extracted/relinked for serving, while the served page remains raw (no `<head>`, toolbar, or JavaScript).
 
 ## Input Validation
 

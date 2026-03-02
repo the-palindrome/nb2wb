@@ -17,36 +17,162 @@ html = nb2wb.convert(
 )
 ```
 
-## `notebook` Input Types
+## Parameter Reference
 
-`notebook` accepts:
+| Parameter | Type | Meaning |
+|---|---|---|
+| `notebook` | `str \| Mapping \| nbformat.NotebookNode` | In-memory source payload (never a path object) |
+| `config` | `None \| dict-like \| Config \| str \| Path` | Config object, mapping, or YAML path |
+| `target` | `str` | Platform wrapper: `substack`, `medium`, `x` |
+| `execute` | `bool` | Execute code cells before rendering |
+| `working_dir` | `str \| Path \| None` | Execution working directory when `execute=True` |
+| `raw_mode` | `bool` | Strip wrapper chrome (`<head>`, toolbar, JS) |
 
-- `str` (in-memory Markdown or Quarto text)
-- `dict` (JSON/JSONB parsed notebook payload)
+## Input Formats (Detailed)
+
+### 1. Notebook Object Payloads
+
+Accepted:
+
 - `nbformat.NotebookNode`
-- in-memory text payload mapping:
-  - `{"format": "md", "content": "<markdown text>"}`
-  - `{"format": "qmd", "content": "<quarto text>"}`
-  - aliases: `format="markdown"` and `format="quarto"`
-  - `source` or `text` can be used instead of `content`
+- notebook `dict`/mapping (for example from JSON/JSONB)
 
-In-memory notebook payloads are validated against nbformat schema before conversion.
-In-memory `.md` / `.qmd` payloads use the same readers as file-based input.
+Required notebook fields after normalization/validation include:
 
-`nb2wb.convert()` is strict content-only. It does not accept paths.
-All string values are treated as content payloads (including path-like strings).
+- `nbformat`
+- `nbformat_minor`
+- `cells`
+- `metadata`
 
-## Path Loader Helpers
+Behavior:
 
-Use helpers when your source is on disk:
+- payload is normalized and validated via `nbformat`
+- payloads are canonicalized to internal `nbformat=4`, `nbformat_minor=5`
+- legacy major versions (for example v3 `worksheets` payloads) are upgraded to v4
+- conservative legacy repairs are applied for known lossless patterns:
+  - `code.input` -> `code.source` (when `source` missing)
+  - `prompt_number` -> `execution_count` (when missing)
+  - stream outputs `stream` -> `name` (when missing)
+  - output aliases `pyout` -> `execute_result`, `pyerr` -> `error`
+- missing or duplicate/invalid cell ids are repaired deterministically
+- missing `kernelspec.display_name` is derived from `kernelspec.name` when available
+- unsupported major versions and unknown non-legacy schema fields fail with actionable `ValueError`
 
-- `nb2wb.load_input_payload(path)`:
-  - `.ipynb` -> validated `NotebookNode`
-  - `.md` -> `{"format": "md", "content": "..."}`
-  - `.qmd` -> `{"format": "qmd", "content": "..."}`
-- `nb2wb.load_notebook_payload(path)` (`.ipynb` only)
-- `nb2wb.load_markdown_payload(path)` (`.md` only)
-- `nb2wb.load_quarto_payload(path)` (`.qmd` only)
+### 2. In-Memory Text Payloads
+
+Accepted as plain `str`:
+
+- Markdown text
+- Quarto text (auto-detected when Quarto chunk fences are present, such as ```` ```{python} ````)
+- path-like strings are still treated as text content (for example `"post.ipynb"` is parsed as markdown text, not loaded from disk)
+
+Accepted as explicit mapping payload:
+
+- `{"format": "md", "content": "<markdown text>"}`
+- `{"format": "qmd", "content": "<quarto text>"}`
+
+Format aliases:
+
+- `markdown` -> `md`
+- `quarto` -> `qmd`
+
+Content key aliases:
+
+- `content` (preferred)
+- `source`
+- `text`
+
+### 3. Path Loader Helper Output Contracts
+
+`nb2wb.convert()` is content-only and does not accept paths directly.
+Use loader helpers for filesystem inputs:
+
+| Helper | Input | Output payload |
+|---|---|---|
+| `nb2wb.load_input_payload(path)` | `.ipynb`, `.md`, `.qmd` | notebook node (`.ipynb`) or text mapping (`.md`/`.qmd`) |
+| `nb2wb.load_notebook_payload(path)` | `.ipynb` | validated `NotebookNode` |
+| `nb2wb.load_markdown_payload(path)` | `.md` | `{"format": "md", "content": "..."}` |
+| `nb2wb.load_quarto_payload(path)` | `.qmd` | `{"format": "qmd", "content": "..."}` |
+
+Use loader helpers whenever your source is a filesystem path.
+
+## Output Formats (Detailed)
+
+`nb2wb.convert()` always returns a single `str` containing an HTML document.
+Both modes include a `<!DOCTYPE html>` root and a `<body>` containing:
+
+- a content container: `<div id="content">...</div>`
+- converted notebook cell output (markdown/code/output fragments)
+
+### Normal Mode (`raw_mode=False`)
+
+Normal mode includes the full preview wrapper:
+
+- `<head>...</head>` with CSS and metadata
+- toolbar/header with copy controls
+- JavaScript block for copy interactions
+
+Target-specific image wrapping:
+
+- `substack`: images are embedded as data URIs where needed
+- `medium` / `x`: image tags are wrapped in:
+  - `<div class="image-container">`
+  - `<button class="copy-image-btn">Copy image</button>`
+
+Typical structure:
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>...</head>
+<body>
+  <div id="toolbar">...</div>
+  <div id="content">...</div>
+  <script>...</script>
+</body>
+</html>
+```
+
+### Raw Mode (`raw_mode=True`)
+
+Raw mode strips all preview chrome:
+
+- removes `<head>...</head>`
+- removes toolbar/header controls
+- removes all JavaScript (`<script>` blocks)
+
+Target-specific image behavior in raw mode:
+
+- `substack`: plain `<img ...>` tags with data URI embedding where needed
+- `medium` / `x`: plain `<img ...>` tags (no `.image-container`, no copy button)
+
+Typical structure:
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<body>
+  <div id="content">...</div>
+</body>
+</html>
+```
+
+## Output Contract for Automation
+
+Recommended stable assumptions for agent/tool integrations:
+
+- return type is always one HTML `str`
+- output includes `<!DOCTYPE html>` and an `<html ...>` root
+- converted article content is wrapped under `#content`
+- `raw_mode=False` includes `<head>`, toolbar controls, and a `<script>` block
+- `raw_mode=True` excludes `<head>`, toolbar controls, and all `<script>` blocks
+
+Details you should treat as unstable implementation details:
+
+- exact CSS content and variable names
+- exact toolbar message text
+- JavaScript function names/implementation
+- incidental wrapper class names outside explicitly documented mode-level behavior
 
 ## `config` Input Types
 
@@ -56,29 +182,6 @@ Use helpers when your source is on disk:
 - `dict` with same schema as `config.yaml`
 - `nb2wb.Config`
 - YAML path (`str` or `Path`)
-
-## Return Value
-
-Returns one string: full HTML document for the selected target.
-
-## Raw Mode
-
-Set `raw_mode=True` to emit a stripped-down HTML wrapper:
-
-- removes `<head>...</head>`
-- removes toolbar/header copy controls
-- removes all JavaScript (`<script>` blocks)
-- for `medium` and `x`, emits standard `<img ...>` tags (no `.image-container` wrappers)
-
-```python
-import nb2wb
-
-html = nb2wb.convert(
-    notebook_payload,
-    target="medium",
-    raw_mode=True,
-)
-```
 
 ## `supported_targets()`
 
@@ -103,7 +206,7 @@ html = nb2wb.convert(
 )
 ```
 
-## In-Memory Example (API payload)
+## In-Memory Notebook Example
 
 ```python
 import nb2wb
@@ -143,6 +246,18 @@ qmd_html = nb2wb.convert(
 md_html2 = nb2wb.convert(
     {"format": "md", "content": "One-line markdown without newline"},
     target="substack",
+)
+```
+
+## Raw Mode Example
+
+```python
+import nb2wb
+
+html = nb2wb.convert(
+    notebook_payload,
+    target="medium",
+    raw_mode=True,
 )
 ```
 

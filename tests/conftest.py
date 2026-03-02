@@ -104,14 +104,14 @@ def minimal_config():
             padding_x=10,
             padding_y=10,
             separator=10,
-            background="white",
+            background="#ffffff",
             border_radius=0,
         ),
         latex=LatexConfig(
             font_size=24,
             dpi=72,
-            color="black",
-            background="white",
+            color="#000000",
+            background="#ffffff",
             padding=10,
             image_width=800,
             try_usetex=False,  # Use mathtext for speed
@@ -290,7 +290,7 @@ def mock_latex_available(monkeypatch):
             try:
                 png_idx = cmd.index("-o") + 1
                 png_path = Path(cmd[png_idx])
-                # Create minimal 1x1 white PNG
+                # Create minimal 1x1 #ffffff PNG
                 png_data = (
                     b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01'
                     b'\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89'

@@ -30,7 +30,7 @@ from nb2wb.platforms.x import XArticlesBuilder
 # Helpers
 # ---------------------------------------------------------------------------
 
-# Minimal valid 1x1 white PNG
+# Minimal valid 1x1 #ffffff PNG
 _TINY_PNG = (
     b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01"
     b"\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89"

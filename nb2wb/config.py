@@ -23,7 +23,7 @@ class CodeConfig:
     background: str = (
         ""  # outer padding background colour; empty = use theme background
     )
-    border_radius: int = 14  # corner radius in pixels (0 = square corners)
+    border_radius: int = 0  # corner radius in pixels (0 = square corners)
 
 
 @dataclass
@@ -32,8 +32,8 @@ class LatexConfig:
 
     font_size: int = 48
     dpi: int = 150
-    color: str = "black"
-    background: str = "white"
+    color: str = "#000000"
+    background: str = "#ffffff"
     padding: int = 68  # vertical padding in pixels around the expression
     image_width: int = 1920  # canvas width in pixels for rendered images
     try_usetex: bool = True  # try full LaTeX installation first
@@ -50,7 +50,7 @@ class TableConfig:
     font: str = "DejaVu Sans"
     color: str = "#1f2937"
     header_color: str = "#0f172a"
-    background: str = "white"
+    background: str = "#ffffff"
     header_background: str = "#eef2ff"
     stripe_background: str = "#f8fafc"
     border_color: str = "#dbe4ee"
@@ -58,7 +58,7 @@ class TableConfig:
     cell_padding_x: int = 24
     cell_padding_y: int = 14
     outer_padding: int = 20  # spacing around table card inside the output image
-    canvas_background: str = "white"
+    canvas_background: str = "#ffffff"
     zebra_striping: bool = True
     shadow: bool = True
     shadow_color: str = "#0f172a"
@@ -89,7 +89,7 @@ class Config:
     """Top-level configuration aggregating render and safety settings."""
 
     image_width: int = 1920  # default canvas width for all rendered images
-    border_radius: int = 14  # corner radius in pixels for all rendered images
+    border_radius: int = 0  # corner radius in pixels for all rendered images
     code: CodeConfig = field(default_factory=CodeConfig)
     latex: LatexConfig = field(default_factory=LatexConfig)
     table: TableConfig = field(default_factory=TableConfig)

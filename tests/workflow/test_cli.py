@@ -4,6 +4,7 @@ Workflow tests for the CLI interface.
 Tests the complete command-line interface including argument parsing,
 file handling, and output generation.
 """
+import json
 import pytest
 import nbformat
 from pathlib import Path
@@ -595,3 +596,67 @@ class TestCLIOutputValidation:
         # Images should be base64 encoded
         if "img" in html.lower():
             assert "data:image" in html or "base64" in html
+
+
+class TestCLILegacyNotebookCompatibility:
+    """Regression tests for old or mislabeled notebook payloads."""
+
+    def test_cli_converts_v3_notebook_json(self, tmp_path):
+        notebook = {
+            "nbformat": 3,
+            "nbformat_minor": 0,
+            "metadata": {"name": "legacy"},
+            "worksheets": [
+                {
+                    "cells": [
+                        {
+                            "cell_type": "markdown",
+                            "metadata": {},
+                            "source": "# Legacy CLI V3",
+                        }
+                    ],
+                    "metadata": {},
+                }
+            ],
+        }
+        notebook_path = tmp_path / "legacy.ipynb"
+        notebook_path.write_text(json.dumps(notebook), encoding="utf-8")
+        output_path = tmp_path / "legacy.html"
+
+        sys.argv = ["nb2wb", str(notebook_path), "-o", str(output_path)]
+        try:
+            main()
+        except SystemExit:
+            pass
+
+        assert output_path.exists()
+        html = output_path.read_text(encoding="utf-8")
+        assert "Legacy CLI V3" in html
+
+    def test_cli_regression_v44_payload_with_cell_ids(self, tmp_path):
+        notebook = {
+            "nbformat": 4,
+            "nbformat_minor": 4,
+            "metadata": {},
+            "cells": [
+                {
+                    "cell_type": "markdown",
+                    "metadata": {},
+                    "id": "legacyid1",
+                    "source": "# Legacy Cell ID",
+                }
+            ],
+        }
+        notebook_path = tmp_path / "legacy-id.ipynb"
+        notebook_path.write_text(json.dumps(notebook), encoding="utf-8")
+        output_path = tmp_path / "legacy-id.html"
+
+        sys.argv = ["nb2wb", str(notebook_path), "-o", str(output_path)]
+        try:
+            main()
+        except SystemExit:
+            pass
+
+        assert output_path.exists()
+        html = output_path.read_text(encoding="utf-8")
+        assert "Legacy Cell ID" in html

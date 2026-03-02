@@ -10,7 +10,7 @@ Pass config through either:
 ```yaml
 # Global defaults
 image_width: 1920
-border_radius: 14
+border_radius: 0
 
 code:
   font_size: 48
@@ -22,13 +22,13 @@ code:
   padding_y: 100
   separator: 0
   background: ""
-  border_radius: 14
+  border_radius: 0
 
 latex:
   font_size: 48
   dpi: 150
-  color: "black"
-  background: "white"
+  color: "#000000"
+  background: "#ffffff"
   padding: 68
   image_width: 1920
   try_usetex: true
@@ -41,7 +41,7 @@ table:
   font: "DejaVu Sans"
   color: "#1f2937"
   header_color: "#0f172a"
-  background: "white"
+  background: "#ffffff"
   header_background: "#eef2ff"
   stripe_background: "#f8fafc"
   border_color: "#dbe4ee"
@@ -49,7 +49,7 @@ table:
   cell_padding_x: 24
   cell_padding_y: 14
   outer_padding: 20
-  canvas_background: "white"
+  canvas_background: "#ffffff"
   zebra_striping: true
   shadow: true
   shadow_color: "#0f172a"
@@ -73,6 +73,12 @@ safety:
 
 - `code.image_width`, `latex.image_width`, and `table.image_width` inherit top-level `image_width` unless overridden.
 - `code.border_radius`, `latex.border_radius`, and `table.border_radius` inherit top-level `border_radius` unless overridden.
+- Color fields use hex format (for example `#ffffff`, `#000000`, `#ff0000`).
+
+## Default Behavior
+
+- If top-level `border_radius` is omitted, it defaults to `0`.
+- Sub-config border radii inherit that value unless explicitly set.
 
 ## Platform Defaults
 
