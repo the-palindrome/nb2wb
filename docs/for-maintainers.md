@@ -4,7 +4,7 @@ This page is a technical overview of the project for maintainers and coding agen
 
 ## Purpose and Scope
 
-`nb2wb` converts notebook-style inputs into platform-ready HTML for Substack, Medium, and X.
+`nb2wb` converts notebook-style inputs into platform-ready HTML for target profiles (`substack`, `medium`, `x`, `linkedin`, `devto`, `hashnode`, `ghost`, `wordpress`).
 
 Current architectural direction:
 
@@ -44,7 +44,7 @@ Current architectural direction:
 ### API path
 
 1. `nb2wb.api.convert(...)`
-2. `_resolve_config(...)` + `apply_platform_defaults(...)`
+2. `_resolve_config(...)` + `resolve_target_options(...)` + `apply_target_profile_defaults(...)`
 3. payload normalization (`_coerce_api_payload`)
 4. `Converter.convert_notebook(...)`
 5. platform wrapper `builder.build_page(...)`
@@ -86,7 +86,7 @@ Current architectural direction:
 |---|---|
 | `nb2wb/api.py` | Public programmatic interface, payload coercion, config resolution, loader helpers |
 | `nb2wb/cli.py` | CLI argument parsing, path validation, file I/O, optional `--serve` flow |
-| `nb2wb/config.py` | Dataclass config schema, YAML/dict loading, platform defaults |
+| `nb2wb/config.py` | Dataclass config schema, YAML/dict loading, target profile defaults |
 | `nb2wb/converter.py` | Core in-memory notebook-to-fragment conversion |
 | `nb2wb/md_reader.py` | Markdown text/file to notebook model |
 | `nb2wb/qmd_reader.py` | Quarto text/file to notebook model |
@@ -98,9 +98,8 @@ Current architectural direction:
 | `nb2wb/renderers/table_renderer.py` | HTML table-to-image rendering |
 | `nb2wb/renderers/_image_utils.py` | Shared image post-processing helpers |
 | `nb2wb/platforms/base.py` | Shared platform wrapper helpers + safe image conversion |
-| `nb2wb/platforms/substack.py` | Substack page wrapper |
-| `nb2wb/platforms/medium.py` | Medium page wrapper |
-| `nb2wb/platforms/x.py` | X Articles page wrapper |
+| `nb2wb/platforms/profiles.py` | Declarative target profiles (theme/image/render defaults) |
+| `nb2wb/platforms/builder.py` | Generic profile-driven page builder + target options |
 | `tests/unit/` | Fast unit tests per module and security components |
 | `tests/integration/` | Cross-module conversion behavior tests |
 | `tests/workflow/` | CLI behavior and end-to-end workflow tests |

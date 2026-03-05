@@ -206,6 +206,28 @@ class TestCLIPlatformSelection:
         html = output_path.read_text()
         assert len(html) > 0
 
+    def test_cli_linkedin_platform(self, tmp_path):
+        """CLI generates LinkedIn-formatted HTML."""
+        nb = nbformat.v4.new_notebook()
+        nb.cells = [nbformat.v4.new_markdown_cell("# LinkedIn Test")]
+
+        notebook_path = tmp_path / "test.ipynb"
+        with open(notebook_path, "w") as f:
+            nbformat.write(nb, f)
+
+        output_path = tmp_path / "linkedin.html"
+
+        sys.argv = ["nb2wb", str(notebook_path), "-t", "linkedin", "-o", str(output_path)]
+
+        try:
+            main()
+        except SystemExit:
+            pass
+
+        assert output_path.exists()
+        html = output_path.read_text()
+        assert len(html) > 0
+
 
 class TestCLIErrorHandling:
     """Test CLI error handling."""
@@ -452,12 +474,22 @@ class TestCLIServerSafeMode:
 
         seen: dict[str, object] = {}
 
-        def fake_convert(notebook, *, config, target, execute, working_dir, raw_mode):
+        def fake_convert(
+            notebook,
+            *,
+            config,
+            target,
+            target_options,
+            execute,
+            working_dir,
+            raw_mode,
+        ):
             from nb2wb.config import load_config
 
             resolved = load_config(config)
             seen["api_called"] = True
             seen["target"] = target
+            seen["target_options"] = target_options
             seen["payload_type"] = type(notebook).__name__
             seen["working_dir"] = str(working_dir)
             seen["raw_mode"] = raw_mode
@@ -478,6 +510,7 @@ class TestCLIServerSafeMode:
 
         assert seen["api_called"] is True
         assert seen["target"] == "substack"
+        assert seen["target_options"] is None
         assert seen["payload_type"] == "NotebookNode"
         assert seen["working_dir"] == str(notebook_path.parent)
         assert seen["raw_mode"] is False
@@ -492,7 +525,17 @@ class TestCLIServerSafeMode:
 
         seen: dict[str, object] = {}
 
-        def fake_convert(notebook, *, config, target, execute, working_dir, raw_mode):
+        def fake_convert(
+            notebook,
+            *,
+            config,
+            target,
+            target_options,
+            execute,
+            working_dir,
+            raw_mode,
+        ):
+            seen["target_options"] = target_options
             seen["raw_mode"] = raw_mode
             return "<html><body><p>ok</p></body></html>"
 
@@ -504,7 +547,65 @@ class TestCLIServerSafeMode:
         except SystemExit:
             pass
 
+        assert seen["target_options"] is None
         assert seen["raw_mode"] is True
+
+    def test_cli_forwards_target_options_to_api(self, tmp_path, monkeypatch):
+        nb = nbformat.v4.new_notebook()
+        nb.cells = [nbformat.v4.new_markdown_cell("# Options")]
+        notebook_path = tmp_path / "opts.ipynb"
+        with open(notebook_path, "w") as f:
+            nbformat.write(nb, f)
+
+        seen: dict[str, object] = {}
+
+        def fake_convert(
+            notebook,
+            *,
+            config,
+            target,
+            target_options,
+            execute,
+            working_dir,
+            raw_mode,
+        ):
+            seen["target"] = target
+            seen["target_options"] = target_options
+            return "<html><body><p>ok</p></body></html>"
+
+        monkeypatch.setattr("nb2wb.cli.convert_notebook", fake_convert)
+
+        sys.argv = [
+            "nb2wb",
+            str(notebook_path),
+            "-t",
+            "devto",
+            "--image-strategy",
+            "copyable",
+            "--raw-image-strategy",
+            "preserve",
+            "--copy-script",
+            "copyable",
+            "--article-width",
+            "777",
+            "--table-mode",
+            "native",
+            "-o",
+            str(tmp_path / "out.html"),
+        ]
+        try:
+            main()
+        except SystemExit:
+            pass
+
+        assert seen["target"] == "devto"
+        assert seen["target_options"] == {
+            "image_strategy": "copyable",
+            "raw_image_strategy": "preserve",
+            "copy_script_mode": "copyable",
+            "article_width_px": 777,
+            "table_mode": "native",
+        }
 
 
 class TestCLIInputSanitization:

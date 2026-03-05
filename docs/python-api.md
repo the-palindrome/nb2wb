@@ -11,6 +11,7 @@ html = nb2wb.convert(
     notebook,
     config=None,
     target="substack",
+    target_options=None,
     execute=False,
     working_dir=None,
     raw_mode=False,
@@ -23,7 +24,8 @@ html = nb2wb.convert(
 |---|---|---|
 | `notebook` | `str \| Mapping \| nbformat.NotebookNode` | In-memory source payload (never a path object) |
 | `config` | `None \| dict-like \| Config \| str \| Path` | Config object, mapping, or YAML path |
-| `target` | `str` | Platform wrapper: `substack`, `medium`, `x` |
+| `target` | `str` | Platform wrapper: `substack`, `medium`, `x`, `linkedin`, `devto`, `hashnode`, `ghost`, `wordpress` |
+| `target_options` | `Mapping \| None` | Optional profile feature overrides (`image_strategy`, `raw_image_strategy`, `copy_script_mode`, `article_width_px`, `table_mode`, `toolbar_message`, `theme_overrides`) |
 | `execute` | `bool` | Execute code cells before rendering |
 | `working_dir` | `str \| Path \| None` | Execution working directory when `execute=True` |
 | `raw_mode` | `bool` | Strip wrapper chrome (`<head>`, toolbar, JS) |
@@ -112,12 +114,10 @@ Normal mode includes the full preview wrapper:
 - toolbar/header with copy controls
 - JavaScript block for copy interactions
 
-Target-specific image wrapping:
+Target-specific image wrapping (defaults):
 
-- `substack`: images are embedded as data URIs where needed
-- `medium` / `x`: image tags are wrapped in:
-  - `<div class="image-container">`
-  - `<button class="copy-image-btn">Copy image</button>`
+- `copyable`: `medium`, `x`, `linkedin` (image container + copy button)
+- `embed`: `substack`, `devto`, `hashnode`, `ghost`, `wordpress`
 
 Typical structure:
 
@@ -141,10 +141,8 @@ Raw mode strips all preview chrome:
 - removes toolbar/header controls
 - removes all JavaScript (`<script>` blocks)
 
-Target-specific image behavior in raw mode:
-
-- `substack`: plain `<img ...>` tags with data URI embedding where needed
-- `medium` / `x`: plain `<img ...>` tags (no `.image-container`, no copy button)
+Target-specific image behavior in raw mode follows each target profile's
+`raw_image_strategy` (default: embed for all built-in targets).
 
 Typical structure:
 
@@ -189,7 +187,25 @@ Details you should treat as unstable implementation details:
 import nb2wb
 
 print(nb2wb.supported_targets())
-# ['substack', 'x', 'medium']
+# ['substack', 'medium', 'x', 'linkedin', 'devto', 'hashnode', 'ghost', 'wordpress']
+```
+
+## `target_options` Example
+
+```python
+import nb2wb
+
+html = nb2wb.convert(
+    notebook_payload,
+    target="devto",
+    target_options={
+        "image_strategy": "copyable",
+        "raw_image_strategy": "preserve",
+        "copy_script_mode": "copyable",
+        "article_width_px": 780,
+        "table_mode": "native",
+    },
+)
 ```
 
 ## Path-Based Example

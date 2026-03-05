@@ -12,6 +12,8 @@ from nb2wb.config import (
     LatexConfig,
     TableConfig,
     SafetyConfig,
+    TargetPageOptions,
+    apply_target_profile_defaults,
     load_config,
     load_config_from_dict,
     apply_platform_defaults,
@@ -168,6 +170,27 @@ safety:
         assert config.code.font_size == 30
         assert config.latex.dpi == 200
         assert config.safety.max_cells == 123
+
+    def test_load_config_from_dict_target_options(self):
+        """target_options mapping is parsed and normalized."""
+        config = load_config_from_dict(
+            {
+                "target_options": {
+                    "image_strategy": "copyable",
+                    "raw_image_strategy": "preserve",
+                    "copy_script_mode": "none",
+                    "article_width_px": 720,
+                    "table_mode": "native",
+                }
+            }
+        )
+        assert config.target_options == TargetPageOptions(
+            image_strategy="copyable",
+            raw_image_strategy="preserve",
+            copy_script_mode="none",
+            article_width_px=720,
+            table_mode="native",
+        )
 
     def test_load_config_from_dict_rejects_non_mapping(self):
         """Non-dict config input raises a TypeError."""
@@ -487,3 +510,21 @@ code:
         # Custom settings preserved
         assert result.border_radius == 20
         assert result.code.theme == "github"
+
+    def test_linkedin_platform_smaller_dimensions(self):
+        """LinkedIn profile applies narrow rendering defaults."""
+        config = Config()
+        result = apply_target_profile_defaults(config, "linkedin")
+        assert result.image_width == 760
+        assert result.code.font_size == 42
+        assert result.table.mode == "image"
+
+    def test_table_mode_option_overrides_profile_defaults(self):
+        """table_mode in target options has highest precedence."""
+        config = Config()
+        result = apply_target_profile_defaults(
+            config,
+            "medium",
+            target_options={"table_mode": "native"},
+        )
+        assert result.table.mode == "native"

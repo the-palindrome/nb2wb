@@ -2,7 +2,7 @@
 
 **Write in notebooks. Publish anywhere.**
 
-`nb2wb` converts Jupyter Notebooks and other notebook-style content into publishable HTML for Substack, Medium, and X Articles.
+`nb2wb` converts Jupyter Notebooks and other notebook-style content into publishable HTML for Substack, Medium, X Articles, LinkedIn, Dev.to, Hashnode, Ghost, and WordPress.
 
 Supported inputs:
 
@@ -23,7 +23,7 @@ Supported inputs:
 3. **Render markdown, math, code, and outputs** into platform-safe HTML fragments.
 4. **Convert display math, code, and (optionally) tables to images** for high-fidelity publishing.
 5. **Sanitize rich HTML/SVG output** and enforce server-side safety limits.
-6. **Wrap output for your target platform** (`substack`, `medium`, `x`).
+6. **Wrap output for your target platform** (`substack`, `medium`, `x`, `linkedin`, `devto`, `hashnode`, `ghost`, `wordpress`).
 
 ## Installation
 
@@ -45,11 +45,14 @@ pip install -e ".[dev]"
 nb2wb notebook.ipynb
 nb2wb notebook.ipynb -t medium
 nb2wb notebook.ipynb -t x
+nb2wb notebook.ipynb -t linkedin
+nb2wb notebook.ipynb -t devto
 nb2wb notebook.ipynb -o article.html
 nb2wb notebook.ipynb --open
 nb2wb notebook.ipynb --serve
 nb2wb notebook.ipynb --raw -o article_raw.html
 nb2wb report.qmd --execute
+nb2wb report.ipynb -t ghost --image-strategy embed --article-width 900
 ```
 
 ## Quick Start (Python API)
@@ -77,6 +80,17 @@ html = nb2wb.convert(
     notebook_payload,
     target="medium",
     raw_mode=True,
+)
+
+# Override target features at call-time
+html = nb2wb.convert(
+    notebook_payload,
+    target="devto",
+    target_options={
+        "image_strategy": "copyable",
+        "copy_script_mode": "copyable",
+        "article_width_px": 780,
+    },
 )
 ```
 

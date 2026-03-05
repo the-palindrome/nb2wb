@@ -3,31 +3,34 @@ Platform-specific HTML builders for different publishing platforms.
 """
 from __future__ import annotations
 
+from typing import Mapping
+
 from .base import MIME_TO_EXT, PlatformBuilder
-from .substack import SubstackBuilder
-from .x import XArticlesBuilder
-from .medium import MediumBuilder
+from .builder import ProfiledBuilder, TargetPageOptions, normalize_page_options
+from .profiles import get_target_profile, list_target_keys
 
 
-_BUILDERS: dict[str, type[PlatformBuilder]] = {
-    "substack": SubstackBuilder,
-    "x": XArticlesBuilder,
-    "medium": MediumBuilder,
-}
-
-
-def get_builder(platform: str) -> PlatformBuilder:
+def get_builder(
+    platform: str,
+    *,
+    target_options: Mapping[str, object] | TargetPageOptions | None = None,
+) -> PlatformBuilder:
     """Get the appropriate HTML builder for the specified platform."""
-    if platform not in _BUILDERS:
-        raise ValueError(
-            f"Unknown platform: {platform}. Supported: {list(_BUILDERS.keys())}"
-        )
-    return _BUILDERS[platform]()
+    profile = get_target_profile(platform)
+    options = normalize_page_options(target_options)
+    return ProfiledBuilder(profile, options=options)
 
 
 def list_platforms() -> list[str]:
     """Return list of supported platform names."""
-    return list(_BUILDERS.keys())
+    return list_target_keys()
 
 
-__all__ = ["MIME_TO_EXT", "PlatformBuilder", "get_builder", "list_platforms"]
+__all__ = [
+    "MIME_TO_EXT",
+    "PlatformBuilder",
+    "ProfiledBuilder",
+    "TargetPageOptions",
+    "get_builder",
+    "list_platforms",
+]

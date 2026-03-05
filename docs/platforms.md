@@ -1,12 +1,28 @@
 # Platforms
 
-`nb2wb` generates platform-targeted HTML wrappers.
+`nb2wb` generates target-profiled HTML wrappers.
 
 ## Supported Targets
 
 - `substack`
 - `medium`
 - `x`
+- `linkedin`
+- `devto`
+- `hashnode`
+- `ghost`
+- `wordpress`
+
+## Default Image Strategies
+
+- `copyable`: `medium`, `x`, `linkedin`
+- `embed`: `substack`, `devto`, `hashnode`, `ghost`, `wordpress`
+
+You can override these defaults via:
+
+- CLI: `--image-strategy`, `--raw-image-strategy`, `--copy-script`
+- API: `target_options={...}`
+- YAML: `target_options: ...`
 
 ## Raw Mode Across Targets
 
@@ -15,28 +31,17 @@ Use `--raw` (CLI) or `raw_mode=True` (Python API) to remove preview chrome from 
 - no `<head>` section
 - no toolbar/header copy controls
 - no JavaScript blocks
-- for `medium` and `x`, images are plain `<img ...>` tags without copy-button wrappers
+- image behavior still follows each target profile's `raw_image_strategy`
 
-## Substack
+## Target Notes
 
-- best fit for direct copy/paste with embedded data URI images
-- includes copy toolbar for article content in normal mode
-- markdown tables default to image fallback for reliable paste fidelity
+- `substack`: embed-first workflow with simple copy toolbar.
+- `medium`: copyable image wrappers in normal mode.
+- `x`: copyable image wrappers in normal mode, narrow article layout defaults.
+- `linkedin`: copyable image wrappers in normal mode.
+- `devto`, `hashnode`, `ghost`, `wordpress`: embed-first defaults and direct paste flow.
 
-## Medium
-
-- copy/paste-friendly wrapper in normal mode
-- per-image copy controls included in normal mode
-- medium editor behavior may still require per-image insertion depending on editor changes
-- markdown tables default to image fallback for reliable rendering
-
-## X Articles
-
-- similar workflow to Medium
-- includes copy controls for reliable transfer in normal mode
-- markdown tables default to image fallback for reliable rendering
-
-## `--serve` Mode for Medium/X
+## `--serve` Mode
 
 `--serve` rewrites embedded image data URIs to hosted image URLs via local static serving + ngrok.
 

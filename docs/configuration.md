@@ -67,6 +67,15 @@ safety:
   max_total_output_bytes: 26214400
   max_display_math_blocks: 500
   max_total_latex_chars: 1000000
+
+target_options:
+  image_strategy: null         # "embed" | "copyable" | "preserve"
+  raw_image_strategy: null     # "embed" | "copyable" | "preserve"
+  copy_script_mode: null       # "simple" | "copyable" | "none"
+  article_width_px: null       # positive integer
+  table_mode: null             # "native" | "image"
+  toolbar_message: null        # custom toolbar helper text
+  theme_overrides: {}          # CSS variable map for wrapper theme
 ```
 
 ## Inheritance Rules
@@ -82,13 +91,27 @@ safety:
 
 ## Platform Defaults
 
-When target is `medium` or `x`, platform defaults adjust canvas sizes and paddings for narrower layouts.
+Target profiles apply render defaults automatically for each supported target:
+
+- `substack`
+- `medium`
+- `x`
+- `linkedin`
+- `devto`
+- `hashnode`
+- `ghost`
+- `wordpress`
 
 Examples:
 
 - top-level `image_width`:
   - `700` for `medium`
   - `680` for `x`
+  - `760` for `linkedin`
+  - `860` for `devto`
+  - `840` for `hashnode`
+  - `900` for `ghost`
+  - `920` for `wordpress`
 - `code.font_size`: `42`
 - `code.image_width`: `1200`
 - `latex.font_size`: `35`
@@ -97,8 +120,8 @@ Examples:
 Table fallback defaults by platform:
 
 - `substack`: `table.mode: "image"`
-- `medium`: `table.mode: "image"` (+ smaller table font/padding defaults)
-- `x`: `table.mode: "image"` (+ smaller table font/padding defaults)
+- `medium` / `x` / `linkedin`: `table.mode: "image"` (+ narrow-layout table defaults)
+- `devto` / `hashnode` / `ghost` / `wordpress`: `table.mode: "image"` (+ medium-width defaults)
 
 ## API Dict Example
 

@@ -31,8 +31,13 @@ After cell conversion, content is wrapped for one of:
 - `substack`
 - `medium`
 - `x`
+- `linkedin`
+- `devto`
+- `hashnode`
+- `ghost`
+- `wordpress`
 
-Each wrapper provides copy/paste-friendly layout and controls (unless raw mode is enabled).
+Each wrapper provides copy/paste-friendly layout and controls (unless raw mode is enabled), with profile-driven image strategies (`embed` or `copyable`).
 
 ## 4. Equation Labels and References
 

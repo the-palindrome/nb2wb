@@ -40,7 +40,7 @@ Adjust `safety` config values for your workload profile, for example:
 
 Only raise limits as needed.
 
-## Medium/X paste issues
+## Medium/X/LinkedIn paste issues
 
 If embedded base64 images are stripped by editors:
 

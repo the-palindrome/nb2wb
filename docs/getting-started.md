@@ -27,9 +27,12 @@ Common variants:
 ```bash
 nb2wb notebook.ipynb -t medium
 nb2wb notebook.ipynb -t x
+nb2wb notebook.ipynb -t linkedin
+nb2wb notebook.ipynb -t devto
 nb2wb notebook.ipynb -o article.html
 nb2wb notebook.ipynb --open
 nb2wb notebook.ipynb --raw -o article_raw.html
+nb2wb notebook.ipynb -t ghost --image-strategy embed --article-width 900
 ```
 
 ## First Conversion (Python API)
@@ -64,7 +67,7 @@ html = nb2wb.convert(notebook_payload_dict, target="medium", raw_mode=True)
 
 In raw mode, output omits `<head>`, toolbar/header controls, and JavaScript.
 
-## Local Serve Mode (for Medium/X workflows)
+## Local Serve Mode (for copyable-image workflows)
 
 ```bash
 nb2wb notebook.ipynb --serve

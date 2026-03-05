@@ -11,7 +11,13 @@ from typing import Any
 import nbformat
 from nbformat.v4.convert import upgrade_output as _upgrade_v4_output
 
-from .config import Config, apply_platform_defaults, load_config, load_config_from_dict
+from .config import (
+    Config,
+    apply_target_profile_defaults,
+    load_config,
+    load_config_from_dict,
+    resolve_target_options,
+)
 from .converter import Converter
 from .md_reader import read_md_text
 from .platforms import get_builder, list_platforms
@@ -41,6 +47,7 @@ def convert(
     *,
     config: Config | Mapping[str, Any] | str | Path | None = None,
     target: str = "substack",
+    target_options: Mapping[str, Any] | None = None,
     execute: bool = False,
     working_dir: str | Path | None = None,
     raw_mode: bool = False,
@@ -58,7 +65,10 @@ def convert(
             - ``Config`` instance
             - dict-like mapping using the same schema as ``config.yaml``
             - path to a YAML config file
-        target: Platform target name (``substack``, ``medium``, ``x``).
+        target: Platform target name (``substack``, ``medium``, ``x``,
+            ``linkedin``, ``devto``, ``hashnode``, ``ghost``, ``wordpress``).
+        target_options: Optional per-target feature overrides (image strategy,
+            copy script mode, table mode, article width, etc.).
         execute: Whether to execute code cells before rendering.
         working_dir: Execution working directory for in-memory payloads.
             Defaults to current working directory.
@@ -68,8 +78,16 @@ def convert(
         Full HTML page ready for the selected target.
     """
     resolved_config = _resolve_config(config)
-    resolved_config = apply_platform_defaults(resolved_config, target)
-    builder = get_builder(target)
+    resolved_target_options = resolve_target_options(
+        resolved_config.target_options,
+        target_options,
+    )
+    resolved_config = apply_target_profile_defaults(
+        resolved_config,
+        target,
+        target_options=resolved_target_options,
+    )
+    builder = get_builder(target, target_options=resolved_target_options)
     converter = Converter(resolved_config, execute=execute)
 
     notebook_node = _coerce_api_payload(notebook)

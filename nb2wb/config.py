@@ -7,6 +7,13 @@ from pathlib import Path
 from typing import Any
 from typing import Optional
 
+from .platforms.builder import (
+    TargetPageOptions,
+    merge_page_options,
+    normalize_page_options,
+)
+from .platforms.profiles import get_target_profile
+
 
 @dataclass
 class CodeConfig:
@@ -94,6 +101,7 @@ class Config:
     latex: LatexConfig = field(default_factory=LatexConfig)
     table: TableConfig = field(default_factory=TableConfig)
     safety: SafetyConfig = field(default_factory=SafetyConfig)
+    target_options: TargetPageOptions = field(default_factory=TargetPageOptions)
 
 
 def load_config_from_dict(data: Mapping[str, Any] | None) -> Config:
@@ -151,6 +159,7 @@ def _build_config_from_mapping(data: dict[str, Any]) -> Config:
         for k, v in data.get("safety", {}).items()
         if k in SafetyConfig.__dataclass_fields__
     }
+    target_options = normalize_page_options(data.get("target_options"))
 
     # Sub-configs inherit top-level image_width / border_radius unless overridden
     code_fields.setdefault("image_width", top_width)
@@ -170,81 +179,42 @@ def _build_config_from_mapping(data: dict[str, Any]) -> Config:
         latex=LatexConfig(**latex_fields),
         table=TableConfig(**table_fields),
         safety=SafetyConfig(**safety_fields),
+        target_options=target_options,
     )
 
 
-# Platform-specific default overrides.  Only the fields listed here are
-# changed; everything else is inherited from the user's config.
-_PLATFORM_DEFAULTS: dict[str, dict] = {
-    "substack": {
-        "table": {
-            "mode": "image",
-            "border_radius": 12,
-            "outer_padding": 20,
-        },
-    },
-    "x": {
-        "image_width": 680,
-        "code": {
-            "font_size": 42,
-            "image_width": 1200,
-            "padding_x": 30,
-            "padding_y": 30,
-            "separator": 0,
-        },
-        "latex": {"font_size": 35, "padding": 50, "image_width": 1200},
-        "table": {
-            "mode": "image",
-            "font_size": 30,
-            "image_width": 1200,
-            "cell_padding_x": 16,
-            "cell_padding_y": 10,
-            "outer_padding": 14,
-            "border_radius": 10,
-            "shadow_alpha": 20,
-            "shadow_blur": 14,
-            "shadow_offset_y": 6,
-        },
-    },
-    "medium": {
-        "image_width": 700,
-        "code": {
-            "font_size": 42,
-            "image_width": 1200,
-            "padding_x": 30,
-            "padding_y": 30,
-            "separator": 0,
-        },
-        "latex": {"font_size": 35, "padding": 50, "image_width": 1200},
-        "table": {
-            "mode": "image",
-            "font_size": 30,
-            "image_width": 1200,
-            "cell_padding_x": 16,
-            "cell_padding_y": 10,
-            "outer_padding": 16,
-            "border_radius": 10,
-            "shadow_alpha": 20,
-            "shadow_blur": 14,
-            "shadow_offset_y": 6,
-        },
-    },
-}
+def resolve_target_options(
+    config_target_options: TargetPageOptions | Mapping[str, Any] | None,
+    runtime_target_options: TargetPageOptions | Mapping[str, Any] | None,
+) -> TargetPageOptions:
+    """Merge config and runtime target options with runtime precedence."""
+    base = normalize_page_options(config_target_options)
+    override = normalize_page_options(runtime_target_options)
+    return merge_page_options(base, override)
 
 
-def apply_platform_defaults(config: Config, platform: str) -> Config:
+def apply_target_profile_defaults(
+    config: Config,
+    platform: str,
+    *,
+    target_options: TargetPageOptions | Mapping[str, Any] | None = None,
+) -> Config:
     """
-    Apply platform-specific default adjustments to config.
+    Apply target-profile render defaults to config.
 
-    Returns a new Config with platform-optimized settings.
+    Returns a new Config with target-optimized rendering settings.
     """
-    defaults = _PLATFORM_DEFAULTS.get(platform)
-    if defaults is None:
+    try:
+        defaults = get_target_profile(platform).render_defaults
+    except ValueError:
         return config
 
+    options = normalize_page_options(target_options)
     code_overrides = defaults.get("code", {})
     latex_overrides = defaults.get("latex", {})
     table_overrides = defaults.get("table", {})
+    if options.table_mode is not None:
+        table_overrides = {**table_overrides, "mode": options.table_mode}
 
     # Build CodeConfig: start from current config, override with platform defaults
     code_fields = {f: getattr(config.code, f) for f in CodeConfig.__dataclass_fields__}
@@ -267,4 +237,10 @@ def apply_platform_defaults(config: Config, platform: str) -> Config:
         latex=LatexConfig(**latex_fields),
         table=TableConfig(**table_fields),
         safety=config.safety,
+        target_options=resolve_target_options(config.target_options, options),
     )
+
+
+def apply_platform_defaults(config: Config, platform: str) -> Config:
+    """Backward-compatible alias for profile-derived defaults."""
+    return apply_target_profile_defaults(config, platform)
