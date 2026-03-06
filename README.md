@@ -2,7 +2,7 @@
 
 **Write in notebooks. Publish anywhere.**
 
-`nb2wb` converts Jupyter Notebooks and other notebook-style content into publishable HTML for Substack, Medium, X Articles, LinkedIn, Dev.to, Hashnode, Ghost, and WordPress.
+`nb2wb` converts Jupyter Notebooks and other notebook-style content into publishable HTML with a neutral default mode plus platform profiles for Substack, Medium, X Articles, LinkedIn, Dev.to, Hashnode, Ghost, and WordPress.
 
 Supported inputs:
 
@@ -23,7 +23,7 @@ Supported inputs:
 3. **Render markdown, math, code, and outputs** into platform-safe HTML fragments.
 4. **Convert display math, code, and (optionally) tables to images** for high-fidelity publishing.
 5. **Sanitize rich HTML/SVG output** and enforce server-side safety limits.
-6. **Wrap output for your target platform** (`substack`, `medium`, `x`, `linkedin`, `devto`, `hashnode`, `ghost`, `wordpress`).
+6. **Wrap output for your target platform** (`default`, `substack`, `medium`, `x`, `linkedin`, `devto`, `hashnode`, `ghost`, `wordpress`).
 
 ## Installation
 

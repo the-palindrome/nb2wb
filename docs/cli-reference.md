@@ -10,7 +10,7 @@ nb2wb <input.{ipynb|qmd|md}> [options]
 
 | Option | Description |
 |---|---|
-| `-t, --target {substack,medium,x,linkedin,devto,hashnode,ghost,wordpress}` | Target platform (`substack` default) |
+| `-t, --target {default,substack,medium,x,linkedin,devto,hashnode,ghost,wordpress}` | Target platform (`default` default mode) |
 | `-c, --config PATH` | Config YAML path |
 | `-o, --output PATH` | Output HTML path |
 | `--image-strategy {embed,copyable}` | Override normal-mode image behavior |

@@ -165,8 +165,8 @@ def main() -> None:
         "--target",
         type=str,
         choices=platforms,
-        default="substack",
-        help=f"Target platform (choices: {', '.join(platforms)}; default: substack)",
+        default="default",
+        help=f"Target platform (choices: {', '.join(platforms)}; default: default)",
     )
     parser.add_argument(
         "-o",
@@ -248,7 +248,10 @@ def main() -> None:
         print(f"Error: {exc}", file=sys.stderr)
         sys.exit(1)
 
-    print(f"Converting '{notebook_path}' for {args.target} …")
+    if args.target == "default":
+        print(f"Converting '{notebook_path}' using default mode …")
+    else:
+        print(f"Converting '{notebook_path}' for {args.target} …")
     try:
         payload = load_input_payload(notebook_path)
         target_options: dict[str, object] = {}

@@ -4,6 +4,7 @@
 
 ## Supported Targets
 
+- `default`
 - `substack`
 - `medium`
 - `x`
@@ -16,7 +17,7 @@
 ## Default Image Strategies
 
 - `copyable`: `medium`, `x`, `linkedin`
-- `embed`: `substack`, `devto`, `hashnode`, `ghost`, `wordpress`
+- `embed`: `default`, `substack`, `devto`, `hashnode`, `ghost`, `wordpress`
 
 You can override these defaults via:
 
@@ -35,6 +36,7 @@ Use `--raw` (CLI) or `raw_mode=True` (Python API) to remove preview chrome from 
 
 ## Target Notes
 
+- `default`: neutral preview mode (generic title/message, no platform-specific render defaults).
 - `substack`: embed-first workflow with simple copy toolbar.
 - `medium`: copyable image wrappers in normal mode.
 - `x`: copyable image wrappers in normal mode, narrow article layout defaults.

@@ -89,6 +89,24 @@ class TestCLIBasics:
         default_output = tmp_path / "test.html"
         assert default_output.exists()
 
+    def test_cli_default_target_uses_neutral_mode(self, tmp_path, capsys):
+        """CLI default target does not emit Substack-specific messaging."""
+        notebook_path = _write_notebook(
+            tmp_path / "default.ipynb",
+            [nbformat.v4.new_markdown_cell("# Default Mode")],
+        )
+        output_path = tmp_path / "default.html"
+
+        _run_cli(["nb2wb", str(notebook_path), "-o", str(output_path)])
+
+        captured = capsys.readouterr()
+        assert "using default mode" in captured.out
+        assert "for substack" not in captured.out.lower()
+
+        html = output_path.read_text()
+        assert "Paste into your destination editor." in html
+        assert "Substack draft" not in html
+
     def test_cli_with_config(self, tmp_path):
         """CLI accepts config file."""
         notebook_path = _write_notebook(
@@ -340,7 +358,7 @@ class TestCLIServerSafeMode:
         _run_cli(["nb2wb", str(notebook_path), "-o", str(tmp_path / "out.html")])
 
         assert seen["api_called"] is True
-        assert seen["target"] == "substack"
+        assert seen["target"] == "default"
         assert seen["target_options"] is None
         assert seen["payload_type"] == "NotebookNode"
         assert seen["working_dir"] == str(notebook_path.parent)

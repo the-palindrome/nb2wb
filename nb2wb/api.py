@@ -46,7 +46,7 @@ def convert(
     notebook: str | Mapping[str, Any] | nbformat.NotebookNode,
     *,
     config: Config | Mapping[str, Any] | str | Path | None = None,
-    target: str = "substack",
+    target: str = "default",
     target_options: Mapping[str, Any] | None = None,
     execute: bool = False,
     working_dir: str | Path | None = None,
@@ -65,8 +65,9 @@ def convert(
             - ``Config`` instance
             - dict-like mapping using the same schema as ``config.yaml``
             - path to a YAML config file
-        target: Platform target name (``substack``, ``medium``, ``x``,
-            ``linkedin``, ``devto``, ``hashnode``, ``ghost``, ``wordpress``).
+        target: Platform target name (``default``, ``substack``, ``medium``,
+            ``x``, ``linkedin``, ``devto``, ``hashnode``, ``ghost``,
+            ``wordpress``).
         target_options: Optional per-target feature overrides (image strategy,
             copy script mode, table mode, article width, etc.).
         execute: Whether to execute code cells before rendering.

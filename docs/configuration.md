@@ -94,6 +94,7 @@ target_options:
 
 Target profiles apply render defaults automatically for each supported target:
 
+- `default`
 - `substack`
 - `medium`
 - `x`
@@ -105,6 +106,7 @@ Target profiles apply render defaults automatically for each supported target:
 
 Examples:
 
+- `default`: no render overrides; uses base config values
 - top-level `image_width`:
   - `700` for `medium`
   - `680` for `x`

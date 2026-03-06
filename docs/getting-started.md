@@ -43,7 +43,6 @@ import nb2wb
 payload = nb2wb.load_input_payload("notebook.ipynb")
 html = nb2wb.convert(
     payload,
-    target="substack",
 )
 ```
 
@@ -54,7 +53,7 @@ In-memory notebook payload:
 ```python
 import nb2wb
 
-html = nb2wb.convert(notebook_payload_dict, target="substack")
+html = nb2wb.convert(notebook_payload_dict)
 ```
 
 Raw mode from API:

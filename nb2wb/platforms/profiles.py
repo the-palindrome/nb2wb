@@ -267,6 +267,15 @@ _NARROW_RENDER_DEFAULTS = {
 }
 
 TARGET_PROFILES: dict[str, TargetProfile] = {
+    "default": TargetProfile(
+        key="default",
+        name="Default",
+        title="nb2wb — Preview",
+        toolbar_message="Paste into your destination editor.",
+        image_strategy="embed",
+        raw_image_strategy="embed",
+        copy_script_mode="simple",
+    ),
     "substack": TargetProfile(
         key="substack",
         name="Substack",
@@ -396,4 +405,3 @@ TARGET_PROFILES: dict[str, TargetProfile] = {
         },
     ),
 }
-

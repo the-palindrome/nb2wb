@@ -10,7 +10,7 @@ import nb2wb
 html = nb2wb.convert(
     notebook,
     config=None,
-    target="substack",
+    target="default",
     target_options=None,
     execute=False,
     working_dir=None,
@@ -24,7 +24,7 @@ html = nb2wb.convert(
 |---|---|---|
 | `notebook` | `str \| Mapping \| nbformat.NotebookNode` | In-memory source payload (never a path object) |
 | `config` | `None \| dict-like \| Config \| str \| Path` | Config object, mapping, or YAML path |
-| `target` | `str` | Platform wrapper: `substack`, `medium`, `x`, `linkedin`, `devto`, `hashnode`, `ghost`, `wordpress` |
+| `target` | `str` | Target wrapper: `default`, `substack`, `medium`, `x`, `linkedin`, `devto`, `hashnode`, `ghost`, `wordpress` |
 | `target_options` | `Mapping \| None` | Optional profile feature overrides (`image_strategy`, `raw_image_strategy`, `copy_script_mode`, `article_width_px`, `table_mode`, `toolbar_message`, `theme_overrides`) |
 | `execute` | `bool` | Execute code cells before rendering |
 | `working_dir` | `str \| Path \| None` | Execution working directory when `execute=True` |
@@ -117,7 +117,7 @@ Normal mode includes the full preview wrapper:
 Target-specific image wrapping (defaults):
 
 - `copyable`: `medium`, `x`, `linkedin` (image container + copy button)
-- `embed`: `substack`, `devto`, `hashnode`, `ghost`, `wordpress`
+- `embed`: `default`, `substack`, `devto`, `hashnode`, `ghost`, `wordpress`
 
 Typical structure:
 
@@ -187,7 +187,7 @@ Details you should treat as unstable implementation details:
 import nb2wb
 
 print(nb2wb.supported_targets())
-# ['substack', 'medium', 'x', 'linkedin', 'devto', 'hashnode', 'ghost', 'wordpress']
+# ['default', 'substack', 'medium', 'x', 'linkedin', 'devto', 'hashnode', 'ghost', 'wordpress']
 ```
 
 ## `target_options` Example

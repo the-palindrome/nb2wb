@@ -28,6 +28,7 @@ All inputs are normalized into a notebook-like model and then rendered by the sa
 
 After cell conversion, content is wrapped for one of:
 
+- `default`
 - `substack`
 - `medium`
 - `x`

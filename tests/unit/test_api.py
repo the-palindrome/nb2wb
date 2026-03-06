@@ -17,6 +17,7 @@ class TestPublicApi:
 
     def test_supported_targets_include_new_platforms(self):
         assert nb2wb.supported_targets() == [
+            "default",
             "substack",
             "medium",
             "x",
@@ -302,6 +303,8 @@ class TestPublicApi:
         html = nb2wb.convert(nb, config={"latex": {"try_usetex": False}})
 
         assert "NotebookNode Input" in html
+        assert "Paste into your destination editor." in html
+        assert "Substack draft" not in html
 
     def test_convert_accepts_in_memory_markdown_string(self):
         markdown_text = "# In-memory MD\n\nBody from payload."

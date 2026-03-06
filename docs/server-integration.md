@@ -24,7 +24,7 @@ app = FastAPI()
 
 class RenderRequest(BaseModel):
     notebook: dict[str, Any]
-    target: str = "substack"
+    target: str = "default"
     execute: bool = False
     raw_mode: bool = False
     config: dict[str, Any] | None = None
@@ -54,7 +54,7 @@ Any HTTP client can send:
 ```json
 {
   "notebook": { "nbformat": 4, "nbformat_minor": 5, "metadata": {}, "cells": [] },
-  "target": "substack",
+  "target": "default",
   "execute": false,
   "raw_mode": false,
   "config": {

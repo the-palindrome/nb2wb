@@ -4,7 +4,7 @@ This page is a technical overview of the project for maintainers and coding agen
 
 ## Purpose and Scope
 
-`nb2wb` converts notebook-style inputs into platform-ready HTML for target profiles (`substack`, `medium`, `x`, `linkedin`, `devto`, `hashnode`, `ghost`, `wordpress`).
+`nb2wb` converts notebook-style inputs into platform-ready HTML for target profiles (`default`, `substack`, `medium`, `x`, `linkedin`, `devto`, `hashnode`, `ghost`, `wordpress`).
 
 Current architectural direction:
 
