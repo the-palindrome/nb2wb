@@ -33,6 +33,7 @@ latex:
   image_width: 1920
   try_usetex: true
   preamble: ""
+  cache_size: 256          # max LaTeX render cache entries (0 disables cache)
   border_radius: 0
 
 table:
@@ -122,6 +123,18 @@ Table fallback defaults by platform:
 - `substack`: `table.mode: "image"`
 - `medium` / `x` / `linkedin`: `table.mode: "image"` (+ narrow-layout table defaults)
 - `devto` / `hashnode` / `ghost` / `wordpress`: `table.mode: "image"` (+ medium-width defaults)
+
+## Fast Table Rendering (Opt-In)
+
+If runtime is more important than drop-shadow styling, disable table shadows:
+
+```yaml
+table:
+  mode: "image"
+  shadow: false
+```
+
+This keeps table images enabled while reducing render cost on table-heavy documents.
 
 ## API Dict Example
 

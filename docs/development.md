@@ -27,6 +27,20 @@ black nb2wb tests
 isort nb2wb tests
 ```
 
+## Runtime Benchmarks
+
+Use the lightweight benchmark scenarios to track runtime changes:
+
+```bash
+MPLCONFIGDIR=/tmp/matplotlib-cache python3 tests/perf/benchmark_runtime.py
+```
+
+This reports JSON timings for:
+
+- `code_heavy`
+- `markdown_tiny`
+- `math_repeated`
+
 ## Build Docs Locally
 
 Install docs dependencies:

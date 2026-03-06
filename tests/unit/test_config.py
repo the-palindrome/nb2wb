@@ -67,6 +67,7 @@ class TestConfigDefaults:
         assert latex.image_width == 1920
         assert latex.try_usetex is True
         assert latex.preamble == ""
+        assert latex.cache_size == 256
         assert latex.border_radius == 0
 
     def test_table_config_defaults(self):
@@ -165,13 +166,14 @@ safety:
             {
                 "image_width": 1200,
                 "code": {"font_size": 30},
-                "latex": {"dpi": 200},
+                "latex": {"dpi": 200, "cache_size": 12},
                 "safety": {"max_cells": 123},
             }
         )
         assert config.image_width == 1200
         assert config.code.font_size == 30
         assert config.latex.dpi == 200
+        assert config.latex.cache_size == 12
         assert config.safety.max_cells == 123
 
     def test_load_config_from_dict_target_options(self):

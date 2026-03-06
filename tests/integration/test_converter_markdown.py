@@ -204,6 +204,26 @@ class TestMarkdownCellProcessing:
 
         assert first_pos < second_pos < third_pos
 
+    def test_markdown_reference_state_does_not_leak_between_cells(self, minimal_config, tmp_path):
+        """Reference definitions from one cell must not affect later cells."""
+        nb = nbformat.v4.new_notebook()
+        nb.cells = [
+            nbformat.v4.new_markdown_cell(
+                "[ref]: https://example.com\n\n[ref]"
+            ),
+            nbformat.v4.new_markdown_cell("[ref]"),
+        ]
+
+        notebook_path = tmp_path / "test.ipynb"
+        with open(notebook_path, "w") as f:
+            nbformat.write(nb, f)
+
+        converter = Converter(minimal_config)
+        html = _convert_path(converter, notebook_path)
+
+        # The first cell contains one resolved reference link.
+        assert html.count('href="https://example.com"') == 1
+
     def test_markdown_extensions_applied(self, minimal_config, tmp_path):
         """Markdown extensions (tables, lists) work correctly."""
         nb = nbformat.v4.new_notebook()

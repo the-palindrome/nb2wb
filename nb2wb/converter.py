@@ -73,9 +73,11 @@ class Converter:
         _enforce_serialized_notebook_size(notebook, self.config.safety)
         nb = _execute_cells(notebook, cwd or Path.cwd()) if self.execute else notebook
         _enforce_notebook_limits(nb, self.config.safety)
+        self._markdown_parser = markdown.Markdown(extensions=_MD_EXTENSIONS)
         self._lang = _notebook_language(nb)
         self._latex_preamble = _collect_latex_preamble(nb.cells)
         self._eq_labels = _collect_equation_labels(nb.cells)
+        self._table_mode_image = str(self.config.table.mode).lower() == "image"
 
         parts: list[str] = []
         for cell in nb.cells:
@@ -140,8 +142,12 @@ class Converter:
         src = _restore_protected_spans(src, stash)
 
         # 3. Markdown → HTML
-        html = markdown.markdown(src, extensions=_MD_EXTENSIONS)
-        if str(self.config.table.mode).lower() == "image":
+        parser = getattr(self, "_markdown_parser", None)
+        if parser is None:
+            parser = markdown.Markdown(extensions=_MD_EXTENSIONS)
+            self._markdown_parser = parser
+        html = parser.reset().convert(src)
+        if getattr(self, "_table_mode_image", str(self.config.table.mode).lower() == "image"):
             html = render_tables_as_images(html, self.config.table)
         html = _sanitize_html_fragment(html, profile="html")
         return f'<div class="md-cell">{html}</div>\n'

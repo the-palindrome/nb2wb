@@ -37,7 +37,28 @@ def pytest_configure(config):
 
 @pytest.fixture(autouse=True)
 def reset_matplotlib():
-    """Reset matplotlib state between tests."""
+    """Reset matplotlib/cache state between tests."""
+    # Clear renderer caches so monkeypatch-based tests remain deterministic.
+    from nb2wb.renderers import code_renderer, latex_renderer, table_renderer
+
+    for name in ("_load_font", "_find_font", "_style_for_theme"):
+        fn = getattr(code_renderer, name, None)
+        if fn is not None and hasattr(fn, "cache_clear"):
+            fn.cache_clear()
+
+    for name in ("_load_font", "_candidate_fonts"):
+        fn = getattr(table_renderer, name, None)
+        if fn is not None and hasattr(fn, "cache_clear"):
+            fn.cache_clear()
+
+    for name in ("_matplotlib_module", "_matplotlib_colors", "_matplotlib_pyplot", "_tag_font"):
+        fn = getattr(latex_renderer, name, None)
+        if fn is not None and hasattr(fn, "cache_clear"):
+            fn.cache_clear()
+    clear_fn = getattr(latex_renderer, "_clear_render_cache", None)
+    if clear_fn is not None:
+        clear_fn()
+
     import matplotlib.pyplot as plt
     yield
     plt.close('all')

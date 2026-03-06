@@ -45,6 +45,7 @@ class LatexConfig:
     image_width: int = 1920  # canvas width in pixels for rendered images
     try_usetex: bool = True  # try full LaTeX installation first
     preamble: str = ""  # extra LaTeX preamble (appended after builtins)
+    cache_size: int = 256  # max cached LaTeX render entries (0 disables cache)
     border_radius: int = 0  # corner radius in pixels (0 = square corners)
 
 

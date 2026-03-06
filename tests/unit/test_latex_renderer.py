@@ -8,6 +8,7 @@ import pytest
 import base64
 import subprocess
 from pathlib import Path
+import nb2wb.renderers.latex_renderer as lr
 from nb2wb.renderers.latex_renderer import (
     extract_display_math,
     render_latex_block,
@@ -17,6 +18,7 @@ from nb2wb.renderers.latex_renderer import (
     _trim_and_pad,
     _draw_tag,
     _round_corners,
+    _clear_render_cache,
 )
 from nb2wb.config import LatexConfig
 from PIL import Image
@@ -310,6 +312,78 @@ class TestRenderLatexBlock:
         latex = r"\begin{bmatrix} 1 & 2 \\ 3 & 4 \end{bmatrix}"
         result = render_latex_block(latex, minimal_config.latex)
         assert result.startswith("data:image/png;base64,")
+
+
+class TestRenderCache:
+    """Tests for bounded in-memory LaTeX render cache behavior."""
+
+    def test_render_cache_hits_for_identical_inputs(self, minimal_config, monkeypatch):
+        """Repeated identical render calls should hit cache."""
+        minimal_config.latex.try_usetex = False
+        minimal_config.latex.cache_size = 32
+        _clear_render_cache()
+
+        calls = 0
+
+        def fake_render_mathtext(latex: str, config: LatexConfig, tag: int | None = None) -> str:
+            nonlocal calls
+            calls += 1
+            payload = f"{latex}|{tag}|{calls}".encode("utf-8")
+            return "data:image/png;base64," + base64.b64encode(payload).decode("ascii")
+
+        monkeypatch.setattr(lr, "_render_mathtext", fake_render_mathtext)
+
+        first = render_latex_block("x = 1", minimal_config.latex)
+        second = render_latex_block("x = 1", minimal_config.latex)
+
+        assert first == second
+        assert calls == 1
+
+    def test_render_cache_disabled_when_size_zero(self, minimal_config, monkeypatch):
+        """cache_size=0 disables cache lookups/stores."""
+        minimal_config.latex.try_usetex = False
+        minimal_config.latex.cache_size = 0
+        _clear_render_cache()
+
+        calls = 0
+
+        def fake_render_mathtext(latex: str, config: LatexConfig, tag: int | None = None) -> str:
+            nonlocal calls
+            calls += 1
+            payload = f"{latex}|{tag}|{calls}".encode("utf-8")
+            return "data:image/png;base64," + base64.b64encode(payload).decode("ascii")
+
+        monkeypatch.setattr(lr, "_render_mathtext", fake_render_mathtext)
+
+        first = render_latex_block("x = 1", minimal_config.latex)
+        second = render_latex_block("x = 1", minimal_config.latex)
+
+        assert first != second
+        assert calls == 2
+
+    def test_render_cache_key_includes_tag(self, minimal_config, monkeypatch):
+        """Different equation tags should not collide in cache."""
+        minimal_config.latex.try_usetex = False
+        minimal_config.latex.cache_size = 32
+        _clear_render_cache()
+
+        calls = 0
+
+        def fake_render_mathtext(latex: str, config: LatexConfig, tag: int | None = None) -> str:
+            nonlocal calls
+            calls += 1
+            payload = f"{latex}|{tag}|{calls}".encode("utf-8")
+            return "data:image/png;base64," + base64.b64encode(payload).decode("ascii")
+
+        monkeypatch.setattr(lr, "_render_mathtext", fake_render_mathtext)
+
+        first = render_latex_block("x = 1", minimal_config.latex, tag=1)
+        second = render_latex_block("x = 1", minimal_config.latex, tag=2)
+        third = render_latex_block("x = 1", minimal_config.latex, tag=1)
+
+        assert first != second
+        assert first == third
+        assert calls == 2
 
 
 class TestUseTexRendering:
