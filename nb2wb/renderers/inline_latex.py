@@ -7,7 +7,8 @@ Pipeline for each $...$ span:
   3. Convert any remaining ^{...} / _{...} to Unicode superscripts/subscripts,
      falling back to <sup>/<sub> tags when the characters have no Unicode form
   4. Strip leftover bare braces
-  5. Wrap single-letter Latin variables and Greek letters in <em>
+  5. Wrap Latin variables and Greek letters in <em>, preserving known
+     roman math function names (sin, cos, log, ...).
 """
 from __future__ import annotations
 
@@ -49,6 +50,7 @@ _GREEK = (
     "ΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡΣΤΥΦΧΨΩ"
     "ϕϵϑϱϖϰ"   # \phi, \epsilon, \vartheta, \varrho, \varpi, \varkappa
 )
+_GREEK_SET = set(_GREEK)
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -174,19 +176,75 @@ def _expand_scripts(text: str) -> str:
 # ---------------------------------------------------------------------------
 
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
+_ROMAN_FUNCTIONS = {
+    "sin", "cos", "tan", "csc", "sec", "cot",
+    "sinh", "cosh", "tanh", "coth",
+    "arcsin", "arccos", "arctan",
+    "log", "ln", "exp",
+    "lim", "max", "min", "sup", "inf",
+    "det", "dim", "ker", "gcd", "lcm", "arg", "mod",
+}
+
+
+def _is_latin_word(token: str) -> bool:
+    """Return True if token contains only ASCII Latin letters."""
+    return bool(token) and all(("A" <= ch <= "Z") or ("a" <= ch <= "z") for ch in token)
+
+
+def _italicize_latin_token(token: str) -> str:
+    """Italicize a Latin token, wrapping each character when needed."""
+    if len(token) == 1:
+        return f"<em>{token}</em>"
+    return "".join(f"<em>{ch}</em>" for ch in token)
+
+
+def _italicize_part(part: str) -> str:
+    """Italicize one non-tag text segment."""
+    out: list[str] = []
+    i = 0
+    n = len(part)
+    while i < n:
+        ch = part[i]
+
+        if ch in _GREEK_SET:
+            out.append(f"<em>{ch}</em>")
+            i += 1
+            continue
+
+        if ch.isalpha():
+            start = i
+            while i < n and part[i].isalpha():
+                i += 1
+            token = part[start:i]
+
+            # Preserve unresolved LaTeX command names (e.g., \sin, \cos).
+            if start > 0 and part[start - 1] == "\\":
+                out.append(token)
+                continue
+
+            if token.lower() in _ROMAN_FUNCTIONS:
+                out.append(token)
+                continue
+
+            if _is_latin_word(token):
+                out.append(_italicize_latin_token(token))
+            else:
+                out.append(token)
+            continue
+
+        out.append(ch)
+        i += 1
+
+    return "".join(out)
 
 
 def _italicize(text: str) -> str:
-    """Wrap single-letter Latin variables and Greek letters in <em>."""
+    """Wrap variable letters and Greek letters in <em>."""
     parts = _HTML_TAG_RE.split(text)
     tags = _HTML_TAG_RE.findall(text)
     processed: list[str] = []
     for k, part in enumerate(parts):
-        # Single standalone Latin letters
-        part = re.sub(r"(?<![A-Za-z])([A-Za-z])(?![A-Za-z])", r"<em>\1</em>", part)
-        # Greek letters
-        part = re.sub(f"[{_GREEK}]", lambda m: f"<em>{m.group(0)}</em>", part)
-        processed.append(part)
+        processed.append(_italicize_part(part))
         if k < len(tags):
             processed.append(tags[k])
     return "".join(processed)

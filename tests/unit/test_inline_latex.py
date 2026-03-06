@@ -80,6 +80,15 @@ class TestInlineMathConversion:
         # Either Unicode superscript or HTML tag
         assert ("²" in result or "<sup>2</sup>" in result)
 
+    def test_inline_sentence_variable_products_italicized(self):
+        """Regression: adjacent Latin variables in inline math are italicized."""
+        text = (
+            r"Inline expressions like $\alpha + \beta = \gamma$ or $E = mc^2$ "
+            r"are converted."
+        )
+        result = convert_inline_math(text)
+        assert "<em>E</em> = <em>m</em><em>c</em>²" in result
+
 
 class TestFracExpansion:
     """Test \\frac{}{} expansion to (num)/(den) format."""
@@ -198,12 +207,18 @@ class TestItalicization:
         result = _italicize(text)
         assert result == "<em>x</em>"
 
+    def test_adjacent_latin_variables_italicized_per_character(self):
+        """Adjacent Latin variable letters are italicized individually."""
+        text = "mc²"
+        result = _italicize(text)
+        assert result == "<em>m</em><em>c</em>²"
+
     def test_multi_letter_word_not_italicized(self):
         """Multi-letter words not italicized."""
         text = "sin"
         result = _italicize(text)
-        # Function names should not be italicized
-        assert "<em>sin</em>" not in result
+        # Known function names should remain upright.
+        assert result == "sin"
 
     def test_greek_letters_italicized(self):
         """Greek letters wrapped in <em>."""
@@ -278,6 +293,23 @@ class TestFullPipeline:
         assert "γ" in result
         # cdot should be converted to dot operator
         assert "⋅" in result or "·" in result
+
+    def test_polynomial_adjacent_variables(self):
+        """Adjacent variables in monomials are italicized per character."""
+        latex = r"ax^2 + bx + c"
+        result = _to_unicode(latex)
+        assert "<em>a</em><em>x</em>²" in result
+        assert "<em>b</em><em>x</em>" in result
+        assert "<em>c</em>" in result
+
+    def test_known_function_names_remain_upright(self):
+        """Known function names stay upright while arguments italicize."""
+        latex = r"\sin x + \cos y"
+        result = _to_unicode(latex)
+        assert r"\sin" in result
+        assert r"\cos" in result
+        assert "<em>x</em>" in result
+        assert "<em>y</em>" in result
 
 
 class TestEdgeCases:
