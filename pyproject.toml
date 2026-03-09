@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nb2wb"
-version = "0.2.2"
+version = "0.2.3"
 description = "Write in Jupyter Notebooks. Publish anywhere."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -12,7 +12,7 @@ license = {text = "MIT"}
 authors = [
     {name = "Tivadar Danka"},
 ]
-keywords = ["jupyter", "substack", "latex", "converter", "technical-writing"]
+keywords = ["jupyter", "substack", "medium", "linkedin", "wordpress", "latex", "converter", "technical-writing"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",

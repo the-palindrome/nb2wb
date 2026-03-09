@@ -12,10 +12,19 @@ from nb2wb.config import (
     LatexConfig,
     TableConfig,
     SafetyConfig,
+    TargetPageOptions,
+    apply_target_profile_defaults,
     load_config,
     load_config_from_dict,
     apply_platform_defaults,
 )
+
+
+def _load_yaml_config(tmp_path: Path, content: str) -> Config:
+    """Write YAML content to a temp config file and load it."""
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(content)
+    return load_config(config_path)
 
 
 class TestConfigDefaults:
@@ -58,6 +67,7 @@ class TestConfigDefaults:
         assert latex.image_width == 1920
         assert latex.try_usetex is True
         assert latex.preamble == ""
+        assert latex.cache_size == 256
         assert latex.border_radius == 0
 
     def test_table_config_defaults(self):
@@ -108,8 +118,7 @@ class TestConfigLoading:
 
     def test_load_config_from_temp_file(self, tmp_path):
         """Load config from temporary YAML file."""
-        config_path = tmp_path / "config.yaml"
-        config_path.write_text("""
+        config = _load_yaml_config(tmp_path, """
 image_width: 1000
 border_radius: 20
 code:
@@ -125,7 +134,6 @@ safety:
   max_cells: 123
   max_display_math_blocks: 77
 """)
-        config = load_config(config_path)
         assert config.image_width == 1000
         assert config.border_radius == 20
         assert config.code.font_size == 36
@@ -139,9 +147,7 @@ safety:
 
     def test_load_config_empty_file(self, tmp_path):
         """Empty config file returns defaults."""
-        config_path = tmp_path / "config.yaml"
-        config_path.write_text("")
-        config = load_config(config_path)
+        config = _load_yaml_config(tmp_path, "")
         assert config.image_width == 1920
         assert config.border_radius == 0
 
@@ -160,14 +166,36 @@ safety:
             {
                 "image_width": 1200,
                 "code": {"font_size": 30},
-                "latex": {"dpi": 200},
+                "latex": {"dpi": 200, "cache_size": 12},
                 "safety": {"max_cells": 123},
             }
         )
         assert config.image_width == 1200
         assert config.code.font_size == 30
         assert config.latex.dpi == 200
+        assert config.latex.cache_size == 12
         assert config.safety.max_cells == 123
+
+    def test_load_config_from_dict_target_options(self):
+        """target_options mapping is parsed and normalized."""
+        config = load_config_from_dict(
+            {
+                "target_options": {
+                    "image_strategy": "copyable",
+                    "raw_image_strategy": "preserve",
+                    "copy_script_mode": "none",
+                    "article_width_px": 720,
+                    "table_mode": "native",
+                }
+            }
+        )
+        assert config.target_options == TargetPageOptions(
+            image_strategy="copyable",
+            raw_image_strategy="preserve",
+            copy_script_mode="none",
+            article_width_px=720,
+            table_mode="native",
+        )
 
     def test_load_config_from_dict_rejects_non_mapping(self):
         """Non-dict config input raises a TypeError."""
@@ -185,9 +213,7 @@ class TestConfigInheritance:
 
     def test_image_width_inheritance(self, tmp_path):
         """Top-level image_width inherited by code and latex configs."""
-        config_path = tmp_path / "config.yaml"
-        config_path.write_text("image_width: 2000\n")
-        config = load_config(config_path)
+        config = _load_yaml_config(tmp_path, "image_width: 2000\n")
         assert config.image_width == 2000
         assert config.code.image_width == 2000
         assert config.latex.image_width == 2000
@@ -195,9 +221,7 @@ class TestConfigInheritance:
 
     def test_border_radius_inheritance(self, tmp_path):
         """Top-level border_radius inherited by code and latex configs."""
-        config_path = tmp_path / "config.yaml"
-        config_path.write_text("border_radius: 15\n")
-        config = load_config(config_path)
+        config = _load_yaml_config(tmp_path, "border_radius: 15\n")
         assert config.border_radius == 15
         assert config.code.border_radius == 15
         assert config.latex.border_radius == 15
@@ -205,13 +229,11 @@ class TestConfigInheritance:
 
     def test_override_inherited_image_width(self, tmp_path):
         """Sub-config can override inherited image_width."""
-        config_path = tmp_path / "config.yaml"
-        config_path.write_text("""
+        config = _load_yaml_config(tmp_path, """
 image_width: 2000
 code:
   image_width: 1500
 """)
-        config = load_config(config_path)
         assert config.image_width == 2000
         assert config.code.image_width == 1500  # Override
         assert config.latex.image_width == 2000  # Inherited
@@ -219,13 +241,11 @@ code:
 
     def test_override_inherited_border_radius(self, tmp_path):
         """Sub-config can override inherited border_radius."""
-        config_path = tmp_path / "config.yaml"
-        config_path.write_text("""
+        config = _load_yaml_config(tmp_path, """
 border_radius: 15
 latex:
   border_radius: 0
 """)
-        config = load_config(config_path)
         assert config.border_radius == 15
         assert config.code.border_radius == 15  # Inherited
         assert config.latex.border_radius == 0  # Override
@@ -237,12 +257,10 @@ class TestPartialConfigOverrides:
 
     def test_partial_code_override(self, tmp_path):
         """Partial code config override, rest defaults."""
-        config_path = tmp_path / "config.yaml"
-        config_path.write_text("""
+        config = _load_yaml_config(tmp_path, """
 code:
   font_size: 36
 """)
-        config = load_config(config_path)
         # Overridden
         assert config.code.font_size == 36
         # Defaults preserved
@@ -251,13 +269,11 @@ code:
 
     def test_partial_latex_override(self, tmp_path):
         """Partial latex config override, rest defaults."""
-        config_path = tmp_path / "config.yaml"
-        config_path.write_text("""
+        config = _load_yaml_config(tmp_path, """
 latex:
   color: "#ff0000"
   background: "#000000"
 """)
-        config = load_config(config_path)
         # Overridden
         assert config.latex.color == "#ff0000"
         assert config.latex.background == "#000000"
@@ -267,8 +283,7 @@ latex:
 
     def test_mixed_overrides(self, tmp_path):
         """Mixed overrides across top-level and sub-configs."""
-        config_path = tmp_path / "config.yaml"
-        config_path.write_text("""
+        config = _load_yaml_config(tmp_path, """
 image_width: 1500
 code:
   theme: "github"
@@ -276,7 +291,6 @@ code:
 latex:
   try_usetex: false
 """)
-        config = load_config(config_path)
         assert config.image_width == 1500
         assert config.code.theme == "github"
         assert config.code.line_numbers is False
@@ -355,8 +369,7 @@ class TestComplexConfigScenarios:
 
     def test_full_custom_config(self, tmp_path):
         """Full custom configuration loaded correctly."""
-        config_path = tmp_path / "config.yaml"
-        config_path.write_text("""
+        config = _load_yaml_config(tmp_path, """
 image_width: 1800
 border_radius: 25
 code:
@@ -405,7 +418,6 @@ table:
   image_width: 1400
   border_radius: 30
 """)
-        config = load_config(config_path)
         # Top-level
         assert config.image_width == 1800
         assert config.border_radius == 25
@@ -457,28 +469,24 @@ table:
 
     def test_config_with_extra_fields_ignored(self, tmp_path):
         """Extra unknown fields in YAML ignored gracefully."""
-        config_path = tmp_path / "config.yaml"
-        config_path.write_text("""
+        config = _load_yaml_config(tmp_path, """
 image_width: 1500
 unknown_field: "value"
 code:
   font_size: 36
   unknown_code_field: "value"
 """)
-        config = load_config(config_path)
         assert config.image_width == 1500
         assert config.code.font_size == 36
         # Unknown fields ignored, no errors
 
     def test_x_platform_with_custom_config(self, tmp_path):
         """X platform defaults applied after loading custom config."""
-        config_path = tmp_path / "config.yaml"
-        config_path.write_text("""
+        config = _load_yaml_config(tmp_path, """
 border_radius: 20
 code:
   theme: "github"
 """)
-        config = load_config(config_path)
         result = apply_platform_defaults(config, "x")
         # X platform defaults applied
         assert result.image_width == 680
@@ -487,3 +495,21 @@ code:
         # Custom settings preserved
         assert result.border_radius == 20
         assert result.code.theme == "github"
+
+    def test_linkedin_platform_smaller_dimensions(self):
+        """LinkedIn profile applies narrow rendering defaults."""
+        config = Config()
+        result = apply_target_profile_defaults(config, "linkedin")
+        assert result.image_width == 760
+        assert result.code.font_size == 42
+        assert result.table.mode == "image"
+
+    def test_table_mode_option_overrides_profile_defaults(self):
+        """table_mode in target options has highest precedence."""
+        config = Config()
+        result = apply_target_profile_defaults(
+            config,
+            "medium",
+            target_options={"table_mode": "native"},
+        )
+        assert result.table.mode == "native"

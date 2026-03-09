@@ -1,7 +1,9 @@
 # Development
 
-For architecture, internal contracts, and full repository layout, see
+For architecture, internal contracts, and repository landmarks, see
 [For Maintainers](for-maintainers.md).
+For the current test-suite map and targeted test commands, see
+`tests/README.md`.
 
 ## Local Setup
 
@@ -26,6 +28,22 @@ pytest tests/workflow/
 black nb2wb tests
 isort nb2wb tests
 ```
+
+## Runtime Benchmarks
+
+Use the lightweight benchmark scenarios to track runtime changes:
+
+```bash
+MPLCONFIGDIR=/tmp/matplotlib-cache python3 tests/perf/benchmark_runtime.py
+```
+
+This reports JSON timings for:
+
+- `code_heavy`
+- `markdown_tiny`
+- `math_repeated`
+
+The benchmark script is not part of the default `pytest` run.
 
 ## Build Docs Locally
 

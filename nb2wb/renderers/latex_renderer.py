@@ -16,14 +16,11 @@ import io
 import re
 import subprocess
 import tempfile
+from collections import OrderedDict
+from functools import lru_cache
 from pathlib import Path as _Path
-from typing import Optional
+from threading import Lock
 
-import matplotlib
-import matplotlib.colors as mcolors
-
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 from PIL import Image, ImageChops, ImageDraw, ImageFont
 
 from ..config import LatexConfig
@@ -69,6 +66,35 @@ _FORBIDDEN_PACKAGES = frozenset(
 _MAX_LATEX_CHARS = 10_000
 _MAX_PREAMBLE_CHARS = 20_000
 
+_LATEX_RENDER_CACHE: OrderedDict[tuple[object, ...], str] = OrderedDict()
+_LATEX_RENDER_CACHE_LOCK = Lock()
+
+
+@lru_cache(maxsize=1)
+def _matplotlib_module():
+    """Import matplotlib lazily and pin backend to Agg."""
+    import matplotlib
+
+    matplotlib.use("Agg", force=True)
+    return matplotlib
+
+
+@lru_cache(maxsize=1)
+def _matplotlib_colors():
+    """Import matplotlib.colors lazily."""
+    import matplotlib.colors as mcolors
+
+    return mcolors
+
+
+@lru_cache(maxsize=1)
+def _matplotlib_pyplot():
+    """Import matplotlib.pyplot lazily."""
+    _matplotlib_module()
+    import matplotlib.pyplot as plt
+
+    return plt
+
 
 def _strip_tex_comments(text: str) -> str:
     """Drop unescaped LaTeX comments so validators inspect executable tokens."""
@@ -110,6 +136,52 @@ def extract_display_math(text: str) -> list[tuple[int, int, str]]:
     return result
 
 
+def _latex_cache_key(
+    latex: str,
+    config: LatexConfig,
+    preamble: str,
+    tag: int | None,
+) -> tuple[object, ...]:
+    return (
+        latex,
+        preamble,
+        tag,
+        config.try_usetex,
+        config.font_size,
+        config.dpi,
+        config.color,
+        config.background,
+        config.padding,
+        config.image_width,
+        config.preamble,
+        config.border_radius,
+    )
+
+
+def _cache_get(key: tuple[object, ...]) -> str | None:
+    with _LATEX_RENDER_CACHE_LOCK:
+        cached = _LATEX_RENDER_CACHE.get(key)
+        if cached is not None:
+            _LATEX_RENDER_CACHE.move_to_end(key)
+        return cached
+
+
+def _cache_set(key: tuple[object, ...], value: str, max_size: int) -> None:
+    if max_size <= 0:
+        return
+    with _LATEX_RENDER_CACHE_LOCK:
+        _LATEX_RENDER_CACHE[key] = value
+        _LATEX_RENDER_CACHE.move_to_end(key)
+        while len(_LATEX_RENDER_CACHE) > max_size:
+            _LATEX_RENDER_CACHE.popitem(last=False)
+
+
+def _clear_render_cache() -> None:
+    """Clear the in-memory LaTeX render cache (primarily for tests)."""
+    with _LATEX_RENDER_CACHE_LOCK:
+        _LATEX_RENDER_CACHE.clear()
+
+
 def render_latex_block(
     latex: str, config: LatexConfig, preamble: str = "", tag: int | None = None
 ) -> str:
@@ -124,15 +196,29 @@ def render_latex_block(
     *tag*, if given, is drawn as ``(N)`` at the right edge of the canvas.
     """
     combined_preamble = "\n".join(filter(None, [config.preamble, preamble]))
+    cache_size = max(int(getattr(config, "cache_size", 0)), 0)
+    cache_key: tuple[object, ...] | None = None
+
+    if cache_size:
+        cache_key = _latex_cache_key(latex, config, combined_preamble, tag)
+        cached = _cache_get(cache_key)
+        if cached is not None:
+            return cached
 
     if config.try_usetex:
         try:
             _validate_usetex_inputs(latex, combined_preamble)
-            return _render_usetex(latex, config, combined_preamble, tag=tag)
+            rendered = _render_usetex(latex, config, combined_preamble, tag=tag)
+            if cache_key is not None:
+                _cache_set(cache_key, rendered, cache_size)
+            return rendered
         except Exception:
             pass  # fall through to mathtext
 
-    return _render_mathtext(latex, config, tag=tag)
+    rendered = _render_mathtext(latex, config, tag=tag)
+    if cache_key is not None:
+        _cache_set(cache_key, rendered, cache_size)
+    return rendered
 
 
 # ---------------------------------------------------------------------------
@@ -147,15 +233,7 @@ def _draw_tag(canvas: Image.Image, tag: int, config: LatexConfig) -> None:
 
     # Font: Computer Modern Roman from matplotlib's bundled fonts — matches LaTeX
     font_size_px = round(config.font_size / 72.27 * config.dpi)
-    font: ImageFont.ImageFont | ImageFont.FreeTypeFont
-    font_dir = _Path(matplotlib.__file__).parent / "mpl-data" / "fonts" / "ttf"
-    try:
-        font = ImageFont.truetype(str(font_dir / "cmr10.ttf"), font_size_px)
-    except (IOError, OSError):
-        try:
-            font = ImageFont.truetype(str(font_dir / "DejaVuSans.ttf"), font_size_px)
-        except (IOError, OSError):
-            font = ImageFont.load_default()
+    font = _tag_font(font_size_px)
 
     bbox = draw.textbbox((0, 0), text, font=font)
     text_w = bbox[2] - bbox[0]
@@ -164,8 +242,24 @@ def _draw_tag(canvas: Image.Image, tag: int, config: LatexConfig) -> None:
     x = canvas.width - text_w - config.padding
     y = (canvas.height - text_h) // 2
 
-    r, g, b = (round(c * 255) for c in mcolors.to_rgb(config.color))
+    r, g, b = (round(c * 255) for c in _matplotlib_colors().to_rgb(config.color))
     draw.text((x, y), text, font=font, fill=(r, g, b))
+
+
+@lru_cache(maxsize=16)
+def _tag_font(font_size_px: int) -> ImageFont.ImageFont | ImageFont.FreeTypeFont:
+    """Load and cache the tag font used for equation numbering."""
+    font: ImageFont.ImageFont | ImageFont.FreeTypeFont
+    matplotlib_mod = _matplotlib_module()
+    font_dir = _Path(matplotlib_mod.__file__).parent / "mpl-data" / "fonts" / "ttf"
+    try:
+        font = ImageFont.truetype(str(font_dir / "cmr10.ttf"), font_size_px)
+    except (IOError, OSError):
+        try:
+            font = ImageFont.truetype(str(font_dir / "DejaVuSans.ttf"), font_size_px)
+        except (IOError, OSError):
+            font = ImageFont.load_default()
+    return font
 
 
 def _trim_and_pad(png_bytes: bytes, config: LatexConfig, tag: int | None = None) -> bytes:
@@ -197,6 +291,8 @@ def _trim_and_pad(png_bytes: bytes, config: LatexConfig, tag: int | None = None)
 
 def _render_mathtext(latex: str, config: LatexConfig, tag: int | None = None) -> str:
     """Use matplotlib's built-in mathtext (no LaTeX installation required)."""
+    plt = _matplotlib_pyplot()
+
     if latex.lstrip().startswith(r"\begin{"):
         # mathtext has no multi-line environment support: strip tags and join rows
         inner = re.sub(r"\\(?:begin|end)\{[^}]+\}", "", latex)
@@ -242,13 +338,13 @@ def _render_mathtext(latex: str, config: LatexConfig, tag: int | None = None) ->
 
 def _color_to_html(color: str) -> str:
     """Convert a matplotlib color spec to a 6-digit uppercase HTML hex (no '#')."""
-    r, g, b = mcolors.to_rgb(color)
+    r, g, b = _matplotlib_colors().to_rgb(color)
     return f"{round(r * 255):02X}{round(g * 255):02X}{round(b * 255):02X}"
 
 
 def _color_to_dvipng(color: str) -> str:
     """Convert a matplotlib color spec to dvipng 'rgb R G B' format."""
-    r, g, b = mcolors.to_rgb(color)
+    r, g, b = _matplotlib_colors().to_rgb(color)
     return f"rgb {r:.6f} {g:.6f} {b:.6f}"
 
 

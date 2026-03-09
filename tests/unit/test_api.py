@@ -15,6 +15,19 @@ class TestPublicApi:
         assert callable(nb2wb.load_notebook_payload)
         assert callable(nb2wb.supported_targets)
 
+    def test_supported_targets_include_new_platforms(self):
+        assert nb2wb.supported_targets() == [
+            "default",
+            "substack",
+            "medium",
+            "x",
+            "linkedin",
+            "devto",
+            "hashnode",
+            "ghost",
+            "wordpress",
+        ]
+
     def test_convert_markdown_with_dict_config(self):
         html = nb2wb.convert(
             "# Hello API\n\nBody text.",
@@ -290,6 +303,8 @@ class TestPublicApi:
         html = nb2wb.convert(nb, config={"latex": {"try_usetex": False}})
 
         assert "NotebookNode Input" in html
+        assert "Paste into your destination editor." in html
+        assert "Substack draft" not in html
 
     def test_convert_accepts_in_memory_markdown_string(self):
         markdown_text = "# In-memory MD\n\nBody from payload."
@@ -351,6 +366,67 @@ class TestPublicApi:
             assert 'class="copy-image-btn"' not in html
             assert "<script" not in html.lower()
             assert "<head" not in html.lower()
+
+    def test_convert_linkedin_defaults_to_copyable_images(self):
+        markdown = "![plot](data:image/png;base64,abcd)"
+        html = nb2wb.convert(
+            markdown,
+            target="linkedin",
+            config={"latex": {"try_usetex": False}},
+        )
+        assert 'class="image-container"' in html
+        assert 'class="copy-image-btn"' in html
+
+    def test_convert_dev_targets_default_to_embedded_images(self):
+        markdown = "![plot](data:image/png;base64,abcd)"
+        for target in ("devto", "hashnode", "ghost", "wordpress"):
+            html = nb2wb.convert(
+                markdown,
+                target=target,
+                config={"latex": {"try_usetex": False}},
+            )
+            assert 'class="image-container"' not in html
+            assert 'class="copy-image-btn"' not in html
+
+    def test_convert_target_options_override_image_strategy(self):
+        markdown = "![plot](data:image/png;base64,abcd)"
+        html = nb2wb.convert(
+            markdown,
+            target="devto",
+            target_options={"image_strategy": "copyable"},
+            config={"latex": {"try_usetex": False}},
+        )
+        assert 'class="image-container"' in html
+        assert 'class="copy-image-btn"' in html
+        assert "async function copyImage" in html
+        assert 'querySelectorAll(".image-container")' in html
+
+    def test_convert_copyable_images_upgrade_simple_script_mode(self):
+        markdown = "![plot](data:image/png;base64,abcd)"
+        html = nb2wb.convert(
+            markdown,
+            target="substack",
+            target_options={"image_strategy": "copyable"},
+            config={"latex": {"try_usetex": False}},
+        )
+        assert 'class="image-container"' in html
+        assert "async function copyImage" in html
+        assert "container.replaceWith(img)" in html
+
+    def test_convert_copyable_images_keep_toolbar_hidden_when_copy_script_disabled(self):
+        markdown = "![plot](data:image/png;base64,abcd)"
+        html = nb2wb.convert(
+            markdown,
+            target="default",
+            target_options={
+                "image_strategy": "copyable",
+                "copy_script_mode": "none",
+            },
+            config={"latex": {"try_usetex": False}},
+        )
+        assert 'class="image-container"' in html
+        assert "async function copyImage" in html
+        assert 'id="copy-btn"' not in html
 
     def test_convert_accepts_in_memory_markdown_payload_mapping(self):
         payload = {
@@ -520,7 +596,11 @@ class TestPublicApi:
                 return f"<html><body>{content_html}</body></html>"
 
         monkeypatch.setattr(api, "Converter", DummyConverter)
-        monkeypatch.setattr(api, "get_builder", lambda target: DummyBuilder())
+        monkeypatch.setattr(
+            api,
+            "get_builder",
+            lambda target, target_options=None: DummyBuilder(),
+        )
 
         html = api.convert("# Execute flag", execute=True, raw_mode=True)
 

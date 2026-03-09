@@ -32,7 +32,7 @@ development
 
 - Converts `.ipynb`, `.qmd`, and `.md` into full HTML pages.
 - Preserves math and code fidelity by rendering display math and code blocks as images.
-- Supports Substack, Medium, and X Articles output wrappers.
+- Supports Substack, Medium, X Articles, LinkedIn, Dev.to, Hashnode, Ghost, and WordPress output wrappers.
 - Provides a Python API (`nb2wb.convert`) for backend integration.
 - Applies mandatory server-safe sanitization and notebook resource limits.
 

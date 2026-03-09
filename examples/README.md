@@ -16,7 +16,7 @@ nb2wb examples/notebook.ipynb -t medium -o examples/medium_preview.html
 nb2wb examples/notebook.ipynb -t x -o examples/x_preview.html
 ```
 
-To test URL-based image workflows for Medium/X:
+To test URL-based image workflows for Medium, X, or LinkedIn:
 
 ```bash
 nb2wb examples/notebook.ipynb -t medium --serve

@@ -9,6 +9,7 @@ from __future__ import annotations
 import io
 import inspect
 import sys
+from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 
@@ -109,7 +110,7 @@ def render_code(source: str, language: str, config: CodeConfig, *,
                 execution_count: Optional[int] = None) -> bytes:
     """Render *source* with syntax highlighting to PNG bytes."""
     font = _load_font(config.font_size)
-    style_cls = get_style_by_name(config.theme)
+    style_cls = _style_for_theme(config.theme)
     lines = _tokenize(source, language, style_cls)
     png = _paint(lines, font, style_cls, show_line_numbers=config.line_numbers,
                  min_width=config.image_width)
@@ -127,10 +128,10 @@ def render_code(source: str, language: str, config: CodeConfig, *,
             right_text=lang_display,
         )
         image = _draw_border_image(image, style_cls)
-        png = _image_to_png(image)
         if config.padding_x or config.padding_y:
             bg = config.background or style_cls.background_color
-            png = _outer_pad(png, config.padding_x, config.padding_y, bg)
+            image = _outer_pad_image(image, config.padding_x, config.padding_y, bg)
+        png = _image_to_png(image)
     # When apply_padding is False the caller is expected to stack this image
     # via vstack_and_pad which draws footer, border, and padding *after*
     # normalising widths so that everything spans the full combined width.
@@ -141,7 +142,7 @@ def render_output_text(text: str, config: CodeConfig, *,
                        apply_padding: bool = True) -> bytes:
     """Render plain-text output (stdout, repr, error) to PNG bytes with lighter styling."""
     font = _load_font(config.font_size)
-    style_cls = get_style_by_name(config.theme)
+    style_cls = _style_for_theme(config.theme)
     lines = _tokenize(text, "text", style_cls)
 
     # Create a lighter version of the style for outputs
@@ -174,7 +175,7 @@ def vstack_and_pad(png_list: list[bytes], config: CodeConfig, *,
     if not png_list:
         raise ValueError("png_list must not be empty")
 
-    style_cls = get_style_by_name(config.theme)
+    style_cls = _style_for_theme(config.theme)
     output_bg = _create_output_style(style_cls).background_color
     sep_color = config.background or output_bg
     has_footer = bool(code_footer_left or code_footer_right)
@@ -199,14 +200,16 @@ def vstack_and_pad(png_list: list[bytes], config: CodeConfig, *,
         if draw_code_border:
             _draw_border_on_region(combined, style_cls, region_height=images[0].height)
 
-    png = _image_to_png(combined)
     if config.padding_x or config.padding_y:
-        png = _outer_pad(png, config.padding_x, config.padding_y, sep_color)
+        combined = _outer_pad_image(
+            combined,
+            config.padding_x,
+            config.padding_y,
+            sep_color,
+        )
     if config.border_radius:
-        img = _png_to_image(png)
-        img = _round_corners(img, config.border_radius)
-        png = _image_to_png(img)
-    return png
+        combined = _round_corners(combined, config.border_radius)
+    return _image_to_png(combined)
 
 
 # ---------------------------------------------------------------------------
@@ -217,13 +220,25 @@ def vstack_and_pad(png_list: list[bytes], config: CodeConfig, *,
 def _outer_pad(png_bytes: bytes, padding_x: int, padding_y: int, background: str) -> bytes:
     """Wrap a PNG image with outer padding of the given background colour."""
     img = _png_to_image(png_bytes)
+    return _image_to_png(_outer_pad_image(img, padding_x, padding_y, background))
+
+
+def _outer_pad_image(
+    image: Image.Image,
+    padding_x: int,
+    padding_y: int,
+    background: str,
+) -> Image.Image:
+    """Wrap a PIL image with outer padding using the same image mode."""
+    if padding_x == 0 and padding_y == 0:
+        return image
     canvas = Image.new(
-        "RGB",
-        (img.width + 2 * padding_x, img.height + 2 * padding_y),
+        image.mode,
+        (image.width + 2 * padding_x, image.height + 2 * padding_y),
         background,
     )
-    canvas.paste(img, (padding_x, padding_y))
-    return _image_to_png(canvas)
+    canvas.paste(image, (padding_x, padding_y))
+    return canvas
 
 
 def _draw_footer_image(
@@ -412,6 +427,7 @@ def _tokenize(
 # Font helpers
 # ---------------------------------------------------------------------------
 
+@lru_cache(maxsize=32)
 def _load_font(size: int) -> ImageFont.FreeTypeFont:
     """Load a monospace TrueType font at the given size, falling back to Pillow's default."""
     path = _find_font()
@@ -430,6 +446,7 @@ def _load_font(size: int) -> ImageFont.FreeTypeFont:
     return ImageFont.load_default()
 
 
+@lru_cache(maxsize=1)
 def _find_font() -> Optional[str]:
     """Return the path to the first available monospace font for the current platform."""
     platform = sys.platform
@@ -529,3 +546,9 @@ def _create_output_style(base_style):
 def _rgb_to_hex(rgb: tuple[int, int, int]) -> str:
     """Convert RGB tuple to hex color string."""
     return f"#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}"
+
+
+@lru_cache(maxsize=16)
+def _style_for_theme(theme: str):
+    """Return cached Pygments style class for *theme*."""
+    return get_style_by_name(theme)

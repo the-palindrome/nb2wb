@@ -26,6 +26,8 @@ Supported features:
   - `<!-- nb2wb: hide-cell -->`
   - `<!-- nb2wb: text-snippet -->`
 - special fence language: `latex-preamble`
+- directive comments apply to the next fenced code block, and trailing
+  directives with no following block are discarded
 
 Execution:
 
@@ -46,6 +48,8 @@ Supported features:
 - special chunk languages:
   - `latex-preamble`
   - `output` (attaches stdout to immediately preceding code cell)
+- `{output}` chunks only attach when they appear immediately after a code chunk;
+  intervening prose breaks the association
 
 Execution:
 
@@ -74,6 +78,7 @@ Notes:
 
 - mapping `format` aliases: `markdown`, `quarto`
 - mapping `source` or `text` may be used instead of `content`
+- plain strings that look like file paths are still treated as document text
 - when auto-detection is ambiguous, prefer explicit mapping payloads
 - file paths are loaded via `nb2wb.load_input_payload()` (or typed loader helpers), then passed to `nb2wb.convert()`
 
@@ -84,5 +89,5 @@ Notes:
 | `hide-cell` | Hide entire cell |
 | `hide-input` | Hide code source |
 | `hide-output` | Hide outputs |
-| `latex-preamble` | Collect LaTeX preamble from cell/chunk |
+| `latex-preamble` | Collect LaTeX preamble from cell/chunk and hide that cell from output |
 | `text-snippet` | Render code as `<pre><code>` instead of PNG |

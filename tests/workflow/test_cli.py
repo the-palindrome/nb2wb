@@ -12,117 +12,126 @@ from nb2wb.cli import main
 import sys
 
 
+def _invoke_cli(argv: list[str]) -> None:
+    """Invoke CLI with explicit argv and no exception handling."""
+    sys.argv = argv
+    main()
+
+
+def _run_cli(argv: list[str]) -> None:
+    """Run CLI and swallow SystemExit for success-path assertions."""
+    try:
+        _invoke_cli(argv)
+    except SystemExit:
+        pass
+
+
+def _write_notebook(path: Path, cells: list[nbformat.NotebookNode]) -> Path:
+    """Write notebook cells to disk and return the input path."""
+    nb = nbformat.v4.new_notebook()
+    nb.cells = cells
+    with path.open("w", encoding="utf-8") as f:
+        nbformat.write(nb, f)
+    return path
+
+
+def _create_input_for_suffix(tmp_path: Path, suffix: str) -> Path:
+    """Create a minimal input file for .ipynb/.md/.qmd parametrized tests."""
+    if suffix == ".ipynb":
+        return _write_notebook(
+            tmp_path / "test.ipynb",
+            [nbformat.v4.new_markdown_cell("# Test")],
+        )
+    if suffix == ".md":
+        p = tmp_path / "test.md"
+        p.write_text("# Test\n\n```python\nx = 1\n```\n")
+        return p
+    p = tmp_path / "test.qmd"
+    p.write_text("# Test\n\n```{python}\nx = 1\n```\n")
+    return p
+
+
 class TestCLIBasics:
     """Test basic CLI functionality."""
 
     def test_cli_help(self, capsys):
         """CLI --help displays usage information."""
-        sys.argv = ["nb2wb", "--help"]
-
-        try:
-            main()
-        except SystemExit:
-            pass  # --help causes sys.exit(0)
+        _run_cli(["nb2wb", "--help"])
 
         captured = capsys.readouterr()
         assert "usage" in captured.out.lower() or "nb2wb" in captured.out
 
     def test_cli_converts_notebook(self, tmp_path, minimal_config):
         """CLI converts notebook to HTML."""
-        # Create test notebook
-        nb = nbformat.v4.new_notebook()
-        nb.cells = [
-            nbformat.v4.new_markdown_cell("# Test Notebook"),
-            nbformat.v4.new_code_cell("x = 1 + 1\nprint(x)"),
-        ]
-
-        notebook_path = tmp_path / "test.ipynb"
-        with open(notebook_path, "w") as f:
-            nbformat.write(nb, f)
-
+        notebook_path = _write_notebook(
+            tmp_path / "test.ipynb",
+            [
+                nbformat.v4.new_markdown_cell("# Test Notebook"),
+                nbformat.v4.new_code_cell("x = 1 + 1\nprint(x)"),
+            ],
+        )
         output_path = tmp_path / "output.html"
 
-        # Run CLI
-        sys.argv = ["nb2wb", str(notebook_path), "-o", str(output_path)]
+        _run_cli(["nb2wb", str(notebook_path), "-o", str(output_path)])
 
-        try:
-            main()
-        except SystemExit:
-            pass  # CLI may exit with success
-
-        # Check output was created
         assert output_path.exists()
-
-        # Verify HTML content
         html_content = output_path.read_text()
         assert "Test Notebook" in html_content
-        assert len(html_content) > 100  # Should have substantial content
+        assert len(html_content) > 100
 
     def test_cli_default_output_path(self, tmp_path):
         """CLI generates default output path when not specified."""
-        # Create test notebook
-        nb = nbformat.v4.new_notebook()
-        nb.cells = [nbformat.v4.new_markdown_cell("# Simple")]
-
-        notebook_path = tmp_path / "test.ipynb"
-        with open(notebook_path, "w") as f:
-            nbformat.write(nb, f)
-
-        # Run CLI without -o flag
-        sys.argv = ["nb2wb", str(notebook_path)]
-
-        try:
-            main()
-        except SystemExit:
-            pass
-
-        # Default output should be test.html
+        notebook_path = _write_notebook(
+            tmp_path / "test.ipynb",
+            [nbformat.v4.new_markdown_cell("# Simple")],
+        )
+        _run_cli(["nb2wb", str(notebook_path)])
         default_output = tmp_path / "test.html"
         assert default_output.exists()
 
+    def test_cli_default_target_uses_neutral_mode(self, tmp_path, capsys):
+        """CLI default target does not emit Substack-specific messaging."""
+        notebook_path = _write_notebook(
+            tmp_path / "default.ipynb",
+            [nbformat.v4.new_markdown_cell("# Default Mode")],
+        )
+        output_path = tmp_path / "default.html"
+
+        _run_cli(["nb2wb", str(notebook_path), "-o", str(output_path)])
+
+        captured = capsys.readouterr()
+        assert "using default mode" in captured.out
+        assert "for substack" not in captured.out.lower()
+
+        html = output_path.read_text()
+        assert "Paste into your destination editor." in html
+        assert "Substack draft" not in html
+
     def test_cli_with_config(self, tmp_path):
         """CLI accepts config file."""
-        # Create test notebook
-        nb = nbformat.v4.new_notebook()
-        nb.cells = [nbformat.v4.new_markdown_cell("# Config Test")]
-
-        notebook_path = tmp_path / "test.ipynb"
-        with open(notebook_path, "w") as f:
-            nbformat.write(nb, f)
-
-        # Create config file
+        notebook_path = _write_notebook(
+            tmp_path / "test.ipynb",
+            [nbformat.v4.new_markdown_cell("# Config Test")],
+        )
         config_path = tmp_path / "config.yaml"
         config_path.write_text("image_width: 1000\nborder_radius: 10\n")
 
         output_path = tmp_path / "output.html"
 
-        # Run CLI with config
-        sys.argv = ["nb2wb", str(notebook_path), "-c", str(config_path),
-                    "-o", str(output_path)]
-
-        try:
-            main()
-        except SystemExit:
-            pass
+        _run_cli(
+            ["nb2wb", str(notebook_path), "-c", str(config_path), "-o", str(output_path)]
+        )
 
         assert output_path.exists()
 
     def test_cli_raw_mode_omits_toolbar(self, tmp_path):
         """CLI --raw omits preview toolbar/header in output HTML."""
-        nb = nbformat.v4.new_notebook()
-        nb.cells = [nbformat.v4.new_markdown_cell("# Raw CLI")]
-
-        notebook_path = tmp_path / "test.ipynb"
-        with open(notebook_path, "w") as f:
-            nbformat.write(nb, f)
-
+        notebook_path = _write_notebook(
+            tmp_path / "test.ipynb",
+            [nbformat.v4.new_markdown_cell("# Raw CLI")],
+        )
         output_path = tmp_path / "raw.html"
-        sys.argv = ["nb2wb", str(notebook_path), "--raw", "-o", str(output_path)]
-
-        try:
-            main()
-        except SystemExit:
-            pass
+        _run_cli(["nb2wb", str(notebook_path), "--raw", "-o", str(output_path)])
 
         assert output_path.exists()
         html = output_path.read_text()
@@ -135,73 +144,23 @@ class TestCLIBasics:
 class TestCLIPlatformSelection:
     """Test platform-specific output."""
 
-    def test_cli_substack_platform(self, tmp_path):
-        """CLI generates Substack-formatted HTML."""
-        nb = nbformat.v4.new_notebook()
-        nb.cells = [nbformat.v4.new_markdown_cell("# Substack Test")]
-
-        notebook_path = tmp_path / "test.ipynb"
-        with open(notebook_path, "w") as f:
-            nbformat.write(nb, f)
-
-        output_path = tmp_path / "substack.html"
-
-        # Run CLI with Substack target
-        sys.argv = ["nb2wb", str(notebook_path), "-t", "substack",
-                    "-o", str(output_path)]
-
-        try:
-            main()
-        except SystemExit:
-            pass
-
-        assert output_path.exists()
-        html = output_path.read_text()
-        assert len(html) > 0
-
-    def test_cli_x_platform(self, tmp_path):
-        """CLI generates X Articles-formatted HTML."""
-        nb = nbformat.v4.new_notebook()
-        nb.cells = [nbformat.v4.new_markdown_cell("# X Articles Test")]
-
-        notebook_path = tmp_path / "test.ipynb"
-        with open(notebook_path, "w") as f:
-            nbformat.write(nb, f)
-
-        output_path = tmp_path / "x.html"
-
-        # Run CLI with X target
-        sys.argv = ["nb2wb", str(notebook_path), "-t", "x",
-                    "-o", str(output_path)]
-
-        try:
-            main()
-        except SystemExit:
-            pass
-
-        assert output_path.exists()
-        html = output_path.read_text()
-        assert len(html) > 0
-
-    def test_cli_medium_platform(self, tmp_path):
-        """CLI generates Medium-formatted HTML."""
-        nb = nbformat.v4.new_notebook()
-        nb.cells = [nbformat.v4.new_markdown_cell("# Medium Test")]
-
-        notebook_path = tmp_path / "test.ipynb"
-        with open(notebook_path, "w") as f:
-            nbformat.write(nb, f)
-
-        output_path = tmp_path / "medium.html"
-
-        sys.argv = ["nb2wb", str(notebook_path), "-t", "medium",
-                    "-o", str(output_path)]
-
-        try:
-            main()
-        except SystemExit:
-            pass
-
+    @pytest.mark.parametrize(
+        ("target", "heading", "filename"),
+        [
+            ("substack", "Substack Test", "substack.html"),
+            ("x", "X Articles Test", "x.html"),
+            ("medium", "Medium Test", "medium.html"),
+            ("linkedin", "LinkedIn Test", "linkedin.html"),
+        ],
+    )
+    def test_cli_platform(self, tmp_path, target, heading, filename):
+        """CLI generates platform-formatted HTML."""
+        notebook_path = _write_notebook(
+            tmp_path / "test.ipynb",
+            [nbformat.v4.new_markdown_cell(f"# {heading}")],
+        )
+        output_path = tmp_path / filename
+        _run_cli(["nb2wb", str(notebook_path), "-t", target, "-o", str(output_path)])
         assert output_path.exists()
         html = output_path.read_text()
         assert len(html) > 0
@@ -212,27 +171,17 @@ class TestCLIErrorHandling:
 
     def test_cli_missing_input_file(self, capsys):
         """CLI handles missing input file gracefully."""
-        sys.argv = ["nb2wb", "/nonexistent/notebook.ipynb"]
-
         with pytest.raises((SystemExit, FileNotFoundError)):
-            main()
+            _invoke_cli(["nb2wb", "/nonexistent/notebook.ipynb"])
 
     def test_cli_invalid_platform(self, tmp_path, capsys):
         """CLI handles invalid platform selection."""
-        nb = nbformat.v4.new_notebook()
-        nb.cells = [nbformat.v4.new_markdown_cell("# Test")]
-
-        notebook_path = tmp_path / "test.ipynb"
-        with open(notebook_path, "w") as f:
-            nbformat.write(nb, f)
-
-        sys.argv = ["nb2wb", str(notebook_path), "-t", "invalid_platform"]
-
-        # Should either exit or raise an error
-        try:
-            main()
-        except (SystemExit, KeyError, ValueError):
-            pass  # Expected behavior
+        notebook_path = _write_notebook(
+            tmp_path / "test.ipynb",
+            [nbformat.v4.new_markdown_cell("# Test")],
+        )
+        with pytest.raises((SystemExit, KeyError, ValueError)):
+            _invoke_cli(["nb2wb", str(notebook_path), "-t", "invalid_platform"])
 
 
 class TestCLIQuartoSupport:
@@ -261,10 +210,8 @@ print(x)
         output_path = tmp_path / "output.html"
 
         # Run CLI with .qmd file
-        sys.argv = ["nb2wb", str(qmd_path), "-o", str(output_path)]
-
         try:
-            main()
+            _invoke_cli(["nb2wb", str(qmd_path), "-o", str(output_path)])
         except (SystemExit, Exception) as e:
             # Quarto conversion may require additional setup
             if output_path.exists():
@@ -287,12 +234,7 @@ class TestCLIMarkdownSupport:
         md_path.write_text(md_content)
         output_path = tmp_path / "output.html"
 
-        sys.argv = ["nb2wb", str(md_path), "-o", str(output_path)]
-
-        try:
-            main()
-        except SystemExit:
-            pass
+        _run_cli(["nb2wb", str(md_path), "-o", str(output_path)])
 
         assert output_path.exists()
         html = output_path.read_text()
@@ -304,12 +246,7 @@ class TestCLIMarkdownSupport:
         md_path = tmp_path / "article.md"
         md_path.write_text("# Simple\n")
 
-        sys.argv = ["nb2wb", str(md_path)]
-
-        try:
-            main()
-        except SystemExit:
-            pass
+        _run_cli(["nb2wb", str(md_path)])
 
         default_output = tmp_path / "article.html"
         assert default_output.exists()
@@ -320,10 +257,8 @@ class TestCLIMarkdownSupport:
         md_path.write_text("# Test\n\n```python\nprint('hi')\n```\n")
         output_path = tmp_path / "output.html"
 
-        sys.argv = ["nb2wb", str(md_path), "--execute", "-o", str(output_path)]
-
         try:
-            main()
+            _invoke_cli(["nb2wb", str(md_path), "--execute", "-o", str(output_path)])
         except (SystemExit, Exception):
             # Execution may fail without Jupyter kernel; that's OK
             pass
@@ -333,41 +268,12 @@ class TestCLIMarkdownSupport:
             html = output_path.read_text()
             assert len(html) > 0
 
-    def test_cli_execute_flag_in_help(self, capsys):
-        """--execute flag appears in CLI help text."""
-        sys.argv = ["nb2wb", "--help"]
-
-        try:
-            main()
-        except SystemExit:
-            pass
-
+    @pytest.mark.parametrize("needle", ["--execute", "--raw", ".md"])
+    def test_cli_help_mentions_supported_flags_and_formats(self, capsys, needle):
+        """CLI help text documents execute/raw flags and markdown support."""
+        _run_cli(["nb2wb", "--help"])
         captured = capsys.readouterr()
-        assert "--execute" in captured.out
-
-    def test_cli_raw_flag_in_help(self, capsys):
-        """--raw flag appears in CLI help text."""
-        sys.argv = ["nb2wb", "--help"]
-
-        try:
-            main()
-        except SystemExit:
-            pass
-
-        captured = capsys.readouterr()
-        assert "--raw" in captured.out
-
-    def test_cli_md_help_mentions_md(self, capsys):
-        """CLI help text mentions .md files."""
-        sys.argv = ["nb2wb", "--help"]
-
-        try:
-            main()
-        except SystemExit:
-            pass
-
-        captured = capsys.readouterr()
-        assert ".md" in captured.out
+        assert needle in captured.out
 
 
 class TestCLIExecutionFlag:
@@ -376,18 +282,7 @@ class TestCLIExecutionFlag:
     @pytest.mark.parametrize("suffix", [".ipynb", ".md", ".qmd"])
     def test_cli_without_execute_skips_execution(self, tmp_path, monkeypatch, suffix):
         """Without --execute, converter execution is not invoked for any input type."""
-        if suffix == ".ipynb":
-            nb = nbformat.v4.new_notebook()
-            nb.cells = [nbformat.v4.new_markdown_cell("# Test")]
-            input_path = tmp_path / "test.ipynb"
-            with open(input_path, "w") as f:
-                nbformat.write(nb, f)
-        elif suffix == ".md":
-            input_path = tmp_path / "test.md"
-            input_path.write_text("# Test\n\n```python\nx = 1\n```\n")
-        else:
-            input_path = tmp_path / "test.qmd"
-            input_path.write_text("# Test\n\n```{python}\nx = 1\n```\n")
+        input_path = _create_input_for_suffix(tmp_path, suffix)
 
         called = False
 
@@ -397,30 +292,14 @@ class TestCLIExecutionFlag:
             return nb
 
         monkeypatch.setattr("nb2wb.converter._execute_cells", fake_execute_cells)
-        sys.argv = ["nb2wb", str(input_path), "-o", str(tmp_path / "out.html")]
-
-        try:
-            main()
-        except SystemExit:
-            pass
+        _run_cli(["nb2wb", str(input_path), "-o", str(tmp_path / "out.html")])
 
         assert called is False
 
     @pytest.mark.parametrize("suffix", [".ipynb", ".md", ".qmd"])
     def test_cli_with_execute_runs_execution(self, tmp_path, monkeypatch, suffix):
         """With --execute, converter execution is invoked for every input type."""
-        if suffix == ".ipynb":
-            nb = nbformat.v4.new_notebook()
-            nb.cells = [nbformat.v4.new_markdown_cell("# Test")]
-            input_path = tmp_path / "test.ipynb"
-            with open(input_path, "w") as f:
-                nbformat.write(nb, f)
-        elif suffix == ".md":
-            input_path = tmp_path / "test.md"
-            input_path.write_text("# Test\n\n```python\nx = 1\n```\n")
-        else:
-            input_path = tmp_path / "test.qmd"
-            input_path.write_text("# Test\n\n```{python}\nx = 1\n```\n")
+        input_path = _create_input_for_suffix(tmp_path, suffix)
 
         called = False
 
@@ -430,12 +309,9 @@ class TestCLIExecutionFlag:
             return nb
 
         monkeypatch.setattr("nb2wb.converter._execute_cells", fake_execute_cells)
-        sys.argv = ["nb2wb", str(input_path), "--execute", "-o", str(tmp_path / "out.html")]
-
-        try:
-            main()
-        except SystemExit:
-            pass
+        _run_cli(
+            ["nb2wb", str(input_path), "--execute", "-o", str(tmp_path / "out.html")]
+        )
 
         assert called is True
 
@@ -444,20 +320,29 @@ class TestCLIServerSafeMode:
     """Test mandatory server-safe wiring in CLI."""
 
     def test_cli_uses_server_safe_pipeline(self, tmp_path, monkeypatch):
-        nb = nbformat.v4.new_notebook()
-        nb.cells = [nbformat.v4.new_markdown_cell("# Safe")]
-        notebook_path = tmp_path / "safe.ipynb"
-        with open(notebook_path, "w") as f:
-            nbformat.write(nb, f)
+        notebook_path = _write_notebook(
+            tmp_path / "safe.ipynb",
+            [nbformat.v4.new_markdown_cell("# Safe")],
+        )
 
         seen: dict[str, object] = {}
 
-        def fake_convert(notebook, *, config, target, execute, working_dir, raw_mode):
+        def fake_convert(
+            notebook,
+            *,
+            config,
+            target,
+            target_options,
+            execute,
+            working_dir,
+            raw_mode,
+        ):
             from nb2wb.config import load_config
 
             resolved = load_config(config)
             seen["api_called"] = True
             seen["target"] = target
+            seen["target_options"] = target_options
             seen["payload_type"] = type(notebook).__name__
             seen["working_dir"] = str(working_dir)
             seen["raw_mode"] = raw_mode
@@ -470,41 +355,98 @@ class TestCLIServerSafeMode:
 
         monkeypatch.setattr("nb2wb.cli.convert_notebook", fake_convert)
 
-        sys.argv = ["nb2wb", str(notebook_path), "-o", str(tmp_path / "out.html")]
-        try:
-            main()
-        except SystemExit:
-            pass
+        _run_cli(["nb2wb", str(notebook_path), "-o", str(tmp_path / "out.html")])
 
         assert seen["api_called"] is True
-        assert seen["target"] == "substack"
+        assert seen["target"] == "default"
+        assert seen["target_options"] is None
         assert seen["payload_type"] == "NotebookNode"
         assert seen["working_dir"] == str(notebook_path.parent)
         assert seen["raw_mode"] is False
         assert seen["has_safety_limits"] is True
 
     def test_cli_forwards_raw_flag_to_api(self, tmp_path, monkeypatch):
-        nb = nbformat.v4.new_notebook()
-        nb.cells = [nbformat.v4.new_markdown_cell("# Raw")]
-        notebook_path = tmp_path / "raw.ipynb"
-        with open(notebook_path, "w") as f:
-            nbformat.write(nb, f)
+        notebook_path = _write_notebook(
+            tmp_path / "raw.ipynb",
+            [nbformat.v4.new_markdown_cell("# Raw")],
+        )
 
         seen: dict[str, object] = {}
 
-        def fake_convert(notebook, *, config, target, execute, working_dir, raw_mode):
+        def fake_convert(
+            notebook,
+            *,
+            config,
+            target,
+            target_options,
+            execute,
+            working_dir,
+            raw_mode,
+        ):
+            seen["target_options"] = target_options
             seen["raw_mode"] = raw_mode
             return "<html><body><p>ok</p></body></html>"
 
         monkeypatch.setattr("nb2wb.cli.convert_notebook", fake_convert)
 
-        sys.argv = ["nb2wb", str(notebook_path), "--raw", "-o", str(tmp_path / "out.html")]
-        try:
-            main()
-        except SystemExit:
-            pass
+        _run_cli(["nb2wb", str(notebook_path), "--raw", "-o", str(tmp_path / "out.html")])
 
+        assert seen["target_options"] is None
         assert seen["raw_mode"] is True
+
+    def test_cli_forwards_target_options_to_api(self, tmp_path, monkeypatch):
+        notebook_path = _write_notebook(
+            tmp_path / "opts.ipynb",
+            [nbformat.v4.new_markdown_cell("# Options")],
+        )
+
+        seen: dict[str, object] = {}
+
+        def fake_convert(
+            notebook,
+            *,
+            config,
+            target,
+            target_options,
+            execute,
+            working_dir,
+            raw_mode,
+        ):
+            seen["target"] = target
+            seen["target_options"] = target_options
+            return "<html><body><p>ok</p></body></html>"
+
+        monkeypatch.setattr("nb2wb.cli.convert_notebook", fake_convert)
+
+        _run_cli(
+            [
+                "nb2wb",
+                str(notebook_path),
+                "-t",
+                "devto",
+                "--image-strategy",
+                "copyable",
+                "--raw-image-strategy",
+                "preserve",
+                "--copy-script",
+                "copyable",
+                "--article-width",
+                "777",
+                "--table-mode",
+                "native",
+                "-o",
+                str(tmp_path / "out.html"),
+            ]
+        )
+
+        assert seen["target"] == "devto"
+        assert seen["target_options"] == {
+            "image_strategy": "copyable",
+            "raw_image_strategy": "preserve",
+            "copy_script_mode": "copyable",
+            "article_width_px": 777,
+            "table_mode": "native",
+        }
 
 
 class TestCLIInputSanitization:
@@ -513,26 +455,23 @@ class TestCLIInputSanitization:
     def test_cli_rejects_unsupported_input_extension(self, tmp_path, capsys):
         bad = tmp_path / "bad.txt"
         bad.write_text("hello")
-        sys.argv = ["nb2wb", str(bad)]
 
         with pytest.raises(SystemExit):
-            main()
+            _invoke_cli(["nb2wb", str(bad)])
 
         captured = capsys.readouterr()
         assert "must use one of" in captured.err
 
     def test_cli_rejects_control_chars_in_output_path(self, tmp_path, capsys):
-        nb = nbformat.v4.new_notebook()
-        nb.cells = [nbformat.v4.new_markdown_cell("# Test")]
-        notebook_path = tmp_path / "test.ipynb"
-        with open(notebook_path, "w") as f:
-            nbformat.write(nb, f)
+        notebook_path = _write_notebook(
+            tmp_path / "test.ipynb",
+            [nbformat.v4.new_markdown_cell("# Test")],
+        )
 
         bad_output = tmp_path / "out\nbad.html"
-        sys.argv = ["nb2wb", str(notebook_path), "-o", str(bad_output)]
 
         with pytest.raises(SystemExit):
-            main()
+            _invoke_cli(["nb2wb", str(notebook_path), "-o", str(bad_output)])
 
         captured = capsys.readouterr()
         assert "control characters" in captured.err
@@ -543,24 +482,17 @@ class TestCLIOutputValidation:
 
     def test_cli_output_is_valid_html(self, tmp_path):
         """CLI generates valid HTML structure."""
-        nb = nbformat.v4.new_notebook()
-        nb.cells = [
-            nbformat.v4.new_markdown_cell("# Test"),
-            nbformat.v4.new_markdown_cell("Paragraph with **bold** text."),
-        ]
-
-        notebook_path = tmp_path / "test.ipynb"
-        with open(notebook_path, "w") as f:
-            nbformat.write(nb, f)
+        notebook_path = _write_notebook(
+            tmp_path / "test.ipynb",
+            [
+                nbformat.v4.new_markdown_cell("# Test"),
+                nbformat.v4.new_markdown_cell("Paragraph with **bold** text."),
+            ],
+        )
 
         output_path = tmp_path / "output.html"
 
-        sys.argv = ["nb2wb", str(notebook_path), "-o", str(output_path)]
-
-        try:
-            main()
-        except SystemExit:
-            pass
+        _run_cli(["nb2wb", str(notebook_path), "-o", str(output_path)])
 
         assert output_path.exists()
         html = output_path.read_text()
@@ -572,23 +504,14 @@ class TestCLIOutputValidation:
 
     def test_cli_output_is_self_contained(self, tmp_path):
         """CLI generates self-contained HTML (no external dependencies)."""
-        nb = nbformat.v4.new_notebook()
-        nb.cells = [
-            nbformat.v4.new_markdown_cell("$$E = mc^2$$"),
-        ]
-
-        notebook_path = tmp_path / "test.ipynb"
-        with open(notebook_path, "w") as f:
-            nbformat.write(nb, f)
+        notebook_path = _write_notebook(
+            tmp_path / "test.ipynb",
+            [nbformat.v4.new_markdown_cell("$$E = mc^2$$")],
+        )
 
         output_path = tmp_path / "output.html"
 
-        sys.argv = ["nb2wb", str(notebook_path), "-o", str(output_path)]
-
-        try:
-            main()
-        except SystemExit:
-            pass
+        _run_cli(["nb2wb", str(notebook_path), "-o", str(output_path)])
 
         html = output_path.read_text()
 
@@ -623,11 +546,7 @@ class TestCLILegacyNotebookCompatibility:
         notebook_path.write_text(json.dumps(notebook), encoding="utf-8")
         output_path = tmp_path / "legacy.html"
 
-        sys.argv = ["nb2wb", str(notebook_path), "-o", str(output_path)]
-        try:
-            main()
-        except SystemExit:
-            pass
+        _run_cli(["nb2wb", str(notebook_path), "-o", str(output_path)])
 
         assert output_path.exists()
         html = output_path.read_text(encoding="utf-8")
@@ -651,11 +570,7 @@ class TestCLILegacyNotebookCompatibility:
         notebook_path.write_text(json.dumps(notebook), encoding="utf-8")
         output_path = tmp_path / "legacy-id.html"
 
-        sys.argv = ["nb2wb", str(notebook_path), "-o", str(output_path)]
-        try:
-            main()
-        except SystemExit:
-            pass
+        _run_cli(["nb2wb", str(notebook_path), "-o", str(output_path)])
 
         assert output_path.exists()
         html = output_path.read_text(encoding="utf-8")

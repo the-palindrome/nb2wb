@@ -343,6 +343,7 @@ def build_page(
     raw_mode: bool = False,
     theme_overrides: Mapping[str, str] | None = None,
     extra_css: str = "",
+    include_copy_button: bool = True,
 ) -> str:
     """Build a complete HTML preview page."""
     toolbar_html = ""
@@ -360,17 +361,20 @@ def build_page(
             theme_vars=theme_vars,
             extra_css=extra_css,
         )
-        toolbar_html = (
-            "  <div id=\"toolbar\">\n"
-            "    <button id=\"copy-btn\" onclick=\"copyContent()\">&#128203; Copy to clipboard</button>\n"
-            f"    <p>{toolbar_message}</p>\n"
-            "  </div>"
-        )
-        script_html = (
-            "  <script>\n"
-            f"{script}\n"
-            "  </script>"
-        )
+        toolbar_parts = ["  <div id=\"toolbar\">"]
+        if include_copy_button:
+            toolbar_parts.append(
+                "    <button id=\"copy-btn\" onclick=\"copyContent()\">&#128203; Copy to clipboard</button>"
+            )
+        toolbar_parts.append(f"    <p>{toolbar_message}</p>")
+        toolbar_parts.append("  </div>")
+        toolbar_html = "\n".join(toolbar_parts)
+        if script:
+            script_html = (
+                "  <script>\n"
+                f"{script}\n"
+                "  </script>"
+            )
     return _PAGE_TEMPLATE.substitute(
         head_html=head_html,
         toolbar_html=toolbar_html,

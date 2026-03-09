@@ -32,10 +32,14 @@ Display math rendering always runs.
 
 Safety controls include:
 
-- TeX input sanitization before subprocess launch
+- TeX input sanitization before the external `latex`/`dvipng` path
 - blocked dangerous TeX commands/packages
 - explicit `-no-shell-escape`
 - subprocess timeouts
+
+If `latex.try_usetex` is enabled, `nb2wb` attempts the external LaTeX pipeline
+first. If that path fails, it falls back to matplotlib mathtext, which avoids
+spawning LaTeX tooling.
 
 ## HTML / SVG Sanitization
 
@@ -63,6 +67,10 @@ Local file image handling also blocks:
 - absolute paths
 - `..` traversal
 - symlink escapes outside working directory
+
+In `embed` and `copyable` image modes, failed image conversion drops the
+affected `<img>` tag instead of leaving an unsafe or unresolved source in the
+output. In `preserve` mode, existing image sources are left untouched.
 
 ## Resource Limits
 

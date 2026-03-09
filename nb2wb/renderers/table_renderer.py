@@ -8,6 +8,7 @@ import re
 import sys
 import warnings
 from dataclasses import dataclass
+from functools import lru_cache
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -536,6 +537,7 @@ def _text_width(text: str, draw: ImageDraw.ImageDraw, font: ImageFont.ImageFont)
             return float(len(text) * max(getattr(font, "size", 12) // 2, 6))
 
 
+@lru_cache(maxsize=64)
 def _load_font(preferred_font: str, size: int) -> ImageFont.ImageFont:
     path = Path(preferred_font)
     if path.exists():
@@ -564,6 +566,7 @@ def _load_font(preferred_font: str, size: int) -> ImageFont.ImageFont:
     return ImageFont.load_default()
 
 
+@lru_cache(maxsize=1)
 def _candidate_fonts() -> list[str]:
     platform = sys.platform
     if platform.startswith("linux"):

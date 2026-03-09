@@ -18,21 +18,30 @@ All inputs are normalized into a notebook-like model and then rendered by the sa
 |---|---|
 | Inline math (`$...$`) | Unicode-oriented inline rendering |
 | Display math (`$$...$$`, `\[...\]`, `\begin{...}`) | PNG image |
-| Code input | Syntax-highlighted PNG (or text snippet mode) |
+| Code input | Syntax-highlighted PNG, or `<pre><code>` when tagged `text-snippet` |
 | Stream/error output | PNG image |
 | `image/png` output | Embedded directly |
 | `image/svg+xml` output | Sanitized, then embedded as data URI |
 | `text/html` output | Sanitized HTML fragment |
+| Markdown/HTML tables | Native HTML table or PNG image, depending on config and target |
 
 ## 3. Platform Wrapping
 
 After cell conversion, content is wrapped for one of:
 
+- `default`
 - `substack`
 - `medium`
 - `x`
+- `linkedin`
+- `devto`
+- `hashnode`
+- `ghost`
+- `wordpress`
 
-Each wrapper provides copy/paste-friendly layout and controls (unless raw mode is enabled).
+Each wrapper provides copy/paste-friendly layout and controls unless raw mode
+is enabled. Built-in profiles default to `embed` or `copyable` image
+strategies, and API/config overrides can also use `preserve`.
 
 ## 4. Equation Labels and References
 
@@ -61,3 +70,9 @@ The conversion pipeline always applies safety controls:
 - Fail-closed image handling
 
 For details, see [Security](security.md).
+
+## 7. Cell-Level Visibility Rules
+
+- Cells tagged `hide-cell` are omitted from final output.
+- `latex-preamble` cells are hidden from output but still extend the LaTeX preamble.
+- Raw notebook cells are skipped.

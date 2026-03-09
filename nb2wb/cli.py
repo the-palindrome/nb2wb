@@ -20,6 +20,13 @@ _CONTROL_CHAR_RE = re.compile(r"[\x00-\x1f\x7f]")
 _ALLOWED_INPUT_SUFFIXES = frozenset({".ipynb", ".qmd", ".md"})
 
 
+def _positive_int(value: str) -> int:
+    out = int(value)
+    if out <= 0:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return out
+
+
 def _extract_images(html: str, images_dir: Path) -> str:
     """Replace data-URI ``<img>`` sources with files in *images_dir*.
 
@@ -158,8 +165,8 @@ def main() -> None:
         "--target",
         type=str,
         choices=platforms,
-        default="substack",
-        help=f"Target platform (choices: {', '.join(platforms)}; default: substack)",
+        default="default",
+        help=f"Target platform (choices: {', '.join(platforms)}; default: default)",
     )
     parser.add_argument(
         "-o",
@@ -167,6 +174,40 @@ def main() -> None:
         type=Path,
         default=None,
         help="Output HTML file path (default: <notebook>.html)",
+    )
+    parser.add_argument(
+        "--image-strategy",
+        type=str,
+        choices=["embed", "copyable"],
+        default=None,
+        help="Override image handling strategy for normal mode.",
+    )
+    parser.add_argument(
+        "--raw-image-strategy",
+        type=str,
+        choices=["embed", "copyable", "preserve"],
+        default=None,
+        help="Override image handling strategy for --raw output.",
+    )
+    parser.add_argument(
+        "--copy-script",
+        type=str,
+        choices=["simple", "copyable", "none"],
+        default=None,
+        help="Override preview copy-script mode in non-raw output.",
+    )
+    parser.add_argument(
+        "--article-width",
+        type=_positive_int,
+        default=None,
+        help="Override article max width in pixels for preview wrapper.",
+    )
+    parser.add_argument(
+        "--table-mode",
+        type=str,
+        choices=["native", "image"],
+        default=None,
+        help="Override table rendering mode before wrapping output.",
     )
     parser.add_argument(
         "--open",
@@ -207,13 +248,29 @@ def main() -> None:
         print(f"Error: {exc}", file=sys.stderr)
         sys.exit(1)
 
-    print(f"Converting '{notebook_path}' for {args.target} …")
+    if args.target == "default":
+        print(f"Converting '{notebook_path}' using default mode …")
+    else:
+        print(f"Converting '{notebook_path}' for {args.target} …")
     try:
         payload = load_input_payload(notebook_path)
+        target_options: dict[str, object] = {}
+        if args.image_strategy is not None:
+            target_options["image_strategy"] = args.image_strategy
+        if args.raw_image_strategy is not None:
+            target_options["raw_image_strategy"] = args.raw_image_strategy
+        if args.copy_script is not None:
+            target_options["copy_script_mode"] = args.copy_script
+        if args.article_width is not None:
+            target_options["article_width_px"] = args.article_width
+        if args.table_mode is not None:
+            target_options["table_mode"] = args.table_mode
+
         html = convert_notebook(
             payload,
             config=config_path,
             target=args.target,
+            target_options=target_options or None,
             execute=args.execute,
             working_dir=notebook_path.parent,
             raw_mode=args.raw,
