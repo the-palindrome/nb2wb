@@ -398,6 +398,35 @@ class TestPublicApi:
         )
         assert 'class="image-container"' in html
         assert 'class="copy-image-btn"' in html
+        assert "async function copyImage" in html
+        assert 'querySelectorAll(".image-container")' in html
+
+    def test_convert_copyable_images_upgrade_simple_script_mode(self):
+        markdown = "![plot](data:image/png;base64,abcd)"
+        html = nb2wb.convert(
+            markdown,
+            target="substack",
+            target_options={"image_strategy": "copyable"},
+            config={"latex": {"try_usetex": False}},
+        )
+        assert 'class="image-container"' in html
+        assert "async function copyImage" in html
+        assert "container.replaceWith(img)" in html
+
+    def test_convert_copyable_images_keep_toolbar_hidden_when_copy_script_disabled(self):
+        markdown = "![plot](data:image/png;base64,abcd)"
+        html = nb2wb.convert(
+            markdown,
+            target="default",
+            target_options={
+                "image_strategy": "copyable",
+                "copy_script_mode": "none",
+            },
+            config={"latex": {"try_usetex": False}},
+        )
+        assert 'class="image-container"' in html
+        assert "async function copyImage" in html
+        assert 'id="copy-btn"' not in html
 
     def test_convert_accepts_in_memory_markdown_payload_mapping(self):
         payload = {

@@ -131,6 +131,13 @@ def _script_from_mode(mode: str) -> str:
     return ""
 
 
+def _resolve_script_mode(requested_mode: str, image_strategy: str) -> str:
+    """Ensure copyable image wrappers always ship with compatible JS."""
+    if image_strategy == "copyable":
+        return "copyable"
+    return requested_mode
+
+
 class ProfiledBuilder(PlatformBuilder):
     """Build pages from one static target profile and optional overrides."""
 
@@ -171,9 +178,12 @@ class ProfiledBuilder(PlatformBuilder):
         if self.options.article_width_px is not None:
             theme_overrides["body-max-width"] = f"{self.options.article_width_px}px"
 
-        script_mode = self.options.copy_script_mode or self.profile.copy_script_mode
+        requested_script_mode = (
+            self.options.copy_script_mode or self.profile.copy_script_mode
+        )
+        script_mode = _resolve_script_mode(requested_script_mode, strategy)
         script = _script_from_mode(script_mode)
-        include_copy_button = script_mode != "none"
+        include_copy_button = requested_script_mode != "none"
 
         return build_page(
             content_html,
@@ -185,4 +195,3 @@ class ProfiledBuilder(PlatformBuilder):
             extra_css=self.profile.extra_css,
             include_copy_button=include_copy_button,
         )
-
