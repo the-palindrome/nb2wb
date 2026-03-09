@@ -18,12 +18,17 @@
 
 - `copyable`: `medium`, `x`, `linkedin`
 - `embed`: `default`, `substack`, `devto`, `hashnode`, `ghost`, `wordpress`
+- `preserve`: available only as an API/YAML override, not as a built-in target default
 
 You can override these defaults via:
 
 - CLI: `--image-strategy`, `--raw-image-strategy`, `--copy-script`
 - API: `target_options={...}`
 - YAML: `target_options: ...`
+
+The normal-mode CLI flag `--image-strategy` exposes `embed` and `copyable`.
+Use API/YAML `image_strategy: preserve` when you need to keep existing image
+URLs or relative paths untouched.
 
 ## Raw Mode Across Targets
 
@@ -33,6 +38,8 @@ Use `--raw` (CLI) or `raw_mode=True` (Python API) to remove preview chrome from 
 - no toolbar/header copy controls
 - no JavaScript blocks
 - image behavior still follows each target profile's `raw_image_strategy`
+- output still remains a complete HTML document with `<!DOCTYPE html>`,
+  `<html>`, `<body>`, and `#content`
 
 ## Target Notes
 
@@ -45,19 +52,23 @@ Use `--raw` (CLI) or `raw_mode=True` (Python API) to remove preview chrome from 
 
 ## `--serve` Mode
 
-`--serve` rewrites embedded image data URIs to hosted image URLs via local static serving + ngrok.
+`--serve` converts embedded image data URIs into extracted image files and then
+serves the output directory through localhost and ngrok.
 
 Flow:
 
 1. extract images from generated HTML
 2. write files to `images/`
-3. rewrite image sources to HTTP URLs
-4. expose via local server + ngrok tunnel
+3. rewrite image sources to relative `images/...` paths
+4. expose the page via local server + ngrok tunnel
 
 Requirements:
 
 - `ngrok` installed
 - authenticated ngrok configuration
+
+If both `--serve` and `--open` are passed, the serve flow opens the tunneled
+page and `--open` is effectively ignored.
 
 ## Choosing a Target Programmatically
 

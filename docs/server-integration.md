@@ -74,6 +74,9 @@ This maps directly to `nb2wb.convert()` inputs.
 - Apply API-level body size and timeout limits.
 - Set explicit safety limits in `config["safety"]`.
 - Log conversion failures with request/job identifiers.
+- Remember that `nb2wb.convert()` is content-only; if an upstream service sends
+  `"post.ipynb"` as a plain string, it will be parsed as document text rather
+  than loaded from disk.
 
 ## Suggested Job Isolation
 

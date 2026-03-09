@@ -22,12 +22,12 @@ html = nb2wb.convert(
 
 | Parameter | Type | Meaning |
 |---|---|---|
-| `notebook` | `str \| Mapping \| nbformat.NotebookNode` | In-memory source payload (never a path object) |
+| `notebook` | `str \| Mapping \| nbformat.NotebookNode` | In-memory source payload; `Path` objects are rejected |
 | `config` | `None \| dict-like \| Config \| str \| Path` | Config object, mapping, or YAML path |
 | `target` | `str` | Target wrapper: `default`, `substack`, `medium`, `x`, `linkedin`, `devto`, `hashnode`, `ghost`, `wordpress` |
 | `target_options` | `Mapping \| None` | Optional profile feature overrides (`image_strategy`, `raw_image_strategy`, `copy_script_mode`, `article_width_px`, `table_mode`, `toolbar_message`, `theme_overrides`) |
 | `execute` | `bool` | Execute code cells before rendering |
-| `working_dir` | `str \| Path \| None` | Execution working directory when `execute=True` |
+| `working_dir` | `str \| Path \| None` | Execution working directory when `execute=True`; defaults to the current directory and must resolve to an existing directory |
 | `raw_mode` | `bool` | Strip wrapper chrome (`<head>`, toolbar, JS) |
 
 ## Input Formats (Detailed)
@@ -58,6 +58,7 @@ Behavior:
   - output aliases `pyout` -> `execute_result`, `pyerr` -> `error`
 - missing or duplicate/invalid cell ids are repaired deterministically
 - missing `kernelspec.display_name` is derived from `kernelspec.name` when available
+- successful repairs emit a `RuntimeWarning` describing what changed
 - unsupported major versions and unknown non-legacy schema fields fail with actionable `ValueError`
 
 ### 2. In-Memory Text Payloads
@@ -97,6 +98,8 @@ Use loader helpers for filesystem inputs:
 | `nb2wb.load_quarto_payload(path)` | `.qmd` | `{"format": "qmd", "content": "..."}` |
 
 Use loader helpers whenever your source is a filesystem path.
+The Markdown and Quarto helpers intentionally return text payload mappings; the
+actual parsing step still happens inside `nb2wb.convert()`.
 
 ## Output Formats (Detailed)
 
@@ -118,6 +121,8 @@ Target-specific image wrapping (defaults):
 
 - `copyable`: `medium`, `x`, `linkedin` (image container + copy button)
 - `embed`: `default`, `substack`, `devto`, `hashnode`, `ghost`, `wordpress`
+- `preserve`: available through API/YAML target options when you want to keep
+  original image sources unchanged
 
 Typical structure:
 
@@ -207,6 +212,9 @@ html = nb2wb.convert(
     },
 )
 ```
+
+`image_strategy: "preserve"` is supported here even though the CLI
+`--image-strategy` flag does not expose it for normal mode.
 
 ## Path-Based Example
 

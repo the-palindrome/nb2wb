@@ -28,6 +28,10 @@ Common reasons:
 - URL points to non-public/private network address
 - unsupported MIME type
 - download fails timeout/size limits
+- local image path is absolute, traverses with `..`, or resolves outside the current working directory
+
+If you need to keep original image URLs untouched, use API/YAML
+`target_options.image_strategy: preserve`.
 
 ## Conversion fails with safety limit errors
 
@@ -44,7 +48,7 @@ Only raise limits as needed.
 
 If embedded base64 images are stripped by editors:
 
-- use `--serve` mode for public image URLs
+- use `--serve` mode to generate a tunneled preview page with extracted `images/...` assets
 - in normal mode, use per-image copy controls in generated pages
 - in raw mode, copy controls are intentionally removed; prefer `--serve` or manual image handling
 
@@ -58,6 +62,14 @@ Ensure payload is a valid notebook object with:
 - `metadata`
 
 Invalid payloads raise `ValueError`.
+
+## Python API treated my file path string as document content
+
+`nb2wb.convert()` does not load files. These calls behave differently:
+
+- `nb2wb.convert("post.ipynb")` parses the string as Markdown text
+- `nb2wb.convert(Path("post.ipynb"))` raises `TypeError`
+- `nb2wb.convert(nb2wb.load_input_payload("post.ipynb"))` loads and converts the file
 
 ## Legacy notebook payload compatibility
 

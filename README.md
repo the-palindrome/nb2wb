@@ -96,6 +96,12 @@ html = nb2wb.convert(
 
 `nb2wb.convert()` is content-only; use `load_input_payload()` (or typed loaders) for filesystem inputs.
 
+Loader helpers return a validated `NotebookNode` for `.ipynb` inputs and
+`{"format": ..., "content": ...}` mappings for `.md` and `.qmd` inputs.
+Passing a `Path` object to `nb2wb.convert()` raises `TypeError`. Passing a
+plain string such as `"notebook.ipynb"` is treated as document text, not as a
+filesystem path.
+
 ## Security at a Glance
 
 `nb2wb` uses a mandatory server-safe conversion pipeline:
@@ -144,6 +150,8 @@ Run tests:
 ```bash
 pytest
 ```
+
+Detailed suite guide: `tests/README.md`
 
 Build docs locally:
 

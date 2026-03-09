@@ -21,6 +21,7 @@ nb2wb notebook.ipynb
 ```
 
 This writes `notebook.html` by default.
+The same command shape also works for `.md` and `.qmd` inputs.
 
 Common variants:
 
@@ -47,6 +48,9 @@ html = nb2wb.convert(
 ```
 
 `nb2wb.convert()` accepts in-memory payloads; use loader helpers for path-based sources.
+`nb2wb.convert(Path("notebook.ipynb"))` is rejected on purpose, and a plain
+string such as `"notebook.ipynb"` is parsed as Markdown text rather than loaded
+from disk.
 
 In-memory notebook payload:
 
@@ -72,7 +76,12 @@ In raw mode, output omits `<head>`, toolbar/header controls, and JavaScript.
 nb2wb notebook.ipynb --serve
 ```
 
-This extracts images, runs a local HTTP server, and creates an ngrok URL.
+This extracts image data URIs into an `images/` directory next to the output
+HTML, rewrites the page to use those relative files, starts a local HTTP
+server, and exposes the served page through ngrok.
+
+If you pass both `--serve` and `--open`, the serve flow wins and opens the
+tunneled page.
 
 Requirements:
 

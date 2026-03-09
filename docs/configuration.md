@@ -79,6 +79,10 @@ target_options:
   theme_overrides: {}          # CSS variable map for wrapper theme
 ```
 
+`target_options.image_strategy: preserve` is available in YAML and the Python
+API. The CLI `--image-strategy` flag does not expose `preserve` for normal-mode
+output.
+
 ## Inheritance Rules
 
 - `code.image_width`, `latex.image_width`, and `table.image_width` inherit top-level `image_width` unless overridden.
