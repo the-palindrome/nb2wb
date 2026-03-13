@@ -51,9 +51,12 @@ _ANSI = re.compile(r"\x1b\[[0-9;]*[mGKFHJ]")
 _LABEL_RE = re.compile(r"(?<!\\)\\label\{([^}]+)\}")
 _EQREF_RE = re.compile(r"(?<!\\)\\eqref\{([^}]+)\}")
 
-# Fenced code blocks — protected from all LaTeX processing
-# Matches ``` or ~~~  (3+ identical fence chars) with optional language tag
-_FENCED_CODE_RE = re.compile(r"^(`{3,})[^\n]*\n.*?\1[ \t]*$", re.MULTILINE | re.DOTALL)
+# Fenced code blocks — protected from all LaTeX processing.
+# Matches backtick or tilde fences (3+ identical fence chars) with optional language tag.
+_FENCED_CODE_RE = re.compile(
+    r"^((?:`{3,}|~{3,}))[^\n]*\n.*?\1[ \t]*$",
+    re.MULTILINE | re.DOTALL,
+)
 _INLINE_CODE_RE = re.compile(r"(`+)(.+?)\1")
 _PROTECTED_TOKEN = "\x00PROTECTED{}\x00"
 _LIST_ITEM_RE = re.compile(

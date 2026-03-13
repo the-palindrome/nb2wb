@@ -117,6 +117,29 @@ class TestMarkdownCellProcessing:
         # Dollar sign content inside code block must be preserved literally
         assert "$1" in html
 
+    def test_tilde_fenced_code_preserves_list_like_lines(self, minimal_config, tmp_path):
+        """Tilde-fenced code contents stay verbatim through cuddled-list normalization."""
+        nb = nbformat.v4.new_notebook()
+        nb.cells = [
+            nbformat.v4.new_markdown_cell(
+                "Here's some code:\n\n~~~python\nparagraph line\n- item\n~~~"
+            )
+        ]
+
+        notebook_path = tmp_path / "test.ipynb"
+        with open(notebook_path, "w") as f:
+            nbformat.write(nb, f)
+
+        converter = Converter(minimal_config)
+        html = _convert_path(converter, notebook_path)
+
+        code_match = re.search(r"<pre><code[^>]*>(.*?)</code></pre>", html, flags=re.DOTALL)
+        assert code_match is not None
+
+        code_contents = code_match.group(1)
+        assert "paragraph line\n- item" in code_contents
+        assert "paragraph line\n\n- item" not in code_contents
+
     def test_inline_code_protected_from_latex(self, minimal_config, tmp_path):
         """Dollar signs inside backtick code spans are not processed as LaTeX."""
         nb = nbformat.v4.new_notebook()
