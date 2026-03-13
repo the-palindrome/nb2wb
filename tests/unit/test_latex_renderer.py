@@ -21,7 +21,7 @@ from nb2wb.renderers.latex_renderer import (
     _clear_render_cache,
 )
 from nb2wb.config import LatexConfig
-from PIL import Image
+from PIL import Image, ImageChops, ImageDraw
 import io
 
 
@@ -251,6 +251,26 @@ class TestImageProcessing:
         # Tag should be drawn (can't easily verify text, but image should be valid)
         assert result_img.width == minimal_config.latex.image_width
 
+    def test_trim_and_pad_shrinks_wide_formula_and_keeps_edge_gap(self, minimal_config):
+        """Wide formulas should fit the canvas without touching the edges."""
+        img = Image.new("RGB", (1600, 80), "#ffffff")
+        draw = ImageDraw.Draw(img)
+        draw.rectangle([0, 20, 1599, 60], fill="#000000")
+
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+
+        result = _trim_and_pad(buf.getvalue(), minimal_config.latex)
+        result_img = Image.open(io.BytesIO(result)).convert("RGB")
+        bbox = ImageChops.difference(
+            result_img,
+            Image.new("RGB", result_img.size, minimal_config.latex.background),
+        ).getbbox()
+
+        assert bbox is not None
+        assert bbox[0] >= 4
+        assert result_img.width - bbox[2] >= 4
+
     def test_draw_tag_on_canvas(self, minimal_config):
         """Draw equation tag on canvas."""
         canvas = Image.new("RGB", (800, 100), "#ffffff")
@@ -312,6 +332,36 @@ class TestRenderLatexBlock:
         latex = r"\begin{bmatrix} 1 & 2 \\ 3 & 4 \end{bmatrix}"
         result = render_latex_block(latex, minimal_config.latex)
         assert result.startswith("data:image/png;base64,")
+
+    def test_render_mathtext_auto_shrinks_wide_formula(self, minimal_config, monkeypatch):
+        """Over-wide formulas should retry rendering with a smaller font size."""
+        font_sizes: list[int] = []
+
+        def fake_render_mathtext_png(latex: str, config: LatexConfig) -> bytes:
+            font_sizes.append(config.font_size)
+            width = config.font_size * 40
+            img = Image.new("RGB", (width, 50), config.background)
+            draw = ImageDraw.Draw(img)
+            draw.rectangle([0, 10, width - 1, 40], fill=config.color)
+            buf = io.BytesIO()
+            img.save(buf, format="PNG")
+            return buf.getvalue()
+
+        monkeypatch.setattr(lr, "_render_mathtext_png", fake_render_mathtext_png)
+
+        result = _render_mathtext("x = 1", minimal_config.latex)
+        payload = result.removeprefix("data:image/png;base64,")
+        rendered = Image.open(io.BytesIO(base64.b64decode(payload))).convert("RGB")
+        bbox = ImageChops.difference(
+            rendered,
+            Image.new("RGB", rendered.size, minimal_config.latex.background),
+        ).getbbox()
+
+        assert bbox is not None
+        assert len(font_sizes) >= 2
+        assert min(font_sizes) < minimal_config.latex.font_size
+        assert bbox[0] >= 4
+        assert rendered.width - bbox[2] >= 4
 
 
 class TestRenderCache:
