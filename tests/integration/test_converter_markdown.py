@@ -275,6 +275,46 @@ class TestMarkdownCellProcessing:
         assert "<code>~~literal~~</code>" in html
         assert "<del>rendered</del>" in html
 
+    def test_cuddled_unordered_lists_render_as_lists(self, minimal_config, tmp_path):
+        """Unordered list markers after text render as a proper list block."""
+        nb = nbformat.v4.new_notebook()
+        nb.cells = [
+            nbformat.v4.new_markdown_cell(
+                "List intro line\n* first item\n* second item"
+            )
+        ]
+
+        notebook_path = tmp_path / "test.ipynb"
+        with open(notebook_path, "w") as f:
+            nbformat.write(nb, f)
+
+        converter = Converter(minimal_config)
+        html = _convert_path(converter, notebook_path)
+
+        assert "<ul>" in html
+        assert "<li>first item</li>" in html
+        assert "<li>second item</li>" in html
+
+    def test_cuddled_ordered_lists_render_as_lists(self, minimal_config, tmp_path):
+        """Ordered list markers after text render as a proper list block."""
+        nb = nbformat.v4.new_notebook()
+        nb.cells = [
+            nbformat.v4.new_markdown_cell(
+                "Steps line\n1. first step\n2. second step"
+            )
+        ]
+
+        notebook_path = tmp_path / "test.ipynb"
+        with open(notebook_path, "w") as f:
+            nbformat.write(nb, f)
+
+        converter = Converter(minimal_config)
+        html = _convert_path(converter, notebook_path)
+
+        assert "<ol>" in html
+        assert "<li>first step</li>" in html
+        assert "<li>second step</li>" in html
+
     def test_markdown_table_can_render_as_image(self, minimal_config, tmp_path):
         """Table HTML can be replaced by a rendered image when configured."""
         nb = nbformat.v4.new_notebook()

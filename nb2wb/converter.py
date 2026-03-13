@@ -56,6 +56,12 @@ _EQREF_RE = re.compile(r"(?<!\\)\\eqref\{([^}]+)\}")
 _FENCED_CODE_RE = re.compile(r"^(`{3,})[^\n]*\n.*?\1[ \t]*$", re.MULTILINE | re.DOTALL)
 _INLINE_CODE_RE = re.compile(r"(`+)(.+?)\1")
 _PROTECTED_TOKEN = "\x00PROTECTED{}\x00"
+_LIST_ITEM_RE = re.compile(
+    r"^[ \t]{0,3}(?:[*+-][ \t]+\S.*|\d+[.)][ \t]+\S.*)$"
+)
+_NON_PARAGRAPH_LINE_RE = re.compile(
+    r"^[ \t]{0,3}(?:[*+-][ \t]+\S|\d+[.)][ \t]+\S|>|#|`{3,}|~{3,}|\|)"
+)
 
 _STRIKETHROUGH_PATTERN = r"(?<!~)(~~)(.+?)(~~)(?!~)"
 _MD_BASE_EXTENSIONS = ("extra", "sane_lists", "nl2br")
@@ -155,6 +161,7 @@ class Converter:
 
         # 2. Convert inline LaTeX to Unicode
         src = convert_inline_math(src)
+        src = _normalize_cuddled_lists(src)
 
         # Restore fenced code blocks and inline code spans before markdown parsing
         src = _restore_protected_spans(src, stash)
@@ -345,6 +352,29 @@ def _restore_protected_spans(src: str, stash: list[str]) -> str:
     for i, block in enumerate(stash):
         src = src.replace(_PROTECTED_TOKEN.format(i), block)
     return src
+
+
+def _normalize_cuddled_lists(src: str) -> str:
+    """Insert a blank line before top-level list items that follow paragraph text."""
+    if not src:
+        return src
+
+    lines = src.splitlines()
+    if not lines:
+        return src
+
+    out: list[str] = []
+    for line in lines:
+        if _LIST_ITEM_RE.match(line):
+            prev = out[-1] if out else ""
+            if prev.strip() and not _NON_PARAGRAPH_LINE_RE.match(prev):
+                out.append("")
+        out.append(line)
+
+    normalized = "\n".join(out)
+    if src.endswith("\n"):
+        normalized += "\n"
+    return normalized
 
 
 def _cell_tags(cell) -> frozenset[str]:
