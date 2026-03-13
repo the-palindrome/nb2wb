@@ -30,6 +30,8 @@ import html as html_mod
 
 import markdown
 import nbformat
+from markdown.extensions import Extension
+from markdown.inlinepatterns import SimpleTagInlineProcessor
 
 from .config import Config
 from .config import SafetyConfig
@@ -55,8 +57,24 @@ _FENCED_CODE_RE = re.compile(r"^(`{3,})[^\n]*\n.*?\1[ \t]*$", re.MULTILINE | re.
 _INLINE_CODE_RE = re.compile(r"(`+)(.+?)\1")
 _PROTECTED_TOKEN = "\x00PROTECTED{}\x00"
 
-# Markdown extensions used for cell conversion
-_MD_EXTENSIONS = ["extra", "sane_lists", "nl2br"]
+_STRIKETHROUGH_PATTERN = r"(?<!~)(~~)(.+?)(~~)(?!~)"
+_MD_BASE_EXTENSIONS = ("extra", "sane_lists", "nl2br")
+
+
+class _StrikethroughExtension(Extension):
+    """Enable GitHub-style ~~strikethrough~~ spans in Python-Markdown."""
+
+    def extendMarkdown(self, md) -> None:
+        md.inlinePatterns.register(
+            SimpleTagInlineProcessor(_STRIKETHROUGH_PATTERN, "del"),
+            "strikethrough",
+            175,
+        )
+
+
+def _markdown_extensions() -> list[str | Extension]:
+    """Return markdown extensions used for cell conversion."""
+    return [*_MD_BASE_EXTENSIONS, _StrikethroughExtension()]
 
 _RICH_OUTPUT_MIMES = frozenset({"image/png", "image/svg+xml", "text/html"})
 
@@ -73,7 +91,7 @@ class Converter:
         _enforce_serialized_notebook_size(notebook, self.config.safety)
         nb = _execute_cells(notebook, cwd or Path.cwd()) if self.execute else notebook
         _enforce_notebook_limits(nb, self.config.safety)
-        self._markdown_parser = markdown.Markdown(extensions=_MD_EXTENSIONS)
+        self._markdown_parser = markdown.Markdown(extensions=_markdown_extensions())
         self._lang = _notebook_language(nb)
         self._latex_preamble = _collect_latex_preamble(nb.cells)
         self._eq_labels = _collect_equation_labels(nb.cells)
@@ -144,7 +162,7 @@ class Converter:
         # 3. Markdown → HTML
         parser = getattr(self, "_markdown_parser", None)
         if parser is None:
-            parser = markdown.Markdown(extensions=_MD_EXTENSIONS)
+            parser = markdown.Markdown(extensions=_markdown_extensions())
             self._markdown_parser = parser
         html = parser.reset().convert(src)
         if getattr(self, "_table_mode_image", str(self.config.table.mode).lower() == "image"):

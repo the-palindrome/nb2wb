@@ -245,6 +245,36 @@ class TestMarkdownCellProcessing:
         # Table should be converted to HTML
         assert "<table>" in html or "<th>" in html
 
+    def test_markdown_strikethrough_applied(self, minimal_config, tmp_path):
+        """GitHub-style ~~strikethrough~~ converts to <del>."""
+        nb = nbformat.v4.new_notebook()
+        nb.cells = [nbformat.v4.new_markdown_cell("~~strikethrough test~~")]
+
+        notebook_path = tmp_path / "test.ipynb"
+        with open(notebook_path, "w") as f:
+            nbformat.write(nb, f)
+
+        converter = Converter(minimal_config)
+        html = _convert_path(converter, notebook_path)
+
+        assert "<del>strikethrough test</del>" in html
+        assert "~~strikethrough test~~" not in html
+
+    def test_markdown_strikethrough_respects_inline_code(self, minimal_config, tmp_path):
+        """Backtick code with ~~ stays literal while bare ~~ is rendered."""
+        nb = nbformat.v4.new_notebook()
+        nb.cells = [nbformat.v4.new_markdown_cell("`~~literal~~` and ~~rendered~~")]
+
+        notebook_path = tmp_path / "test.ipynb"
+        with open(notebook_path, "w") as f:
+            nbformat.write(nb, f)
+
+        converter = Converter(minimal_config)
+        html = _convert_path(converter, notebook_path)
+
+        assert "<code>~~literal~~</code>" in html
+        assert "<del>rendered</del>" in html
+
     def test_markdown_table_can_render_as_image(self, minimal_config, tmp_path):
         """Table HTML can be replaced by a rendered image when configured."""
         nb = nbformat.v4.new_notebook()
