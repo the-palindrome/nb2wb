@@ -30,6 +30,8 @@ import html as html_mod
 
 import markdown
 import nbformat
+from markdown.extensions import Extension
+from markdown.inlinepatterns import SimpleTagInlineProcessor
 
 from .config import Config
 from .config import SafetyConfig
@@ -49,14 +51,39 @@ _ANSI = re.compile(r"\x1b\[[0-9;]*[mGKFHJ]")
 _LABEL_RE = re.compile(r"(?<!\\)\\label\{([^}]+)\}")
 _EQREF_RE = re.compile(r"(?<!\\)\\eqref\{([^}]+)\}")
 
-# Fenced code blocks — protected from all LaTeX processing
-# Matches ``` or ~~~  (3+ identical fence chars) with optional language tag
-_FENCED_CODE_RE = re.compile(r"^(`{3,})[^\n]*\n.*?\1[ \t]*$", re.MULTILINE | re.DOTALL)
+# Fenced code blocks — protected from all LaTeX processing.
+# Matches backtick or tilde fences (3+ identical fence chars) with optional language tag.
+_FENCED_CODE_RE = re.compile(
+    r"^((?:`{3,}|~{3,}))[^\n]*\n.*?\1[ \t]*$",
+    re.MULTILINE | re.DOTALL,
+)
 _INLINE_CODE_RE = re.compile(r"(`+)(.+?)\1")
 _PROTECTED_TOKEN = "\x00PROTECTED{}\x00"
+_LIST_ITEM_RE = re.compile(
+    r"^[ \t]{0,3}(?:[*+-][ \t]+\S.*|\d+[.)][ \t]+\S.*)$"
+)
+_NON_PARAGRAPH_LINE_RE = re.compile(
+    r"^[ \t]{0,3}(?:[*+-][ \t]+\S|\d+[.)][ \t]+\S|>|#|`{3,}|~{3,}|\|)"
+)
 
-# Markdown extensions used for cell conversion
-_MD_EXTENSIONS = ["extra", "sane_lists", "nl2br"]
+_STRIKETHROUGH_PATTERN = r"(?<!~)(~~)(.+?)(~~)(?!~)"
+_MD_BASE_EXTENSIONS = ("extra", "sane_lists", "nl2br")
+
+
+class _StrikethroughExtension(Extension):
+    """Enable GitHub-style ~~strikethrough~~ spans in Python-Markdown."""
+
+    def extendMarkdown(self, md) -> None:
+        md.inlinePatterns.register(
+            SimpleTagInlineProcessor(_STRIKETHROUGH_PATTERN, "del"),
+            "strikethrough",
+            175,
+        )
+
+
+def _markdown_extensions() -> list[str | Extension]:
+    """Return markdown extensions used for cell conversion."""
+    return [*_MD_BASE_EXTENSIONS, _StrikethroughExtension()]
 
 _RICH_OUTPUT_MIMES = frozenset({"image/png", "image/svg+xml", "text/html"})
 
@@ -64,16 +91,23 @@ _RICH_OUTPUT_MIMES = frozenset({"image/png", "image/svg+xml", "text/html"})
 class Converter:
     """Converts an in-memory Jupyter notebook model into HTML content fragments."""
 
-    def __init__(self, config: Config, *, execute: bool = False) -> None:
+    def __init__(
+        self,
+        config: Config,
+        *,
+        execute: bool = False,
+        warnings_mode: bool = False,
+    ) -> None:
         self.config = config
         self.execute = execute
+        self.warnings_mode = warnings_mode
 
     def convert_notebook(self, notebook, *, cwd: Path | None = None) -> str:
         """Convert an in-memory notebook object (NotebookNode) to HTML."""
         _enforce_serialized_notebook_size(notebook, self.config.safety)
         nb = _execute_cells(notebook, cwd or Path.cwd()) if self.execute else notebook
         _enforce_notebook_limits(nb, self.config.safety)
-        self._markdown_parser = markdown.Markdown(extensions=_MD_EXTENSIONS)
+        self._markdown_parser = markdown.Markdown(extensions=_markdown_extensions())
         self._lang = _notebook_language(nb)
         self._latex_preamble = _collect_latex_preamble(nb.cells)
         self._eq_labels = _collect_equation_labels(nb.cells)
@@ -137,6 +171,7 @@ class Converter:
 
         # 2. Convert inline LaTeX to Unicode
         src = convert_inline_math(src)
+        src = _normalize_cuddled_lists(src)
 
         # Restore fenced code blocks and inline code spans before markdown parsing
         src = _restore_protected_spans(src, stash)
@@ -144,7 +179,7 @@ class Converter:
         # 3. Markdown → HTML
         parser = getattr(self, "_markdown_parser", None)
         if parser is None:
-            parser = markdown.Markdown(extensions=_MD_EXTENSIONS)
+            parser = markdown.Markdown(extensions=_markdown_extensions())
             self._markdown_parser = parser
         html = parser.reset().convert(src)
         if getattr(self, "_table_mode_image", str(self.config.table.mode).lower() == "image"):
@@ -209,6 +244,8 @@ class Converter:
         otype = output.get("output_type", "")
 
         if otype == "stream":
+            if output.get("name") == "stderr" and not self.warnings_mode:
+                return None
             return self._text_output_to_png(_join_text(output.get("text")))
 
         if otype == "error":
@@ -327,6 +364,29 @@ def _restore_protected_spans(src: str, stash: list[str]) -> str:
     for i, block in enumerate(stash):
         src = src.replace(_PROTECTED_TOKEN.format(i), block)
     return src
+
+
+def _normalize_cuddled_lists(src: str) -> str:
+    """Insert a blank line before top-level list items that follow paragraph text."""
+    if not src:
+        return src
+
+    lines = src.splitlines()
+    if not lines:
+        return src
+
+    out: list[str] = []
+    for line in lines:
+        if _LIST_ITEM_RE.match(line):
+            prev = out[-1] if out else ""
+            if prev.strip() and not _NON_PARAGRAPH_LINE_RE.match(prev):
+                out.append("")
+        out.append(line)
+
+    normalized = "\n".join(out)
+    if src.endswith("\n"):
+        normalized += "\n"
+    return normalized
 
 
 def _cell_tags(cell) -> frozenset[str]:

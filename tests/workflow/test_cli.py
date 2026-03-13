@@ -140,6 +140,44 @@ class TestCLIBasics:
         assert "<script" not in html.lower()
         assert "<head" not in html.lower()
 
+    def test_cli_hides_stderr_streams_by_default(self, tmp_path):
+        """CLI omits stderr warning/log outputs unless --warnings is set."""
+        cell = nbformat.v4.new_code_cell("pass")
+        cell.metadata["tags"] = ["hide-input"]
+        cell.outputs = [
+            nbformat.v4.new_output(
+                output_type="stream",
+                name="stderr",
+                text="warning-like stderr output\n",
+            )
+        ]
+        notebook_path = _write_notebook(tmp_path / "warnings.ipynb", [cell])
+        output_path = tmp_path / "warnings.html"
+
+        _run_cli(["nb2wb", str(notebook_path), "-o", str(output_path)])
+
+        html = output_path.read_text()
+        assert 'class="code-cell"' not in html
+
+    def test_cli_warnings_flag_renders_stderr_streams(self, tmp_path):
+        """CLI --warnings restores stderr warning/log rendering."""
+        cell = nbformat.v4.new_code_cell("pass")
+        cell.metadata["tags"] = ["hide-input"]
+        cell.outputs = [
+            nbformat.v4.new_output(
+                output_type="stream",
+                name="stderr",
+                text="warning-like stderr output\n",
+            )
+        ]
+        notebook_path = _write_notebook(tmp_path / "warnings_on.ipynb", [cell])
+        output_path = tmp_path / "warnings_on.html"
+
+        _run_cli(["nb2wb", str(notebook_path), "--warnings", "-o", str(output_path)])
+
+        html = output_path.read_text()
+        assert 'class="code-cell"' in html
+
 
 class TestCLIPlatformSelection:
     """Test platform-specific output."""
@@ -334,6 +372,7 @@ class TestCLIServerSafeMode:
             target,
             target_options,
             execute,
+            warnings_mode,
             working_dir,
             raw_mode,
         ):
@@ -345,6 +384,7 @@ class TestCLIServerSafeMode:
             seen["target_options"] = target_options
             seen["payload_type"] = type(notebook).__name__
             seen["working_dir"] = str(working_dir)
+            seen["warnings_mode"] = warnings_mode
             seen["raw_mode"] = raw_mode
             seen["has_safety_limits"] = (
                 resolved.safety.max_input_bytes > 0
@@ -362,6 +402,7 @@ class TestCLIServerSafeMode:
         assert seen["target_options"] is None
         assert seen["payload_type"] == "NotebookNode"
         assert seen["working_dir"] == str(notebook_path.parent)
+        assert seen["warnings_mode"] is False
         assert seen["raw_mode"] is False
         assert seen["has_safety_limits"] is True
 
@@ -380,10 +421,12 @@ class TestCLIServerSafeMode:
             target,
             target_options,
             execute,
+            warnings_mode,
             working_dir,
             raw_mode,
         ):
             seen["target_options"] = target_options
+            seen["warnings_mode"] = warnings_mode
             seen["raw_mode"] = raw_mode
             return "<html><body><p>ok</p></body></html>"
 
@@ -392,6 +435,7 @@ class TestCLIServerSafeMode:
         _run_cli(["nb2wb", str(notebook_path), "--raw", "-o", str(tmp_path / "out.html")])
 
         assert seen["target_options"] is None
+        assert seen["warnings_mode"] is False
         assert seen["raw_mode"] is True
 
     def test_cli_forwards_target_options_to_api(self, tmp_path, monkeypatch):
@@ -409,11 +453,13 @@ class TestCLIServerSafeMode:
             target,
             target_options,
             execute,
+            warnings_mode,
             working_dir,
             raw_mode,
         ):
             seen["target"] = target
             seen["target_options"] = target_options
+            seen["warnings_mode"] = warnings_mode
             return "<html><body><p>ok</p></body></html>"
 
         monkeypatch.setattr("nb2wb.cli.convert_notebook", fake_convert)
@@ -447,6 +493,7 @@ class TestCLIServerSafeMode:
             "article_width_px": 777,
             "table_mode": "native",
         }
+        assert seen["warnings_mode"] is False
 
 
 class TestCLIInputSanitization:

@@ -17,6 +17,7 @@ import re
 import subprocess
 import tempfile
 from collections import OrderedDict
+from dataclasses import replace
 from functools import lru_cache
 from pathlib import Path as _Path
 from threading import Lock
@@ -65,6 +66,9 @@ _FORBIDDEN_PACKAGES = frozenset(
 )
 _MAX_LATEX_CHARS = 10_000
 _MAX_PREAMBLE_CHARS = 20_000
+_MIN_EDGE_PADDING = 12
+_MAX_EDGE_PADDING = 32
+_MIN_AUTO_FONT_SIZE = 12
 
 _LATEX_RENDER_CACHE: OrderedDict[tuple[object, ...], str] = OrderedDict()
 _LATEX_RENDER_CACHE_LOCK = Lock()
@@ -239,8 +243,8 @@ def _draw_tag(canvas: Image.Image, tag: int, config: LatexConfig) -> None:
     text_w = bbox[2] - bbox[0]
     text_h = bbox[3] - bbox[1]
 
-    x = canvas.width - text_w - config.padding
-    y = (canvas.height - text_h) // 2
+    x = canvas.width - text_w - _edge_padding(config)
+    y = (canvas.height - text_h) // 2 - bbox[1]
 
     r, g, b = (round(c * 255) for c in _matplotlib_colors().to_rgb(config.color))
     draw.text((x, y), text, font=font, fill=(r, g, b))
@@ -263,19 +267,24 @@ def _tag_font(font_size_px: int) -> ImageFont.ImageFont | ImageFont.FreeTypeFont
 
 
 def _trim_and_pad(png_bytes: bytes, config: LatexConfig, tag: int | None = None) -> bytes:
-    """Trim background whitespace, add vertical padding, and center on a fixed-width canvas."""
-    img = Image.open(io.BytesIO(png_bytes)).convert("RGB")
-    bg = Image.new("RGB", img.size, config.background)
-    bbox = ImageChops.difference(img, bg).getbbox()
-    if bbox:
-        img = img.crop(bbox)
-    pad_px = config.padding
+    """Trim whitespace, fit wide formulas, and center on a fixed-width canvas."""
+    img = _trim_to_content(Image.open(io.BytesIO(png_bytes)).convert("RGB"), config.background)
+    max_formula_width = _available_formula_width(config, tag)
+    if img.width > max_formula_width:
+        scale = max_formula_width / img.width
+        resized_height = max(1, round(img.height * scale))
+        img = img.resize((max_formula_width, resized_height), _lanczos_resample())
+
+    pad_px = max(0, int(config.padding))
+    formula_left = _edge_padding(config)
+    formula_width = _available_formula_width(config, tag)
+    x = formula_left + max((formula_width - img.width) // 2, 0)
     canvas = Image.new(
         "RGB",
         (config.image_width, img.height + 2 * pad_px),
         config.background,
     )
-    canvas.paste(img, ((config.image_width - img.width) // 2, pad_px))
+    canvas.paste(img, (x, pad_px))
     if tag is not None:
         _draw_tag(canvas, tag, config)
     if config.border_radius:
@@ -291,6 +300,17 @@ def _trim_and_pad(png_bytes: bytes, config: LatexConfig, tag: int | None = None)
 
 def _render_mathtext(latex: str, config: LatexConfig, tag: int | None = None) -> str:
     """Use matplotlib's built-in mathtext (no LaTeX installation required)."""
+    fitted_config, png_bytes = _fit_latex_render(
+        config,
+        tag,
+        lambda current_config: _render_mathtext_png(latex, current_config),
+    )
+    data = base64.b64encode(_trim_and_pad(png_bytes, fitted_config, tag=tag)).decode("ascii")
+    return f"data:image/png;base64,{data}"
+
+
+def _render_mathtext_png(latex: str, config: LatexConfig) -> bytes:
+    """Render a mathtext expression to a tightly-bounded PNG."""
     plt = _matplotlib_pyplot()
 
     if latex.lstrip().startswith(r"\begin{"):
@@ -330,8 +350,7 @@ def _render_mathtext(latex: str, config: LatexConfig, tag: int | None = None) ->
             facecolor=config.background,
         )
         buf.seek(0)
-        data = base64.b64encode(_trim_and_pad(buf.read(), config, tag=tag)).decode("ascii")
-        return f"data:image/png;base64,{data}"
+        return buf.read()
     finally:
         plt.close(fig)
 
@@ -373,6 +392,16 @@ def _validate_usetex_inputs(latex: str, preamble: str) -> None:
 
 
 def _render_usetex(latex: str, config: LatexConfig, preamble: str = "", tag: int | None = None) -> str:
+    fitted_config, png_bytes = _fit_latex_render(
+        config,
+        tag,
+        lambda current_config: _render_usetex_png(latex, current_config, preamble),
+    )
+    data = base64.b64encode(_trim_and_pad(png_bytes, fitted_config, tag=tag)).decode("ascii")
+    return f"data:image/png;base64,{data}"
+
+
+def _render_usetex_png(latex: str, config: LatexConfig, preamble: str = "") -> bytes:
     """
     Direct latex + dvipng pipeline.
 
@@ -448,7 +477,81 @@ def _render_usetex(latex: str, config: LatexConfig, preamble: str = "", tag: int
                 f"dvipng failed:\n{result.stderr.decode(errors='replace')}"
             )
 
-        png_bytes = png_path.read_bytes()
+        return png_path.read_bytes()
 
-    data = base64.b64encode(_trim_and_pad(png_bytes, config, tag=tag)).decode("ascii")
-    return f"data:image/png;base64,{data}"
+
+def _fit_latex_render(
+    config: LatexConfig,
+    tag: int | None,
+    render_png,
+) -> tuple[LatexConfig, bytes]:
+    """Retry wide equations with a smaller font before final composition."""
+    current_config = config
+    png_bytes = render_png(current_config)
+    min_font_size = min(current_config.font_size, max(_MIN_AUTO_FONT_SIZE, round(config.font_size * 0.6)))
+
+    for _ in range(4):
+        content_width = _trimmed_content_width(png_bytes, current_config.background)
+        if content_width <= _available_formula_width(current_config, tag):
+            return current_config, png_bytes
+        if current_config.font_size <= min_font_size:
+            break
+
+        target_font_size = max(
+            min_font_size,
+            int(current_config.font_size * _available_formula_width(current_config, tag) / max(content_width, 1)),
+        )
+        if target_font_size >= current_config.font_size:
+            target_font_size = current_config.font_size - 1
+        if target_font_size < min_font_size:
+            target_font_size = min_font_size
+        if target_font_size == current_config.font_size:
+            break
+
+        current_config = replace(current_config, font_size=target_font_size)
+        png_bytes = render_png(current_config)
+
+    return current_config, png_bytes
+
+
+def _trimmed_content_width(png_bytes: bytes, background: str) -> int:
+    img = Image.open(io.BytesIO(png_bytes)).convert("RGB")
+    return _trim_to_content(img, background).width
+
+
+def _trim_to_content(img: Image.Image, background: str) -> Image.Image:
+    bg = Image.new("RGB", img.size, background)
+    bbox = ImageChops.difference(img, bg).getbbox()
+    if bbox:
+        return img.crop(bbox)
+    return img
+
+
+def _edge_padding(config: LatexConfig) -> int:
+    """Reserve a small horizontal gutter so fitted formulas do not touch the canvas edge."""
+    base = max(int(config.padding) // 3, _MIN_EDGE_PADDING)
+    return max(4, min(base, _MAX_EDGE_PADDING, max(config.image_width // 8, 4)))
+
+
+def _available_formula_width(config: LatexConfig, tag: int | None) -> int:
+    edge_pad = _edge_padding(config)
+    reserved_tag_width = 0
+    if tag is not None:
+        reserved_tag_width = _tag_size(tag, config)[0] + edge_pad
+    return max(1, config.image_width - 2 * edge_pad - reserved_tag_width)
+
+
+def _tag_size(tag: int, config: LatexConfig) -> tuple[int, int]:
+    text = f"({tag})"
+    font_size_px = round(config.font_size / 72.27 * config.dpi)
+    font = _tag_font(font_size_px)
+    probe = Image.new("RGB", (1, 1), config.background)
+    bbox = ImageDraw.Draw(probe).textbbox((0, 0), text, font=font)
+    return bbox[2] - bbox[0], bbox[3] - bbox[1]
+
+
+def _lanczos_resample() -> int:
+    resampling = getattr(Image, "Resampling", None)
+    if resampling is not None:
+        return resampling.LANCZOS
+    return Image.LANCZOS

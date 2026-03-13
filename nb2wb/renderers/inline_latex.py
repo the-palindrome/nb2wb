@@ -3,11 +3,12 @@ Convert inline LaTeX ($...$) to Unicode/HTML.
 
 Pipeline for each $...$ span:
   1. Expand \\frac{num}{den} → (num)/(den)  (handles nested braces)
-  2. Convert known commands to Unicode via unicodeit
-  3. Convert any remaining ^{...} / _{...} to Unicode superscripts/subscripts,
+  2. Normalize known function commands (\\sin → sin, \\log → log, ...)
+  3. Convert known commands to Unicode via unicodeit
+  4. Convert any remaining ^{...} / _{...} to Unicode superscripts/subscripts,
      falling back to <sup>/<sub> tags when the characters have no Unicode form
-  4. Strip leftover bare braces
-  5. Wrap Latin variables and Greek letters in <em>, preserving known
+  5. Strip leftover bare braces
+  6. Wrap Latin variables and Greek letters in <em>, preserving known
      roman math function names (sin, cos, log, ...).
 """
 from __future__ import annotations
@@ -68,6 +69,7 @@ def convert_inline_math(text: str) -> str:
 def _to_unicode(latex: str) -> str:
     """Convert a single inline LaTeX expression to Unicode/HTML text."""
     latex = _expand_frac(latex)
+    latex = _normalize_function_commands(latex)
 
     try:
         import unicodeit
@@ -172,18 +174,30 @@ def _expand_scripts(text: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Step 5 – italicise variables
+# Step 6 – italicise variables
 # ---------------------------------------------------------------------------
 
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
 _ROMAN_FUNCTIONS = {
     "sin", "cos", "tan", "csc", "sec", "cot",
-    "sinh", "cosh", "tanh", "coth",
-    "arcsin", "arccos", "arctan",
-    "log", "ln", "exp",
+    "sinh", "cosh", "tanh", "coth", "sech", "csch",
+    "arcsin", "arccos", "arctan", "arccot", "arcsec", "arccsc",
+    "arsinh", "arcosh", "artanh", "arcoth", "arsech", "arcsch",
+    "log", "ln", "lg", "exp",
+    "arg", "deg", "hom", "pr",
     "lim", "max", "min", "sup", "inf",
-    "det", "dim", "ker", "gcd", "lcm", "arg", "mod",
+    "liminf", "limsup",
+    "det", "dim", "ker", "gcd", "lcm", "mod",
 }
+_FUNCTION_COMMANDS = _ROMAN_FUNCTIONS | {"Pr"}
+_FUNCTION_COMMAND_RE = re.compile(
+    r"\\(" + "|".join(re.escape(name) for name in sorted(_FUNCTION_COMMANDS, key=len, reverse=True)) + r")(?![A-Za-z])"
+)
+
+
+def _normalize_function_commands(latex: str) -> str:
+    """Strip the LaTeX command slash from known math functions/operators."""
+    return _FUNCTION_COMMAND_RE.sub(lambda m: m.group(1), latex)
 
 
 def _is_latin_word(token: str) -> bool:
@@ -217,7 +231,7 @@ def _italicize_part(part: str) -> str:
                 i += 1
             token = part[start:i]
 
-            # Preserve unresolved LaTeX command names (e.g., \sin, \cos).
+            # Preserve unresolved LaTeX command names (e.g., \mathbf, \mathbb).
             if start > 0 and part[start - 1] == "\\":
                 out.append(token)
                 continue

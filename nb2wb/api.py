@@ -49,6 +49,7 @@ def convert(
     target: str = "default",
     target_options: Mapping[str, Any] | None = None,
     execute: bool = False,
+    warnings_mode: bool = False,
     working_dir: str | Path | None = None,
     raw_mode: bool = False,
 ) -> str:
@@ -71,6 +72,8 @@ def convert(
         target_options: Optional per-target feature overrides (image strategy,
             copy script mode, table mode, article width, etc.).
         execute: Whether to execute code cells before rendering.
+        warnings_mode: When True, render `stderr` stream outputs (warnings/logs).
+            Defaults to False so warning-style streams are omitted.
         working_dir: Execution working directory for in-memory payloads.
             Defaults to current working directory.
         raw_mode: When True, omit the preview toolbar/header from output HTML.
@@ -89,7 +92,11 @@ def convert(
         target_options=resolved_target_options,
     )
     builder = get_builder(target, target_options=resolved_target_options)
-    converter = Converter(resolved_config, execute=execute)
+    converter = Converter(
+        resolved_config,
+        execute=execute,
+        warnings_mode=warnings_mode,
+    )
 
     notebook_node = _coerce_api_payload(notebook)
     content_html = converter.convert_notebook(

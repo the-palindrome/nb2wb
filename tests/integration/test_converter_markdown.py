@@ -117,6 +117,29 @@ class TestMarkdownCellProcessing:
         # Dollar sign content inside code block must be preserved literally
         assert "$1" in html
 
+    def test_tilde_fenced_code_preserves_list_like_lines(self, minimal_config, tmp_path):
+        """Tilde-fenced code contents stay verbatim through cuddled-list normalization."""
+        nb = nbformat.v4.new_notebook()
+        nb.cells = [
+            nbformat.v4.new_markdown_cell(
+                "Here's some code:\n\n~~~python\nparagraph line\n- item\n~~~"
+            )
+        ]
+
+        notebook_path = tmp_path / "test.ipynb"
+        with open(notebook_path, "w") as f:
+            nbformat.write(nb, f)
+
+        converter = Converter(minimal_config)
+        html = _convert_path(converter, notebook_path)
+
+        code_match = re.search(r"<pre><code[^>]*>(.*?)</code></pre>", html, flags=re.DOTALL)
+        assert code_match is not None
+
+        code_contents = code_match.group(1)
+        assert "paragraph line\n- item" in code_contents
+        assert "paragraph line\n\n- item" not in code_contents
+
     def test_inline_code_protected_from_latex(self, minimal_config, tmp_path):
         """Dollar signs inside backtick code spans are not processed as LaTeX."""
         nb = nbformat.v4.new_notebook()
@@ -244,6 +267,123 @@ class TestMarkdownCellProcessing:
 
         # Table should be converted to HTML
         assert "<table>" in html or "<th>" in html
+
+    def test_markdown_strikethrough_applied(self, minimal_config, tmp_path):
+        """GitHub-style ~~strikethrough~~ converts to <del>."""
+        nb = nbformat.v4.new_notebook()
+        nb.cells = [nbformat.v4.new_markdown_cell("~~strikethrough test~~")]
+
+        notebook_path = tmp_path / "test.ipynb"
+        with open(notebook_path, "w") as f:
+            nbformat.write(nb, f)
+
+        converter = Converter(minimal_config)
+        html = _convert_path(converter, notebook_path)
+
+        assert "<del>strikethrough test</del>" in html
+        assert "~~strikethrough test~~" not in html
+
+    def test_stderr_streams_hidden_by_default(self, minimal_config, tmp_path):
+        """Stderr warning/log streams are omitted unless warnings mode is enabled."""
+        nb = nbformat.v4.new_notebook()
+        cell = nbformat.v4.new_code_cell("pass")
+        cell.metadata["tags"] = ["hide-input"]
+        cell.outputs = [
+            nbformat.v4.new_output(
+                output_type="stream",
+                name="stderr",
+                text="warning-like stderr output\n",
+            )
+        ]
+        nb.cells = [cell]
+
+        notebook_path = tmp_path / "stderr_hidden.ipynb"
+        with open(notebook_path, "w") as f:
+            nbformat.write(nb, f)
+
+        html = _convert_path(Converter(minimal_config), notebook_path)
+
+        assert 'class="code-cell"' not in html
+
+    def test_stderr_streams_render_when_warnings_mode_enabled(self, minimal_config, tmp_path):
+        """Warnings mode restores rendering for stderr stream outputs."""
+        nb = nbformat.v4.new_notebook()
+        cell = nbformat.v4.new_code_cell("pass")
+        cell.metadata["tags"] = ["hide-input"]
+        cell.outputs = [
+            nbformat.v4.new_output(
+                output_type="stream",
+                name="stderr",
+                text="warning-like stderr output\n",
+            )
+        ]
+        nb.cells = [cell]
+
+        notebook_path = tmp_path / "stderr_visible.ipynb"
+        with open(notebook_path, "w") as f:
+            nbformat.write(nb, f)
+
+        html = _convert_path(
+            Converter(minimal_config, warnings_mode=True),
+            notebook_path,
+        )
+
+        assert 'class="code-cell"' in html
+
+    def test_markdown_strikethrough_respects_inline_code(self, minimal_config, tmp_path):
+        """Backtick code with ~~ stays literal while bare ~~ is rendered."""
+        nb = nbformat.v4.new_notebook()
+        nb.cells = [nbformat.v4.new_markdown_cell("`~~literal~~` and ~~rendered~~")]
+
+        notebook_path = tmp_path / "test.ipynb"
+        with open(notebook_path, "w") as f:
+            nbformat.write(nb, f)
+
+        converter = Converter(minimal_config)
+        html = _convert_path(converter, notebook_path)
+
+        assert "<code>~~literal~~</code>" in html
+        assert "<del>rendered</del>" in html
+
+    def test_cuddled_unordered_lists_render_as_lists(self, minimal_config, tmp_path):
+        """Unordered list markers after text render as a proper list block."""
+        nb = nbformat.v4.new_notebook()
+        nb.cells = [
+            nbformat.v4.new_markdown_cell(
+                "List intro line\n* first item\n* second item"
+            )
+        ]
+
+        notebook_path = tmp_path / "test.ipynb"
+        with open(notebook_path, "w") as f:
+            nbformat.write(nb, f)
+
+        converter = Converter(minimal_config)
+        html = _convert_path(converter, notebook_path)
+
+        assert "<ul>" in html
+        assert "<li>first item</li>" in html
+        assert "<li>second item</li>" in html
+
+    def test_cuddled_ordered_lists_render_as_lists(self, minimal_config, tmp_path):
+        """Ordered list markers after text render as a proper list block."""
+        nb = nbformat.v4.new_notebook()
+        nb.cells = [
+            nbformat.v4.new_markdown_cell(
+                "Steps line\n1. first step\n2. second step"
+            )
+        ]
+
+        notebook_path = tmp_path / "test.ipynb"
+        with open(notebook_path, "w") as f:
+            nbformat.write(nb, f)
+
+        converter = Converter(minimal_config)
+        html = _convert_path(converter, notebook_path)
+
+        assert "<ol>" in html
+        assert "<li>first step</li>" in html
+        assert "<li>second step</li>" in html
 
     def test_markdown_table_can_render_as_image(self, minimal_config, tmp_path):
         """Table HTML can be replaced by a rendered image when configured."""
