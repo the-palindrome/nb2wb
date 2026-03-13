@@ -4,9 +4,9 @@ Unit tests for inline LaTeX → Unicode/HTML conversion.
 Tests the renderers/inline_latex.py module which converts inline math ($...$)
 to Unicode and HTML for clean rendering in web contexts.
 """
-import pytest
 from nb2wb.renderers.inline_latex import (
     convert_inline_math,
+    _ROMAN_FUNCTIONS,
     _expand_frac,
     _expand_scripts,
     _italicize,
@@ -306,10 +306,20 @@ class TestFullPipeline:
         """Known function names stay upright while arguments italicize."""
         latex = r"\sin x + \cos y"
         result = _to_unicode(latex)
-        assert r"\sin" in result
-        assert r"\cos" in result
+        assert "sin" in result
+        assert "cos" in result
+        assert r"\sin" not in result
+        assert r"\cos" not in result
         assert "<em>x</em>" in result
         assert "<em>y</em>" in result
+
+    def test_all_known_function_commands_strip_leading_backslash(self):
+        """Every known function command renders without a leading slash."""
+        commands = sorted(_ROMAN_FUNCTIONS | {"Pr"})
+        latex = " + ".join(fr"\{name} x" for name in commands)
+        result = _to_unicode(latex)
+        for name in commands:
+            assert fr"\{name}" not in result
 
 
 class TestEdgeCases:
