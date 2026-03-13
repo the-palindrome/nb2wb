@@ -225,6 +225,11 @@ def main() -> None:
         help="Execute code blocks via Jupyter kernel before rendering (.ipynb, .qmd, .md).",
     )
     parser.add_argument(
+        "--warnings",
+        action="store_true",
+        help="Render stderr warning/log outputs from code cells.",
+    )
+    parser.add_argument(
         "--raw",
         action="store_true",
         help="Emit raw article HTML without the preview toolbar/header.",
@@ -272,6 +277,7 @@ def main() -> None:
             target=args.target,
             target_options=target_options or None,
             execute=args.execute,
+            warnings_mode=args.warnings,
             working_dir=notebook_path.parent,
             raw_mode=args.raw,
         )

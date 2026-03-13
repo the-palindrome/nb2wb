@@ -88,9 +88,16 @@ _RICH_OUTPUT_MIMES = frozenset({"image/png", "image/svg+xml", "text/html"})
 class Converter:
     """Converts an in-memory Jupyter notebook model into HTML content fragments."""
 
-    def __init__(self, config: Config, *, execute: bool = False) -> None:
+    def __init__(
+        self,
+        config: Config,
+        *,
+        execute: bool = False,
+        warnings_mode: bool = False,
+    ) -> None:
         self.config = config
         self.execute = execute
+        self.warnings_mode = warnings_mode
 
     def convert_notebook(self, notebook, *, cwd: Path | None = None) -> str:
         """Convert an in-memory notebook object (NotebookNode) to HTML."""
@@ -234,6 +241,8 @@ class Converter:
         otype = output.get("output_type", "")
 
         if otype == "stream":
+            if output.get("name") == "stderr" and not self.warnings_mode:
+                return None
             return self._text_output_to_png(_join_text(output.get("text")))
 
         if otype == "error":

@@ -13,6 +13,7 @@ html = nb2wb.convert(
     target="default",
     target_options=None,
     execute=False,
+    warnings_mode=False,
     working_dir=None,
     raw_mode=False,
 )
@@ -27,6 +28,7 @@ html = nb2wb.convert(
 | `target` | `str` | Target wrapper: `default`, `substack`, `medium`, `x`, `linkedin`, `devto`, `hashnode`, `ghost`, `wordpress` |
 | `target_options` | `Mapping \| None` | Optional profile feature overrides (`image_strategy`, `raw_image_strategy`, `copy_script_mode`, `article_width_px`, `table_mode`, `toolbar_message`, `theme_overrides`) |
 | `execute` | `bool` | Execute code cells before rendering |
+| `warnings_mode` | `bool` | Render `stderr` stream outputs (warnings/logs); off by default |
 | `working_dir` | `str \| Path \| None` | Execution working directory when `execute=True`; defaults to the current directory and must resolve to an existing directory |
 | `raw_mode` | `bool` | Strip wrapper chrome (`<head>`, toolbar, JS) |
 

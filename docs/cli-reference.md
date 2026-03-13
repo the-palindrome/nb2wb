@@ -21,6 +21,7 @@ nb2wb <input.{ipynb|qmd|md}> [options]
 | `--open` | Open generated HTML in browser |
 | `--serve` | Extract image data URIs into `images/` beside the output and serve the page over local HTTP + ngrok |
 | `--execute` | Execute code cells before rendering |
+| `--warnings` | Render `stderr` warning/log outputs from code cells |
 | `--raw` | Emit raw output (no `<head>`, toolbar, or JavaScript) |
 
 Normal-mode `--image-strategy` intentionally exposes only `embed` and
@@ -36,6 +37,7 @@ nb2wb report.qmd -t x -o post.html
 nb2wb post.ipynb -t linkedin --image-strategy copyable
 nb2wb post.ipynb -t devto --copy-script none --article-width 780
 nb2wb notes.md --execute
+nb2wb report.ipynb --warnings
 nb2wb report.ipynb --serve
 nb2wb report.ipynb --raw -o post_raw.html
 ```
@@ -44,6 +46,7 @@ nb2wb report.ipynb --raw -o post_raw.html
 
 - Execution is off by default.
 - `--execute` applies uniformly to `.ipynb`, `.qmd`, and `.md`.
+- `stderr` warning/log streams are hidden by default; use `--warnings` to render them.
 - If execution stops early, conversion continues with the notebook state that is
   available at that point and emits a warning.
 

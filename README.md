@@ -52,6 +52,7 @@ nb2wb notebook.ipynb --open
 nb2wb notebook.ipynb --serve
 nb2wb notebook.ipynb --raw -o article_raw.html
 nb2wb report.qmd --execute
+nb2wb report.ipynb --warnings
 nb2wb report.ipynb -t ghost --image-strategy embed --article-width 900
 ```
 
@@ -80,6 +81,13 @@ html = nb2wb.convert(
     notebook_payload,
     target="medium",
     raw_mode=True,
+)
+
+# Restore stderr warning/log output rendering when needed
+html = nb2wb.convert(
+    notebook_payload,
+    target="default",
+    warnings_mode=True,
 )
 
 # Override target features at call-time

@@ -260,6 +260,53 @@ class TestMarkdownCellProcessing:
         assert "<del>strikethrough test</del>" in html
         assert "~~strikethrough test~~" not in html
 
+    def test_stderr_streams_hidden_by_default(self, minimal_config, tmp_path):
+        """Stderr warning/log streams are omitted unless warnings mode is enabled."""
+        nb = nbformat.v4.new_notebook()
+        cell = nbformat.v4.new_code_cell("pass")
+        cell.metadata["tags"] = ["hide-input"]
+        cell.outputs = [
+            nbformat.v4.new_output(
+                output_type="stream",
+                name="stderr",
+                text="warning-like stderr output\n",
+            )
+        ]
+        nb.cells = [cell]
+
+        notebook_path = tmp_path / "stderr_hidden.ipynb"
+        with open(notebook_path, "w") as f:
+            nbformat.write(nb, f)
+
+        html = _convert_path(Converter(minimal_config), notebook_path)
+
+        assert 'class="code-cell"' not in html
+
+    def test_stderr_streams_render_when_warnings_mode_enabled(self, minimal_config, tmp_path):
+        """Warnings mode restores rendering for stderr stream outputs."""
+        nb = nbformat.v4.new_notebook()
+        cell = nbformat.v4.new_code_cell("pass")
+        cell.metadata["tags"] = ["hide-input"]
+        cell.outputs = [
+            nbformat.v4.new_output(
+                output_type="stream",
+                name="stderr",
+                text="warning-like stderr output\n",
+            )
+        ]
+        nb.cells = [cell]
+
+        notebook_path = tmp_path / "stderr_visible.ipynb"
+        with open(notebook_path, "w") as f:
+            nbformat.write(nb, f)
+
+        html = _convert_path(
+            Converter(minimal_config, warnings_mode=True),
+            notebook_path,
+        )
+
+        assert 'class="code-cell"' in html
+
     def test_markdown_strikethrough_respects_inline_code(self, minimal_config, tmp_path):
         """Backtick code with ~~ stays literal while bare ~~ is rendered."""
         nb = nbformat.v4.new_notebook()

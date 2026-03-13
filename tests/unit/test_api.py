@@ -221,6 +221,69 @@ class TestPublicApi:
         assert code["outputs"][2]["output_type"] == "execute_result"
         assert "data" in code["outputs"][2]
 
+    def test_convert_hides_stderr_streams_by_default(self):
+        notebook_dict = {
+            "nbformat": 4,
+            "nbformat_minor": 5,
+            "metadata": {},
+            "cells": [
+                {
+                    "cell_type": "code",
+                    "metadata": {"tags": ["hide-input"]},
+                    "source": "pass",
+                    "execution_count": 1,
+                    "outputs": [
+                        {
+                            "output_type": "stream",
+                            "name": "stderr",
+                            "text": "warning-like stderr output\n",
+                        }
+                    ],
+                }
+            ],
+        }
+
+        html = nb2wb.convert(
+            notebook_dict,
+            config={"latex": {"try_usetex": False}},
+            target="substack",
+            execute=False,
+        )
+
+        assert 'class="code-cell"' not in html
+
+    def test_convert_warnings_mode_renders_stderr_streams(self):
+        notebook_dict = {
+            "nbformat": 4,
+            "nbformat_minor": 5,
+            "metadata": {},
+            "cells": [
+                {
+                    "cell_type": "code",
+                    "metadata": {"tags": ["hide-input"]},
+                    "source": "pass",
+                    "execution_count": 1,
+                    "outputs": [
+                        {
+                            "output_type": "stream",
+                            "name": "stderr",
+                            "text": "warning-like stderr output\n",
+                        }
+                    ],
+                }
+            ],
+        }
+
+        html = nb2wb.convert(
+            notebook_dict,
+            config={"latex": {"try_usetex": False}},
+            target="substack",
+            execute=False,
+            warnings_mode=True,
+        )
+
+        assert 'class="code-cell"' in html
+
     def test_convert_moves_top_level_orig_nbformat_fields_into_metadata(self):
         notebook_dict = {
             "nbformat": 4,
@@ -579,8 +642,9 @@ class TestPublicApi:
         seen: dict[str, object] = {}
 
         class DummyConverter:
-            def __init__(self, config, *, execute):
+            def __init__(self, config, *, execute, warnings_mode):
                 seen["execute"] = execute
+                seen["warnings_mode"] = warnings_mode
                 seen["config_type"] = type(config).__name__
 
             def convert_notebook(self, notebook, *, cwd):
@@ -605,6 +669,7 @@ class TestPublicApi:
         html = api.convert("# Execute flag", execute=True, raw_mode=True)
 
         assert seen["execute"] is True
+        assert seen["warnings_mode"] is False
         assert seen["config_type"] == "Config"
         assert seen["notebook_type"] == "NotebookNode"
         assert seen["cwd"]
