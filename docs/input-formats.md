@@ -93,7 +93,8 @@ Behavior:
 - converts recognized code blocks into notebook code cells when the language is scaffold-supported
 - preserves unsupported/unknown code blocks as fenced markdown
 - keeps ordinary images as markdown images
-- routes image content through the OCR pipeline and then converts typed OCR results into cells or linked figures
+- skips image transcription unless an OCR pipeline is explicitly supplied
+- when an OCR pipeline is supplied, routes image content through it and then converts typed OCR results into cells or linked figures
 
 Current scaffold-supported code languages:
 
@@ -107,11 +108,12 @@ Current scaffold-supported code languages:
 
 Notes:
 
-- the built-in default OCR pipeline lives at `nb2wb.ocr.local`
+- by default, reverse conversion does not OCR images
+- the explicit local OCR pipeline lives at `nb2wb.ocr.local`
 - the OCR pipeline itself decides whether an image is treated as `figure`, `table`, `code`, or `latex`
 - code OCR in the built-in pipeline uses `Tesseract` via `pytesseract` when installed and the `tesseract` binary is available on PATH; otherwise code-like images keep the linked-figure fallback
 - LaTeX OCR and table OCR in the built-in pipeline use `Pix2Text` when installed; otherwise the reverse path keeps the image linked as a figure
-- an OpenAI-backed multimodal OCR pipeline is available via `nb2wb.ocr.multimodal_llm.MultimodalLLMPipeline`
+- an OpenAI-backed OCR pipeline is available via `nb2wb.ocr.openai.OpenAIOCRPipeline`
 - the reverse path accepts in-memory HTML strings or `{"format": "html", "content": ...}` payloads
 - file paths are loaded via `nb2wb.load_html_payload()`
 - a custom OCR pipeline can be supplied via `nb2wb.revert(..., ocr_pipeline=...)`

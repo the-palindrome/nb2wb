@@ -77,7 +77,7 @@ class TestPublicApi:
         assert seen["ocr_pipeline"] is pipeline
         assert seen["source_dir"] is None
 
-    def test_revert_defaults_ocr_pipeline_to_builtin_default(self, monkeypatch):
+    def test_revert_defaults_ocr_pipeline_to_none(self, monkeypatch):
         seen: dict[str, object] = {}
 
         class FakeReverter:

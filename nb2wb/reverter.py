@@ -11,7 +11,6 @@ import nbformat
 
 from ._reader_utils import make_notebook
 from .ocr.base import OCRRequest
-from .ocr.local import local_ocr_pipeline
 from .reverse_images import infer_supported_language_from_parts, normalize_supported_language
 
 try:
@@ -84,7 +83,7 @@ class Reverter:
         ocr_pipeline: Callable[[OCRRequest], dict[str, str]] | None = None,
     ) -> None:
         self._source_dir = source_dir
-        self._ocr_pipeline = ocr_pipeline or local_ocr_pipeline
+        self._ocr_pipeline = ocr_pipeline
 
     def revert_html(self, document: str) -> nbformat.NotebookNode:
         soup = BeautifulSoup(document, "html.parser")
@@ -256,7 +255,10 @@ class Reverter:
             nearby_text=_nearby_text(tag),
             source_dir=self._source_dir,
         )
-        ocr_result = _normalize_ocr_result(self._ocr_pipeline(request))
+        if self._ocr_pipeline is None:
+            ocr_result = {"type": "figure", "payload": ""}
+        else:
+            ocr_result = _normalize_ocr_result(self._ocr_pipeline(request))
         return ImageBlock(
             src=request.src,
             alt=request.alt,

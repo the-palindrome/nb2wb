@@ -11,7 +11,7 @@ _OPENAI_API_KEY_ENV = "OPENAI_API_KEY"
 _KEY_RE = re.compile(r"sk-[A-Za-z0-9_-]+")
 
 
-class MultimodalLLMPipeline(BaseOCRPipeline):
+class OpenAIOCRPipeline(BaseOCRPipeline):
     """OCR pipeline backed by the OpenAI Responses API."""
 
     def __init__(
@@ -23,7 +23,7 @@ class MultimodalLLMPipeline(BaseOCRPipeline):
     ) -> None:
         normalized_model = model.strip()
         if not normalized_model:
-            raise ValueError("model is required for MultimodalLLMPipeline")
+            raise ValueError("model is required for OpenAIOCRPipeline")
 
         self.model = normalized_model
         self._client = client or self._build_client(api_key=api_key)
@@ -38,7 +38,7 @@ class MultimodalLLMPipeline(BaseOCRPipeline):
         if not resolved_api_key:
             raise ValueError(
                 f"{_OPENAI_API_KEY_ENV} environment variable is required when "
-                "using MultimodalLLMPipeline without an explicit api_key."
+                "using OpenAIOCRPipeline without an explicit api_key."
             )
 
         try:
@@ -46,7 +46,7 @@ class MultimodalLLMPipeline(BaseOCRPipeline):
         except ImportError as exc:  # pragma: no cover - optional dependency.
             raise RuntimeError(
                 "OpenAI SDK is not installed. Install it with `pip install nb2wb[openai]` "
-                "or `pip install openai` to enable multimodal OCR."
+                "or `pip install openai` to enable OpenAI OCR."
             ) from exc
 
         return OpenAI(api_key=resolved_api_key)
@@ -244,6 +244,6 @@ class MultimodalLLMPipeline(BaseOCRPipeline):
 
 
 __all__ = [
-    "MultimodalLLMPipeline",
+    "OpenAIOCRPipeline",
     "OCRRequest",
 ]

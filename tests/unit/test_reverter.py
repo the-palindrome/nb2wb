@@ -87,6 +87,21 @@ class TestReverter:
         assert "![chart](plain.png)" in notebook.cells[0].source
         assert "Outro" in notebook.cells[0].source
 
+    def test_revert_skips_image_transcription_when_no_pipeline_is_given(self):
+        notebook = nb2wb.revert(
+            """
+            <html><body>
+              <figure class="table">
+                <img src="table.png" alt="Model comparison table">
+              </figure>
+            </body></html>
+            """
+        )
+
+        assert notebook.cells[0].cell_type == "markdown"
+        assert notebook.cells[0].source == "![Model comparison table](table.png)"
+        assert "wb2nb" not in notebook.cells[0].metadata
+
     def test_revert_code_image_with_supported_language_defaults_to_linked_figure(self):
         notebook = nb2wb.revert(
             """

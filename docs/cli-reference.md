@@ -43,7 +43,8 @@ nb2wb report.ipynb --serve
 nb2wb report.ipynb --raw -o post_raw.html
 wb2nb article.html
 wb2nb article.htm -o recovered.ipynb
-OPENAI_API_KEY=... wb2nb article.html --ocr-pipeline multimodal-llm --openai-model gpt-4.1-mini
+wb2nb article.html --ocr-pipeline local
+OPENAI_API_KEY=... wb2nb article.html --ocr-pipeline openai --model gpt-4.1-mini
 ```
 
 ## Reverse Conversion
@@ -53,17 +54,18 @@ OPENAI_API_KEY=... wb2nb article.html --ocr-pipeline multimodal-llm --openai-mod
 | Option | Description |
 |---|---|
 | `-o, --output PATH` | Output notebook path (default: `<input>.ipynb`) |
-| `--ocr-pipeline {local,multimodal-llm}` | OCR pipeline to use for image-based reverse conversion |
-| `--openai-model MODEL` | Required when `--ocr-pipeline multimodal-llm`; selects the OpenAI model |
+| `--ocr-pipeline {local,openai}` | Optional OCR pipeline for image-based reverse conversion; if omitted, OCR is skipped |
+| `--model MODEL` | Required when `--ocr-pipeline openai`; selects the model |
 
 Current reverse-conversion behavior:
 
 - prose HTML is converted into markdown cells
 - recognized HTML code blocks become notebook code cells for scaffold-supported languages
 - unsupported/unknown code languages are preserved as fenced markdown code blocks
-- every image is passed to the selected OCR pipeline with its HTML context
+- if `--ocr-pipeline` is omitted, images remain linked markdown figures with no transcription
+- if `--ocr-pipeline` is provided, every image is passed to the selected OCR pipeline with its HTML context
 - the OCR pipeline decides whether each image is treated as a linked figure or converted into code/markdown notebook content
-- `multimodal-llm` requires `OPENAI_API_KEY` in the environment and fails fast on missing credentials or API errors
+- `openai` requires `OPENAI_API_KEY` in the environment and fails fast on missing credentials or API errors
 
 ## Execution Semantics
 

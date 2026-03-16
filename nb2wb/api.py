@@ -125,6 +125,7 @@ def revert(
     Args:
         document: In-memory HTML content payload.
         ocr_pipeline: Optional OCR callable returning ``{"type", "payload"}``.
+            When omitted, image transcription is skipped.
     """
     html_document, source_dir = _coerce_html_payload(document)
     return Reverter(

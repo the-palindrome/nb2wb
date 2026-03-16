@@ -42,7 +42,7 @@ cd nb2wb
 pip install -e ".[dev]"
 ```
 
-To enable LaTeX OCR for reverse HTML-to-notebook conversion:
+To enable local OCR for reverse HTML-to-notebook conversion:
 
 ```bash
 pip install -e ".[ocr]"
@@ -71,14 +71,15 @@ nb2wb report.ipynb --warnings
 nb2wb report.ipynb -t ghost --image-strategy embed --article-width 900
 wb2nb article.html
 wb2nb article.html -o recovered.ipynb
-OPENAI_API_KEY=... wb2nb article.html --ocr-pipeline multimodal-llm --openai-model gpt-4.1-mini
+wb2nb article.html --ocr-pipeline local
+OPENAI_API_KEY=... wb2nb article.html --ocr-pipeline openai --model gpt-4.1-mini
 ```
 
 ## Quick Start (Python API)
 
 ```python
 import nb2wb
-from nb2wb.ocr.multimodal_llm import MultimodalLLMPipeline
+from nb2wb.ocr.openai import OpenAIOCRPipeline
 
 # Path input via loader helper
 payload = nb2wb.load_input_payload("notebook.ipynb")
@@ -124,7 +125,7 @@ html = nb2wb.convert(
 payload = nb2wb.load_html_payload("article.html")
 notebook = nb2wb.revert(payload)
 
-# Provide a custom OCR pipeline when desired
+# OCR is opt-in; pass a pipeline only when you want image transcription
 notebook = nb2wb.revert(
     payload,
     ocr_pipeline=lambda request: {"type": "figure", "payload": ""},
@@ -132,7 +133,7 @@ notebook = nb2wb.revert(
 
 llm_notebook = nb2wb.revert(
     payload,
-    ocr_pipeline=MultimodalLLMPipeline(
+    ocr_pipeline=OpenAIOCRPipeline(
         model="gpt-4.1-mini",
         api_key="...",
     ),
@@ -150,11 +151,12 @@ plain string such as `"notebook.ipynb"` is treated as document text, not as a
 filesystem path.
 
 For reverse conversion, `load_html_payload()` returns `{"format": "html", "content": ...}`.
-The reverse path uses an OCR pipeline hook to create markdown/code cells.
+If no `ocr_pipeline` is provided, reverse conversion skips image transcription and keeps images linked in markdown.
+The reverse path can use an OCR pipeline hook to create markdown/code cells.
 `nb2wb.revert(..., ocr_pipeline=...)` accepts a callable returning
 `{"type": "latex"|"code"|"table"|"figure", "payload": "..."}`.
 The OCR pipeline receives image context such as `src`, `alt`, `title`, CSS classes, caption text, nearby text, and `source_dir`, and decides the final image type itself.
-The built-in default pipeline lives at `nb2wb.ocr.local` and currently uses Pix2Text page classification plus Tesseract-backed OCR locally. An explicit OpenAI-backed alternative lives at `nb2wb.ocr.multimodal_llm.MultimodalLLMPipeline` and uses the Responses API with structured output.
+An explicit local pipeline lives at `nb2wb.ocr.local` and currently uses Pix2Text page classification plus Tesseract-backed OCR locally. An explicit OpenAI-backed alternative lives at `nb2wb.ocr.openai.OpenAIOCRPipeline` and uses the Responses API with structured output.
 
 ## Security at a Glance
 
