@@ -14,5 +14,12 @@ class SubstackBuilder(ProfiledBuilder):
     """Compatibility wrapper for the Substack target profile."""
 
     def __init__(self) -> None:
-        super().__init__(get_target_profile("substack"))
+        """Initialize the compatibility builder for Substack pages.
 
+        Args:
+            None.
+
+        Returns:
+            ``None``. The builder is configured with the Substack profile.
+        """
+        super().__init__(get_target_profile("substack"))

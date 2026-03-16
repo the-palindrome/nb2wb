@@ -21,6 +21,14 @@ _ALLOWED_INPUT_SUFFIXES = frozenset({".ipynb", ".qmd", ".md"})
 
 
 def _positive_int(value: str) -> int:
+    """Parse a CLI argument and reject non-positive integers.
+
+    Args:
+        value: Raw command-line string value to validate.
+
+    Returns:
+        The parsed positive integer.
+    """
     out = int(value)
     if out <= 0:
         raise argparse.ArgumentTypeError("must be a positive integer")
@@ -33,6 +41,13 @@ def _extract_images(html: str, images_dir: Path) -> str:
     Creates *images_dir* if needed, writes each image as a file, and returns
     the HTML with ``src`` attributes rewritten to relative paths
     (e.g. ``images/img_1.png``).
+
+    Args:
+        html: HTML document whose embedded images should be extracted.
+        images_dir: Directory where extracted image files will be written.
+
+    Returns:
+        HTML with matching data-URI image sources rewritten to file paths.
     """
     images_dir.mkdir(parents=True, exist_ok=True)
     counter = 0
@@ -43,6 +58,14 @@ def _extract_images(html: str, images_dir: Path) -> str:
     )
 
     def _replace(m: re.Match) -> str:
+        """Persist one embedded image and rewrite its ``src`` attribute.
+
+        Args:
+            m: Regex match containing the full tag, MIME type, and payload.
+
+        Returns:
+            Updated HTML for the image tag, or the original tag on failure.
+        """
         nonlocal counter
         counter += 1
         full_tag = m.group(0)
@@ -71,14 +94,28 @@ def _extract_images(html: str, images_dir: Path) -> str:
 
 
 def _find_free_port() -> int:
-    """Return a free TCP port on localhost."""
+    """Return a free TCP port on localhost.
+
+    Args:
+        None.
+
+    Returns:
+        An available TCP port number bound on the loopback interface.
+    """
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
 
 
 def _get_ngrok_url(max_attempts: int = 10) -> str:
-    """Poll ngrok's local API until the public tunnel URL is available."""
+    """Poll ngrok's local API until the public tunnel URL is available.
+
+    Args:
+        max_attempts: Maximum number of polling attempts before failing.
+
+    Returns:
+        The public ngrok URL for the active HTTP tunnel.
+    """
     import urllib.error
     import urllib.request
 
@@ -98,7 +135,15 @@ def _get_ngrok_url(max_attempts: int = 10) -> str:
 
 
 def _serve(serve_dir: Path, html_name: str) -> None:
-    """Extract images, start HTTP server + ngrok tunnel, open browser."""
+    """Serve a generated HTML page locally and through ngrok.
+
+    Args:
+        serve_dir: Directory containing the page and extracted assets.
+        html_name: Filename of the HTML page to open and serve.
+
+    Returns:
+        ``None``. The function blocks until the server is interrupted.
+    """
     port = _find_free_port()
     handler = functools.partial(SimpleHTTPRequestHandler, directory=str(serve_dir))
     server = HTTPServer(("127.0.0.1", port), handler)
@@ -150,7 +195,14 @@ def _serve(serve_dir: Path, html_name: str) -> None:
 
 
 def main() -> None:
-    """CLI entry point: parse arguments, convert notebook, and write output HTML."""
+    """Run the ``nb2wb`` command-line entry point.
+
+    Args:
+        None.
+
+    Returns:
+        ``None``. The function writes output files or exits on error.
+    """
     platforms = list_platforms()
     parser = argparse.ArgumentParser(
         prog="nb2wb",
@@ -305,7 +357,17 @@ def _sanitize_cli_path(
     must_exist: bool = False,
     allowed_suffixes: frozenset[str] | None = None,
 ) -> Path | None:
-    """Validate and sanitize a user-provided filesystem path."""
+    """Validate and sanitize a user-provided filesystem path.
+
+    Args:
+        path: Parsed path value, or ``None`` when the argument is omitted.
+        arg_name: Human-readable argument label for error messages.
+        must_exist: Whether the path must already exist on disk.
+        allowed_suffixes: Optional set of permitted filename suffixes.
+
+    Returns:
+        The validated path, or ``None`` when no path was provided.
+    """
     if path is None:
         return None
 

@@ -14,5 +14,12 @@ class MediumBuilder(ProfiledBuilder):
     """Compatibility wrapper for the Medium target profile."""
 
     def __init__(self) -> None:
-        super().__init__(get_target_profile("medium"))
+        """Initialize the compatibility builder for Medium pages.
 
+        Args:
+            None.
+
+        Returns:
+            ``None``. The builder is configured with the Medium profile.
+        """
+        super().__init__(get_target_profile("medium"))

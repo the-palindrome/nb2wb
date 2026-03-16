@@ -14,6 +14,18 @@ from urllib.parse import unquote, urlparse
 
 @dataclass(frozen=True)
 class OCRRequest:
+    """Describe one image OCR request and its nearby context.
+
+    Attributes:
+        src: Image source URL, path, or data URI.
+        alt: Image alt text from the source document.
+        title: Image title attribute from the source document.
+        classes: CSS classes associated with the image or wrapper.
+        caption: Visible caption text near the image.
+        nearby_text: Other text surrounding the image.
+        source_dir: Base directory for resolving relative image paths.
+    """
+
     src: str
     alt: str = ""
     title: str = ""
@@ -27,10 +39,26 @@ class BaseOCRPipeline:
     """Base class for OCR pipelines that need shared image-loading helpers."""
 
     def __call__(self, request: OCRRequest) -> dict[str, str]:
+        """Run OCR for one image request.
+
+        Args:
+            request: OCR metadata and image source information.
+
+        Returns:
+            A result mapping containing ``type`` and ``payload`` keys.
+        """
         raise NotImplementedError
 
     @contextmanager
     def input_image_path(self, request: OCRRequest):
+        """Yield a filesystem path for OCR engines that require path input.
+
+        Args:
+            request: OCR metadata and image source information.
+
+        Returns:
+            A context-managed path string pointing to the source image.
+        """
         path = self.resolve_image_path(request)
         if path is not None:
             yield str(path)
@@ -42,6 +70,14 @@ class BaseOCRPipeline:
             yield handle.name
 
     def load_image(self, request: OCRRequest):
+        """Load the request image into a Pillow RGB image.
+
+        Args:
+            request: OCR metadata and image source information.
+
+        Returns:
+            A Pillow image converted to RGB mode.
+        """
         try:
             from PIL import Image
         except ImportError as exc:  # pragma: no cover - Pillow is a core dependency.
@@ -60,6 +96,14 @@ class BaseOCRPipeline:
         return self.open_pil_image(path, Image)
 
     def resolve_image_path(self, request: OCRRequest) -> Path | None:
+        """Resolve a local filesystem path for an image source when possible.
+
+        Args:
+            request: OCR metadata and image source information.
+
+        Returns:
+            A resolved local ``Path`` or ``None`` for remote/data URI images.
+        """
         src = request.src.strip()
         if not src or src.startswith("data:"):
             return None
@@ -76,6 +120,15 @@ class BaseOCRPipeline:
         return path
 
     def open_pil_image(self, path: Path, image_module):
+        """Open an image from disk and normalize it to RGB mode.
+
+        Args:
+            path: Filesystem path to the source image.
+            image_module: Pillow image module used to open the file.
+
+        Returns:
+            A Pillow image converted to RGB mode.
+        """
         resolved = path.expanduser()
         if not resolved.exists():
             raise FileNotFoundError(f"image '{resolved}' not found for OCR")
@@ -83,6 +136,14 @@ class BaseOCRPipeline:
             return handle.convert("RGB")
 
     def read_image_bytes(self, request: OCRRequest) -> tuple[bytes, str]:
+        """Read the source image as raw bytes and detect its MIME type.
+
+        Args:
+            request: OCR metadata and image source information.
+
+        Returns:
+            A ``(bytes, mime_type)`` tuple for the image.
+        """
         src = request.src.strip()
         if not src:
             raise ValueError("image source is empty")
@@ -108,11 +169,27 @@ class BaseOCRPipeline:
         return buffer.getvalue(), "image/png"
 
     def image_data_url(self, request: OCRRequest) -> str:
+        """Encode the source image as a base64 data URL.
+
+        Args:
+            request: OCR metadata and image source information.
+
+        Returns:
+            A ``data:...;base64,...`` URL containing the image bytes.
+        """
         data, mime_type = self.read_image_bytes(request)
         payload = base64.b64encode(data).decode("ascii")
         return f"data:{mime_type};base64,{payload}"
 
     def candidate_texts(self, request: OCRRequest) -> list[str]:
+        """Collect textual hints that may help classify an image.
+
+        Args:
+            request: OCR metadata and image source information.
+
+        Returns:
+            A list of non-empty text fragments related to the image.
+        """
         filename = self.filename_from_src(request.src)
         parts = [
             request.alt,
@@ -125,10 +202,26 @@ class BaseOCRPipeline:
         return [part for part in parts if part]
 
     def classification_haystack(self, request: OCRRequest) -> str:
+        """Collapse image context strings into one lowercase search blob.
+
+        Args:
+            request: OCR metadata and image source information.
+
+        Returns:
+            A lowercase string combining all candidate text fragments.
+        """
         return " ".join(self.candidate_texts(request)).lower()
 
     @staticmethod
     def filename_from_src(src: str) -> str:
+        """Extract a filename hint from an image source value.
+
+        Args:
+            src: Image source URL, path, or data URI.
+
+        Returns:
+            The final path segment, or an empty string when unavailable.
+        """
         if not src:
             return ""
         parsed = urlparse(src)
@@ -137,12 +230,29 @@ class BaseOCRPipeline:
 
     @staticmethod
     def _load_data_uri_image(src: str, image_module):
+        """Decode a data URI image and open it with Pillow.
+
+        Args:
+            src: Base64 image data URI.
+            image_module: Pillow image module used to open the payload.
+
+        Returns:
+            A Pillow image converted to RGB mode.
+        """
         data, _mime_type = BaseOCRPipeline._decode_data_uri(src)
         with image_module.open(BytesIO(data)) as handle:
             return handle.convert("RGB")
 
     @staticmethod
     def _decode_data_uri(src: str) -> tuple[bytes, str]:
+        """Decode a base64-encoded image data URI.
+
+        Args:
+            src: Data URI containing an image payload.
+
+        Returns:
+            A ``(bytes, mime_type)`` tuple extracted from the data URI.
+        """
         header, _, payload = src.partition(",")
         if not header or not payload or ";base64" not in header.lower():
             raise ValueError("unsupported data URI image source")
@@ -155,6 +265,14 @@ class BaseOCRPipeline:
 
     @staticmethod
     def _guess_image_mime_type(path: Path) -> str | None:
+        """Guess an image MIME type from a filesystem path.
+
+        Args:
+            path: Image path whose suffix should be inspected.
+
+        Returns:
+            An ``image/*`` MIME type string, or ``None`` when unknown.
+        """
         mime_type, _encoding = mimetypes.guess_type(path.name)
         if mime_type and mime_type.startswith("image/"):
             return mime_type

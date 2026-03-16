@@ -17,6 +17,14 @@ _ALLOWED_INPUT_SUFFIXES = frozenset({".html", ".htm"})
 
 
 def main() -> None:
+    """Run the ``wb2nb`` command-line entry point.
+
+    Args:
+        None.
+
+    Returns:
+        ``None``. The function writes output or exits with a CLI error.
+    """
     parser = argparse.ArgumentParser(
         prog="wb2nb",
         description="Convert HTML posts into scaffolded Jupyter notebooks",
@@ -98,6 +106,17 @@ def _sanitize_cli_path(
     must_exist: bool = False,
     allowed_suffixes: frozenset[str] | None = None,
 ) -> Path | None:
+    """Validate a CLI path argument before using it.
+
+    Args:
+        path: Parsed path value, or ``None`` when the argument is omitted.
+        arg_name: Human-readable argument label for error messages.
+        must_exist: Whether the path must already exist on disk.
+        allowed_suffixes: Optional set of permitted filename suffixes.
+
+    Returns:
+        The validated path, or ``None`` when no path was provided.
+    """
     if path is None:
         return None
 

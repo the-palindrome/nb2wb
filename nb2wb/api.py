@@ -111,7 +111,14 @@ def convert(
 
 
 def supported_targets() -> list[str]:
-    """Return supported target platform names."""
+    """Return the supported publishing target names.
+
+    Args:
+        None.
+
+    Returns:
+        Supported target keys as a list of strings.
+    """
     return list_platforms()
 
 
@@ -126,6 +133,9 @@ def revert(
         document: In-memory HTML content payload.
         ocr_pipeline: Optional OCR callable returning ``{"type", "payload"}``.
             When omitted, image transcription is skipped.
+
+    Returns:
+        A scaffolded notebook reconstructed from the HTML document.
     """
     html_document, source_dir = _coerce_html_payload(document)
     return Reverter(
@@ -135,7 +145,14 @@ def revert(
 
 
 def load_input_payload(path_like: str | Path) -> Mapping[str, Any] | nbformat.NotebookNode:
-    """Load a supported input path into an in-memory payload consumable by ``convert``."""
+    """Load a supported input file into an in-memory conversion payload.
+
+    Args:
+        path_like: Path to an ``.ipynb``, ``.md``, or ``.qmd`` file.
+
+    Returns:
+        A notebook payload or text payload mapping for ``convert``.
+    """
     path = _sanitize_input_path(path_like)
     suffix = path.suffix.lower()
     if suffix == ".ipynb":
@@ -146,19 +163,40 @@ def load_input_payload(path_like: str | Path) -> Mapping[str, Any] | nbformat.No
 
 
 def load_notebook_payload(path_like: str | Path) -> nbformat.NotebookNode:
-    """Load an ``.ipynb`` file into a validated in-memory notebook payload."""
+    """Load an ``.ipynb`` file into a validated in-memory notebook payload.
+
+    Args:
+        path_like: Path to the notebook file on disk.
+
+    Returns:
+        A validated in-memory notebook payload.
+    """
     path = _sanitize_input_path(path_like, allowed_suffixes=_IPYNB_SUFFIXES)
     return _read_ipynb_payload(path)
 
 
 def load_markdown_payload(path_like: str | Path) -> Mapping[str, str]:
-    """Load a Markdown file into a text payload mapping consumable by ``convert``."""
+    """Load a Markdown file into a text payload mapping for ``convert``.
+
+    Args:
+        path_like: Path to the Markdown file on disk.
+
+    Returns:
+        A text payload mapping tagged with the ``md`` format.
+    """
     path = _sanitize_input_path(path_like, allowed_suffixes=_MD_SUFFIXES)
     return _text_payload_from_path(path, fmt="md")
 
 
 def load_quarto_payload(path_like: str | Path) -> Mapping[str, str]:
-    """Load a Quarto file into a text payload mapping consumable by ``convert``."""
+    """Load a Quarto file into a text payload mapping for ``convert``.
+
+    Args:
+        path_like: Path to the Quarto file on disk.
+
+    Returns:
+        A text payload mapping tagged with the ``qmd`` format.
+    """
     path = _sanitize_input_path(path_like, allowed_suffixes=_QMD_SUFFIXES)
     return _text_payload_from_path(path, fmt="qmd")
 
@@ -166,6 +204,14 @@ def load_quarto_payload(path_like: str | Path) -> Mapping[str, str]:
 def _resolve_config(
     config: Config | Mapping[str, Any] | str | Path | None,
 ) -> Config:
+    """Normalize API config input into a ``Config`` instance.
+
+    Args:
+        config: User-supplied config object, mapping, file path, or ``None``.
+
+    Returns:
+        A fully constructed ``Config`` object ready for conversion.
+    """
     if config is None:
         return Config()
     if isinstance(config, Config):
@@ -184,6 +230,15 @@ def _sanitize_input_path(
     *,
     allowed_suffixes: frozenset[str] | None = None,
 ) -> Path:
+    """Validate an input path before loading notebook or text content.
+
+    Args:
+        path_like: Candidate file path supplied by the caller.
+        allowed_suffixes: Optional whitelist of permitted file extensions.
+
+    Returns:
+        A validated ``Path`` pointing to an existing file.
+    """
     raw = str(path_like)
     if _CONTROL_CHAR_RE.search(raw):
         raise ValueError("input path contains invalid control characters")
@@ -204,6 +259,14 @@ def _sanitize_input_path(
 def _coerce_api_payload(
     notebook: str | Mapping[str, Any] | nbformat.NotebookNode,
 ) -> nbformat.NotebookNode:
+    """Convert supported API payload shapes into a notebook model.
+
+    Args:
+        notebook: Raw text, a payload mapping, or a notebook-like object.
+
+    Returns:
+        A normalized ``NotebookNode`` ready for conversion.
+    """
     if isinstance(notebook, Path):
         raise TypeError(
             "convert() accepts in-memory content payloads only. "
@@ -220,6 +283,14 @@ def _coerce_api_payload(
 
 
 def _coerce_html_payload(document: str | Mapping[str, Any]) -> tuple[str, Path | None]:
+    """Normalize an HTML revert payload and optional source directory.
+
+    Args:
+        document: Raw HTML text or an HTML payload mapping.
+
+    Returns:
+        A tuple containing the HTML string and an optional source directory.
+    """
     if isinstance(document, Path):
         raise TypeError(
             "revert() accepts in-memory HTML payloads only. "
@@ -259,7 +330,14 @@ def _coerce_html_payload(document: str | Mapping[str, Any]) -> tuple[str, Path |
 def _coerce_notebook_node(
     notebook: Mapping[str, Any] | nbformat.NotebookNode,
 ) -> nbformat.NotebookNode:
-    """Normalize to canonical v4.5 and validate an in-memory notebook payload."""
+    """Normalize to canonical v4.5 and validate an in-memory notebook payload.
+
+    Args:
+        notebook: Notebook payload mapping or ``NotebookNode`` instance.
+
+    Returns:
+        A validated notebook normalized to the canonical schema.
+    """
     if isinstance(notebook, nbformat.NotebookNode):
         node = deepcopy(notebook)
     elif isinstance(notebook, Mapping):
@@ -293,6 +371,14 @@ def _coerce_notebook_node(
 def _canonicalize_notebook_payload(
     node: nbformat.NotebookNode,
 ) -> tuple[nbformat.NotebookNode, list[str]]:
+    """Repair a notebook payload into canonical nbformat v4.5 form.
+
+    Args:
+        node: Notebook payload to normalize in place.
+
+    Returns:
+        A tuple of the normalized notebook node and repair notes applied.
+    """
     repairs: list[str] = []
 
     _move_legacy_top_level_metadata_fields(node, repairs)
@@ -353,6 +439,15 @@ def _coerce_top_level_version_fields(
     node: nbformat.NotebookNode,
     repairs: list[str],
 ) -> None:
+    """Normalize top-level nbformat version fields to integers.
+
+    Args:
+        node: Notebook payload whose version fields may need coercion.
+        repairs: Mutable list collecting repair labels.
+
+    Returns:
+        ``None``. The notebook node is updated in place.
+    """
     major = _coerce_int(node.get("nbformat"))
     if major is not None and node.get("nbformat") != major:
         node["nbformat"] = major
@@ -368,6 +463,14 @@ def _coerce_top_level_version_fields(
 
 
 def _looks_like_mislabeled_v3_payload(node: Mapping[str, Any]) -> bool:
+    """Detect legacy worksheet notebooks mislabeled as nbformat 4.
+
+    Args:
+        node: Notebook-like mapping to inspect.
+
+    Returns:
+        ``True`` when the payload appears to be v3 worksheet data.
+    """
     return (
         _coerce_int(node.get("nbformat")) == 4
         and "cells" not in node
@@ -379,6 +482,15 @@ def _move_legacy_top_level_metadata_fields(
     node: nbformat.NotebookNode,
     repairs: list[str],
 ) -> None:
+    """Move legacy nbformat metadata fields under ``metadata``.
+
+    Args:
+        node: Notebook payload being normalized.
+        repairs: Mutable list collecting repair labels.
+
+    Returns:
+        ``None``. The notebook node is updated in place.
+    """
     metadata = node.get("metadata")
     if metadata is None:
         metadata = {}
@@ -404,6 +516,15 @@ def _repair_v4_payload(
     node: nbformat.NotebookNode,
     repairs: list[str],
 ) -> None:
+    """Ensure a v4 notebook has the fields required by nbformat.
+
+    Args:
+        node: Notebook payload already normalized to major version 4.
+        repairs: Mutable list collecting repair labels.
+
+    Returns:
+        ``None``. The notebook node is updated in place.
+    """
     if _coerce_int(node.get("nbformat")) != _CANONICAL_NBFORMAT:
         raise ValueError(
             "Invalid Jupyter notebook payload (ambiguous legacy/malformed structure): "
@@ -440,6 +561,16 @@ def _repair_v4_payload(
 
 
 def _repair_cell(cell: Mapping[str, Any], idx: int, repairs: list[str]) -> None:
+    """Repair one notebook cell to match the nbformat v4 schema.
+
+    Args:
+        cell: Cell mapping to normalize in place.
+        idx: Zero-based index of the cell in the notebook.
+        repairs: Mutable list collecting repair labels.
+
+    Returns:
+        ``None``. The cell mapping is updated in place.
+    """
     if "metadata" not in cell:
         cell["metadata"] = {}
         repairs.append("added_missing_cell_metadata")
@@ -500,6 +631,17 @@ def _repair_legacy_output(
     out_idx: int,
     repairs: list[str],
 ) -> None:
+    """Upgrade legacy code-cell output records to modern v4 structure.
+
+    Args:
+        output: Output mapping to normalize in place.
+        cell_idx: Zero-based index of the parent cell.
+        out_idx: Zero-based index of the output within the cell.
+        repairs: Mutable list collecting repair labels.
+
+    Returns:
+        ``None``. The output mapping is updated in place.
+    """
     output_type = output.get("output_type")
     if output_type == "stream":
         if "name" not in output and "stream" in output:
@@ -532,6 +674,15 @@ def _repair_legacy_output(
 
 
 def _normalize_notebook_metadata(node: nbformat.NotebookNode, repairs: list[str]) -> None:
+    """Fill missing notebook metadata fields that have safe defaults.
+
+    Args:
+        node: Notebook payload whose metadata should be normalized.
+        repairs: Mutable list collecting repair labels.
+
+    Returns:
+        ``None``. The notebook metadata is updated in place.
+    """
     metadata = node.get("metadata")
     if not isinstance(metadata, Mapping):
         raise ValueError(
@@ -547,6 +698,15 @@ def _normalize_notebook_metadata(node: nbformat.NotebookNode, repairs: list[str]
 
 
 def _normalize_cell_ids(node: nbformat.NotebookNode, repairs: list[str]) -> None:
+    """Ensure every notebook cell has a unique, valid cell identifier.
+
+    Args:
+        node: Notebook payload whose cell IDs should be normalized.
+        repairs: Mutable list collecting repair labels.
+
+    Returns:
+        ``None``. The notebook cells are updated in place.
+    """
     cells = node.get("cells", [])
     if not isinstance(cells, list):
         return
@@ -576,6 +736,15 @@ def _normalize_cell_ids(node: nbformat.NotebookNode, repairs: list[str]) -> None
 
 
 def _make_deterministic_cell_id(idx: int, used: set[str]) -> str:
+    """Generate a repeatable cell ID that does not collide with prior IDs.
+
+    Args:
+        idx: Zero-based cell index used as the base identifier seed.
+        used: Set of cell IDs already reserved in the notebook.
+
+    Returns:
+        A unique cell ID string.
+    """
     base = f"cell-{idx + 1:04d}"
     candidate = base
     suffix = 2
@@ -586,6 +755,14 @@ def _make_deterministic_cell_id(idx: int, used: set[str]) -> str:
 
 
 def _coerce_int(value: Any) -> int | None:
+    """Attempt to coerce a value to ``int`` without raising errors.
+
+    Args:
+        value: Arbitrary value that may represent an integer.
+
+    Returns:
+        The coerced integer, or ``None`` when coercion fails.
+    """
     try:
         return int(value)
     except (TypeError, ValueError):
@@ -593,7 +770,14 @@ def _coerce_int(value: Any) -> int | None:
 
 
 def _coerce_text_string_payload(text: str) -> nbformat.NotebookNode:
-    """Parse raw in-memory Markdown/Quarto text payload."""
+    """Parse raw in-memory Markdown or Quarto text into a notebook.
+
+    Args:
+        text: Raw source text to interpret as Markdown or Quarto.
+
+    Returns:
+        A notebook parsed from the provided text.
+    """
     # Quarto chunk fences are the strongest signal for .qmd.
     if _QMD_CHUNK_RE.search(text):
         return read_qmd_text(text)
@@ -603,7 +787,14 @@ def _coerce_text_string_payload(text: str) -> nbformat.NotebookNode:
 def _coerce_text_mapping_payload(
     notebook: Mapping[str, Any] | nbformat.NotebookNode,
 ) -> nbformat.NotebookNode | None:
-    """Parse explicit in-memory text payload mappings for Markdown/Quarto content."""
+    """Parse explicit text payload mappings for Markdown or Quarto content.
+
+    Args:
+        notebook: Candidate mapping that may describe a text payload.
+
+    Returns:
+        A parsed notebook, or ``None`` when the mapping is not text content.
+    """
     if not isinstance(notebook, Mapping):
         return None
 
@@ -636,12 +827,29 @@ def _coerce_text_mapping_payload(
 
 
 def _read_ipynb_payload(path: Path) -> nbformat.NotebookNode:
+    """Read and normalize a notebook file from disk.
+
+    Args:
+        path: Path to an ``.ipynb`` file.
+
+    Returns:
+        A validated ``NotebookNode`` payload.
+    """
     with path.open("r", encoding="utf-8") as handle:
         notebook = nbformat.read(handle, as_version=nbformat.NO_CONVERT)
     return _coerce_notebook_node(notebook)
 
 
 def _text_payload_from_path(path: Path, *, fmt: str) -> Mapping[str, str]:
+    """Build an in-memory text payload mapping from a file path.
+
+    Args:
+        path: Path to the source text file.
+        fmt: Canonical format label such as ``md`` or ``qmd``.
+
+    Returns:
+        A mapping compatible with ``convert`` text payload inputs.
+    """
     return {
         "format": fmt,
         "content": path.read_text(encoding="utf-8"),
@@ -649,7 +857,14 @@ def _text_payload_from_path(path: Path, *, fmt: str) -> Mapping[str, str]:
 
 
 def _resolve_working_dir(path_like: str | Path | None) -> Path:
-    """Resolve and validate working directory for in-memory notebook execution."""
+    """Resolve and validate the working directory for notebook execution.
+
+    Args:
+        path_like: Optional directory path supplied by the caller.
+
+    Returns:
+        A resolved working directory path.
+    """
     if path_like is None:
         return Path.cwd()
 

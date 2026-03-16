@@ -13,7 +13,14 @@ _FRONT_MATTER_RE = re.compile(r"\A---[ \t]*\n(.*?)\n---[ \t]*\n", re.DOTALL)
 
 
 def split_front_matter(text: str) -> tuple[dict[str, Any], str]:
-    """Split YAML front matter from body, returning ``(front_matter, body)``."""
+    """Split YAML front matter from the document body.
+
+    Args:
+        text: Raw Markdown or Quarto document text.
+
+    Returns:
+        A tuple of parsed front matter and the remaining document body.
+    """
     match = _FRONT_MATTER_RE.match(text)
     if not match:
         return {}, text
@@ -28,7 +35,15 @@ def make_notebook(
     cells: list[nbformat.NotebookNode],
     language: str,
 ) -> nbformat.NotebookNode:
-    """Build a notebook with consistent language metadata."""
+    """Build a notebook with consistent language metadata.
+
+    Args:
+        cells: Notebook cells to attach to the new notebook.
+        language: Default notebook language used in metadata.
+
+    Returns:
+        A new notebook populated with the provided cells and metadata.
+    """
     nb = nbformat.v4.new_notebook()
     nb.metadata["kernelspec"] = {
         "language": language,

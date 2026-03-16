@@ -50,25 +50,54 @@ _FOOTER_FONT_RATIO = 0.58  # footer/label font size relative to main font
 
 
 def _png_to_image(png_bytes: bytes) -> Image.Image:
-    """Decode PNG bytes into an RGB PIL image."""
+    """Decode PNG bytes into an RGB Pillow image.
+
+    Args:
+        png_bytes: Raw PNG image bytes to decode.
+
+    Returns:
+        A Pillow image converted to RGB mode.
+    """
     return Image.open(io.BytesIO(png_bytes)).convert("RGB")
 
 
 def _image_to_png(image: Image.Image) -> bytes:
-    """Encode a PIL image as PNG bytes."""
+    """Encode a Pillow image as PNG bytes.
+
+    Args:
+        image: Pillow image to encode.
+
+    Returns:
+        Raw PNG bytes for the image.
+    """
     out = io.BytesIO()
     image.save(out, format="PNG")
     return out.getvalue()
 
 
 def _border_color(bg: tuple[int, int, int]) -> tuple[int, int, int]:
-    """Choose a visible border color against *bg*."""
+    """Choose a visible border color against a background color.
+
+    Args:
+        bg: Background color as an RGB tuple.
+
+    Returns:
+        A contrasting RGB tuple suitable for a border.
+    """
     brightness = sum(bg) / 3
     return _shift(bg, 40 if brightness < 128 else -40)
 
 
 def _extend_image_width(image: Image.Image, width: int) -> Image.Image:
-    """Extend image to *width* by repeating its rightmost pixel column."""
+    """Extend an image to a target width by repeating its right edge.
+
+    Args:
+        image: Source image to widen.
+        width: Target width in pixels.
+
+    Returns:
+        The widened image, or the original image when already wide enough.
+    """
     if image.width >= width:
         return image
     right_col = image.crop((image.width - 1, 0, image.width, image.height))
@@ -80,7 +109,14 @@ def _extend_image_width(image: Image.Image, width: int) -> Image.Image:
 
 
 def _normalize_image_widths(images: list[Image.Image]) -> list[Image.Image]:
-    """Extend all images to the widest image width."""
+    """Extend all images to match the widest image in the list.
+
+    Args:
+        images: Images that should share one common width.
+
+    Returns:
+        Images normalized to a consistent width.
+    """
     if not images:
         return images
     width = max(img.width for img in images)
@@ -88,7 +124,16 @@ def _normalize_image_widths(images: list[Image.Image]) -> list[Image.Image]:
 
 
 def _stack_images(images: list[Image.Image], separator: int, sep_color: str) -> Image.Image:
-    """Stack images vertically with *separator* pixels between rows."""
+    """Stack images vertically with a configurable separator between them.
+
+    Args:
+        images: Images to stack in order from top to bottom.
+        separator: Vertical gap between stacked images in pixels.
+        sep_color: Background color used for separator rows.
+
+    Returns:
+        A new stacked Pillow image.
+    """
     width = max(img.width for img in images)
     total_h = sum(img.height for img in images) + separator * (len(images) - 1)
     combined = Image.new("RGB", (width, total_h), _hex_to_rgb(sep_color))
@@ -108,7 +153,18 @@ def _stack_images(images: list[Image.Image], separator: int, sep_color: str) -> 
 def render_code(source: str, language: str, config: CodeConfig, *,
                 apply_padding: bool = True,
                 execution_count: Optional[int] = None) -> bytes:
-    """Render *source* with syntax highlighting to PNG bytes."""
+    """Render source code with syntax highlighting to PNG bytes.
+
+    Args:
+        source: Source code text to render.
+        language: Language name used for syntax highlighting.
+        config: Active code rendering configuration.
+        apply_padding: Whether to add footer, border, and outer padding.
+        execution_count: Optional execution count label for the footer.
+
+    Returns:
+        PNG bytes for the rendered code image.
+    """
     font = _load_font(config.font_size)
     style_cls = _style_for_theme(config.theme)
     lines = _tokenize(source, language, style_cls)
@@ -140,7 +196,16 @@ def render_code(source: str, language: str, config: CodeConfig, *,
 
 def render_output_text(text: str, config: CodeConfig, *,
                        apply_padding: bool = True) -> bytes:
-    """Render plain-text output (stdout, repr, error) to PNG bytes with lighter styling."""
+    """Render plain-text output to PNG bytes with lighter styling.
+
+    Args:
+        text: Plain-text output such as stdout, repr, or tracebacks.
+        config: Active code rendering configuration.
+        apply_padding: Whether to add outer padding after rendering.
+
+    Returns:
+        PNG bytes for the rendered output image.
+    """
     font = _load_font(config.font_size)
     style_cls = _style_for_theme(config.theme)
     lines = _tokenize(text, "text", style_cls)
@@ -171,6 +236,16 @@ def vstack_and_pad(png_list: list[bytes], config: CodeConfig, *,
     *code_footer_left* / *code_footer_right* are drawn as a Jupyter-style
     footer bar on the code cell (first image) **after** width normalisation so
     that the right-aligned text sits at the true right edge.
+
+    Args:
+        png_list: PNG images to stack from top to bottom.
+        config: Active code rendering configuration.
+        draw_code_border: Whether to draw a border around the first image.
+        code_footer_left: Left-aligned footer text for the first image.
+        code_footer_right: Right-aligned footer text for the first image.
+
+    Returns:
+        PNG bytes for the combined stacked image.
     """
     if not png_list:
         raise ValueError("png_list must not be empty")
@@ -218,7 +293,17 @@ def vstack_and_pad(png_list: list[bytes], config: CodeConfig, *,
 
 
 def _outer_pad(png_bytes: bytes, padding_x: int, padding_y: int, background: str) -> bytes:
-    """Wrap a PNG image with outer padding of the given background colour."""
+    """Wrap PNG bytes with outer padding of the given background color.
+
+    Args:
+        png_bytes: Raw PNG bytes to pad.
+        padding_x: Horizontal padding in pixels.
+        padding_y: Vertical padding in pixels.
+        background: Background color used for the padding area.
+
+    Returns:
+        PNG bytes for the padded image.
+    """
     img = _png_to_image(png_bytes)
     return _image_to_png(_outer_pad_image(img, padding_x, padding_y, background))
 
@@ -229,7 +314,17 @@ def _outer_pad_image(
     padding_y: int,
     background: str,
 ) -> Image.Image:
-    """Wrap a PIL image with outer padding using the same image mode."""
+    """Wrap a Pillow image with outer padding using the same image mode.
+
+    Args:
+        image: Source image to pad.
+        padding_x: Horizontal padding in pixels.
+        padding_y: Vertical padding in pixels.
+        background: Background color used for the padding area.
+
+    Returns:
+        A new padded Pillow image.
+    """
     if padding_x == 0 and padding_y == 0:
         return image
     canvas = Image.new(
@@ -249,7 +344,18 @@ def _draw_footer_image(
     left_text: str,
     right_text: str,
 ) -> Image.Image:
-    """Append a Jupyter-style footer bar to a code cell image."""
+    """Append a Jupyter-style footer bar to a code cell image.
+
+    Args:
+        image: Source code image to extend with a footer.
+        style_cls: Pygments style used to derive footer colors.
+        config: Active code rendering configuration.
+        left_text: Left-aligned footer text.
+        right_text: Right-aligned footer text.
+
+    Returns:
+        A new image containing the original content and footer bar.
+    """
     bg = _hex_to_rgb(style_cls.background_color)
     footer_bg = _shift(bg, -12)
 
@@ -277,7 +383,16 @@ def _draw_footer_image(
 
 
 def _draw_border_on_region(image: Image.Image, style_cls, *, region_height: int) -> None:
-    """Draw a thin border around the top *region_height* rows of an image."""
+    """Draw a thin border around the top region of an image.
+
+    Args:
+        image: Image whose top region should receive a border.
+        style_cls: Pygments style used to derive border colors.
+        region_height: Height in pixels of the bordered region.
+
+    Returns:
+        ``None``. The border is drawn onto the image in place.
+    """
     draw = ImageDraw.Draw(image)
     bg = _hex_to_rgb(style_cls.background_color)
     draw.rectangle(
@@ -288,14 +403,33 @@ def _draw_border_on_region(image: Image.Image, style_cls, *, region_height: int)
 
 
 def _draw_border_image(image: Image.Image, style_cls) -> Image.Image:
-    """Draw a thin border around the full image."""
+    """Draw a thin border around the full image.
+
+    Args:
+        image: Image that should receive a full border.
+        style_cls: Pygments style used to derive border colors.
+
+    Returns:
+        The same image object after the border is drawn.
+    """
     _draw_border_on_region(image, style_cls, region_height=image.height)
     return image
 
 
 def _draw_footer(png_bytes: bytes, style_cls, config: CodeConfig, *,
                  left_text: str, right_text: str) -> bytes:
-    """Append a Jupyter-style footer bar to a code cell image."""
+    """Append a Jupyter-style footer bar to encoded PNG image bytes.
+
+    Args:
+        png_bytes: Source PNG bytes to extend.
+        style_cls: Pygments style used to derive footer colors.
+        config: Active code rendering configuration.
+        left_text: Left-aligned footer text.
+        right_text: Right-aligned footer text.
+
+    Returns:
+        PNG bytes for the footer-extended image.
+    """
     image = _png_to_image(png_bytes)
     return _image_to_png(
         _draw_footer_image(
@@ -309,7 +443,15 @@ def _draw_footer(png_bytes: bytes, style_cls, config: CodeConfig, *,
 
 
 def _draw_border(png_bytes: bytes, style_cls) -> bytes:
-    """Draw a thin border rectangle around the code cell image."""
+    """Draw a thin border rectangle around encoded PNG bytes.
+
+    Args:
+        png_bytes: Source PNG bytes to decorate.
+        style_cls: Pygments style used to derive border colors.
+
+    Returns:
+        PNG bytes for the bordered image.
+    """
     image = _png_to_image(png_bytes)
     return _image_to_png(_draw_border_image(image, style_cls))
 
@@ -322,7 +464,19 @@ def _paint(
     min_width: int = 0,
     left_margin_label: Optional[str] = None,
 ) -> bytes:
-    """Render tokenized lines onto a PIL image and return raw PNG bytes."""
+    """Render tokenized lines onto a Pillow image.
+
+    Args:
+        lines: Tokenized lines as ``[(color, text), ...]`` segments.
+        font: Font used for code text rendering.
+        style_cls: Pygments style used for colors and background.
+        show_line_numbers: Whether to render a line-number gutter.
+        min_width: Minimum output width in pixels.
+        left_margin_label: Optional label rendered in the left margin.
+
+    Returns:
+        Raw PNG bytes for the rendered image.
+    """
     if not lines:
         lines = [[(200, 200, 200), ""]]
 
@@ -393,7 +547,16 @@ def _paint(
 def _tokenize(
     source: str, language: str, style_cls
 ) -> list[list[tuple[tuple[int, int, int], str]]]:
-    """Return per-line token lists: [ [(color_rgb, text), ...], ... ]"""
+    """Tokenize code into per-line colored segments for rendering.
+
+    Args:
+        source: Source code or plain text to tokenize.
+        language: Language hint used to choose a lexer.
+        style_cls: Pygments style used to resolve token colors.
+
+    Returns:
+        Per-line token segments as ``[(color_rgb, text), ...]`` lists.
+    """
     try:
         lexer = get_lexer_by_name(language)
     except Exception:
@@ -429,7 +592,14 @@ def _tokenize(
 
 @lru_cache(maxsize=32)
 def _load_font(size: int) -> ImageFont.FreeTypeFont:
-    """Load a monospace TrueType font at the given size, falling back to Pillow's default."""
+    """Load a monospace font at the requested size.
+
+    Args:
+        size: Requested font size in pixels.
+
+    Returns:
+        A Pillow font object suitable for code rendering.
+    """
     path = _find_font()
     if path:
         try:
@@ -448,7 +618,14 @@ def _load_font(size: int) -> ImageFont.FreeTypeFont:
 
 @lru_cache(maxsize=1)
 def _find_font() -> Optional[str]:
-    """Return the path to the first available monospace font for the current platform."""
+    """Return the first available monospace font path for the platform.
+
+    Args:
+        None.
+
+    Returns:
+        A filesystem path string, or ``None`` when no candidate exists.
+    """
     platform = sys.platform
     if platform.startswith("linux"):
         candidates = _FONT_CANDIDATES["linux"]
@@ -468,7 +645,15 @@ def _find_font() -> Optional[str]:
 # ---------------------------------------------------------------------------
 
 def _text_w(text: str, font) -> float:
-    """Return the rendered width of *text* in pixels using the given font."""
+    """Measure the rendered width of text using a given font.
+
+    Args:
+        text: Text string to measure.
+        font: Font object used for measurement.
+
+    Returns:
+        Approximate rendered width of the text in pixels.
+    """
     try:
         return font.getlength(text)
     except AttributeError:
@@ -480,7 +665,15 @@ def _text_w(text: str, font) -> float:
 
 
 def _line_height(font, gap: int = _LINE_GAP) -> int:
-    """Return the pixel height of a single text line (ascent + descent + gap)."""
+    """Measure the height of one rendered line for a font.
+
+    Args:
+        font: Font object used for measurement.
+        gap: Extra vertical spacing to add between lines.
+
+    Returns:
+        Pixel height for one rendered line.
+    """
     try:
         asc, desc = font.getmetrics()
         return asc + desc + gap
@@ -493,7 +686,14 @@ def _line_height(font, gap: int = _LINE_GAP) -> int:
 # ---------------------------------------------------------------------------
 
 def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
-    """Convert a hex color string (e.g. ``#ff00aa``) to an (R, G, B) tuple."""
+    """Convert a hex color string to an RGB tuple.
+
+    Args:
+        hex_color: Hex color string such as ``#ff00aa``.
+
+    Returns:
+        A three-tuple of red, green, and blue values.
+    """
     h = (hex_color or "").lstrip("#")
     if len(h) == 3:
         h = "".join(c * 2 for c in h)
@@ -503,12 +703,27 @@ def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
 
 
 def _shift(rgb: tuple[int, int, int], amount: int) -> tuple[int, int, int]:
-    """Brighten (amount > 0) or darken (amount < 0) an RGB tuple."""
+    """Brighten or darken an RGB tuple by a fixed amount.
+
+    Args:
+        rgb: Source RGB color tuple.
+        amount: Signed adjustment applied to each channel.
+
+    Returns:
+        A shifted RGB color tuple clamped to valid channel bounds.
+    """
     return tuple(max(0, min(255, c + amount)) for c in rgb)
 
 
 def _default_fg(style_cls) -> tuple[int, int, int]:
-    """Determine the default foreground color from a Pygments style, inferring from background if needed."""
+    """Determine the default foreground color for a Pygments style.
+
+    Args:
+        style_cls: Pygments style used to inspect text colors.
+
+    Returns:
+        Default foreground color as an RGB tuple.
+    """
     for ttype in (Token.Text, Token):
         info = style_cls.style_for_token(ttype)
         if info.get("color"):
@@ -522,13 +737,28 @@ class _OutputStyle:
     """Lighter, muted Pygments-like style used for output cells."""
 
     def __init__(self, base) -> None:
+        """Derive a muted output-cell palette from a Pygments style.
+
+        Args:
+            base: Base Pygments style object to soften for outputs.
+
+        Returns:
+            ``None``. The instance stores the base style and new background.
+        """
         self._base = base
         base_bg = _hex_to_rgb(base.background_color)
         shift = 25 if sum(base_bg) / 3 < 128 else 20
         self.background_color = _rgb_to_hex(_shift(base_bg, shift))
 
     def style_for_token(self, ttype):
-        """Return muted token style mapping."""
+        """Return a muted token style mapping for output rendering.
+
+        Args:
+            ttype: Pygments token type to style.
+
+        Returns:
+            A style mapping for the token type.
+        """
         info = self._base.style_for_token(ttype)
         if not info.get("color"):
             return info
@@ -539,16 +769,37 @@ class _OutputStyle:
 
 
 def _create_output_style(base_style):
-    """Create a lighter, muted style for output cells."""
+    """Create a lighter muted style for output-cell rendering.
+
+    Args:
+        base_style: Base Pygments style used for code rendering.
+
+    Returns:
+        A muted style wrapper used for output blocks.
+    """
     return _OutputStyle(base_style)
 
 
 def _rgb_to_hex(rgb: tuple[int, int, int]) -> str:
-    """Convert RGB tuple to hex color string."""
+    """Convert an RGB tuple to a hex color string.
+
+    Args:
+        rgb: Source RGB color tuple.
+
+    Returns:
+        Hex color string beginning with ``#``.
+    """
     return f"#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}"
 
 
 @lru_cache(maxsize=16)
 def _style_for_theme(theme: str):
-    """Return cached Pygments style class for *theme*."""
+    """Return a cached Pygments style class for a theme name.
+
+    Args:
+        theme: Pygments theme name to resolve.
+
+    Returns:
+        The Pygments style class for the theme.
+    """
     return get_style_by_name(theme)

@@ -21,6 +21,16 @@ class OpenAIOCRPipeline(BaseOCRPipeline):
         api_key: str | None = None,
         client: Any | None = None,
     ) -> None:
+        """Initialize an OpenAI-backed OCR pipeline.
+
+        Args:
+            model: Responses API model name to use for OCR.
+            api_key: Optional explicit API key for the OpenAI client.
+            client: Optional prebuilt client, mainly for tests.
+
+        Returns:
+            ``None``. The pipeline stores the model and client.
+        """
         normalized_model = model.strip()
         if not normalized_model:
             raise ValueError("model is required for OpenAIOCRPipeline")
@@ -29,11 +39,27 @@ class OpenAIOCRPipeline(BaseOCRPipeline):
         self._client = client or self._build_client(api_key=api_key)
 
     def __call__(self, request: OCRRequest) -> dict[str, str]:
+        """Run OCR against one image using the OpenAI Responses API.
+
+        Args:
+            request: OCR metadata and image source information.
+
+        Returns:
+            A result mapping containing the inferred content type and text.
+        """
         data_url = self.image_data_url(request)
         response = self._create_response(data_url)
         return self._parse_response(response)
 
     def _build_client(self, *, api_key: str | None):
+        """Create an OpenAI client using the provided or environment API key.
+
+        Args:
+            api_key: Optional explicit API key override.
+
+        Returns:
+            A configured OpenAI client instance.
+        """
         resolved_api_key = api_key or os.getenv(_OPENAI_API_KEY_ENV)
         if not resolved_api_key:
             raise ValueError(
@@ -52,6 +78,14 @@ class OpenAIOCRPipeline(BaseOCRPipeline):
         return OpenAI(api_key=resolved_api_key)
 
     def _create_response(self, image_data_url: str):
+        """Submit the OCR prompt and image to the Responses API.
+
+        Args:
+            image_data_url: Base64 data URL for the source image.
+
+        Returns:
+            The raw Responses API result object.
+        """
         try:
             return self._client.responses.create(
                 model=self.model,
@@ -85,6 +119,14 @@ class OpenAIOCRPipeline(BaseOCRPipeline):
             ) from exc
 
     def _parse_response(self, response: Any) -> dict[str, str]:
+        """Validate and normalize a Responses API OCR result.
+
+        Args:
+            response: Raw response object or dict returned by the API.
+
+        Returns:
+            A validated ``{"type", "payload"}`` OCR result mapping.
+        """
         refusal = self._extract_refusal(response)
         if refusal:
             raise RuntimeError(f"OpenAI OCR request was refused: {refusal}")
@@ -117,6 +159,14 @@ class OpenAIOCRPipeline(BaseOCRPipeline):
         return {"type": result_type, "payload": result_payload}
 
     def _extract_response_text(self, response: Any) -> str:
+        """Extract the structured JSON text payload from an OCR response.
+
+        Args:
+            response: Raw response object or dict returned by the API.
+
+        Returns:
+            Structured output text, or an empty string when absent.
+        """
         output_text = getattr(response, "output_text", None)
         if isinstance(output_text, str) and output_text.strip():
             return output_text.strip()
@@ -152,6 +202,14 @@ class OpenAIOCRPipeline(BaseOCRPipeline):
         return ""
 
     def _extract_refusal(self, response: Any) -> str:
+        """Extract refusal text from an OCR response when present.
+
+        Args:
+            response: Raw response object or dict returned by the API.
+
+        Returns:
+            Refusal text, or an empty string when the response was accepted.
+        """
         output = getattr(response, "output", None)
         if isinstance(output, list):
             for item in output:
@@ -180,11 +238,27 @@ class OpenAIOCRPipeline(BaseOCRPipeline):
         return ""
 
     def _is_message_item(self, item: Any) -> bool:
+        """Check whether a response output item is a message container.
+
+        Args:
+            item: Response output item to inspect.
+
+        Returns:
+            ``True`` when the item represents a message object.
+        """
         if isinstance(item, dict):
             return item.get("type") == "message"
         return getattr(item, "type", None) == "message"
 
     def _extract_text_chunk(self, chunk: Any) -> str:
+        """Extract text from one response content chunk.
+
+        Args:
+            chunk: Content chunk object or dict from the response.
+
+        Returns:
+            Chunk text, or an empty string when the chunk is not text.
+        """
         if isinstance(chunk, dict):
             chunk_type = chunk.get("type")
             if chunk_type in {"output_text", "text"}:
@@ -200,6 +274,14 @@ class OpenAIOCRPipeline(BaseOCRPipeline):
         return ""
 
     def _extract_refusal_chunk(self, chunk: Any) -> str:
+        """Extract refusal text from one response content chunk.
+
+        Args:
+            chunk: Content chunk object or dict from the response.
+
+        Returns:
+            Refusal text, or an empty string when absent.
+        """
         if isinstance(chunk, dict):
             if chunk.get("type") == "refusal":
                 refusal = chunk.get("refusal")
@@ -213,6 +295,14 @@ class OpenAIOCRPipeline(BaseOCRPipeline):
         return ""
 
     def _build_prompt(self) -> str:
+        """Build the OCR classification prompt sent to the model.
+
+        Args:
+            None.
+
+        Returns:
+            Instruction text describing the expected OCR JSON output.
+        """
         return (
             "You are an OCR system that classifies a single image from a technical post. "
             "Return only structured JSON with keys 'type' and 'payload'. "
@@ -225,6 +315,14 @@ class OpenAIOCRPipeline(BaseOCRPipeline):
         )
 
     def _response_schema(self) -> dict[str, Any]:
+        """Return the JSON schema enforced for OCR responses.
+
+        Args:
+            None.
+
+        Returns:
+            A JSON-schema mapping for the OCR response payload.
+        """
         return {
             "type": "object",
             "additionalProperties": False,
@@ -239,6 +337,14 @@ class OpenAIOCRPipeline(BaseOCRPipeline):
         }
 
     def _sanitize_error_message(self, message: str) -> str:
+        """Redact API key-like strings from surfaced SDK errors.
+
+        Args:
+            message: Raw error message text from the SDK or transport layer.
+
+        Returns:
+            Sanitized error text safe to include in exceptions.
+        """
         redacted = _KEY_RE.sub("[REDACTED]", message).strip()
         return redacted
 

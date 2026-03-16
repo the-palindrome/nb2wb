@@ -36,6 +36,14 @@ class LocalOCRPipeline(BaseOCRPipeline):
     """Local OCR pipeline backed by Pix2Text and Tesseract."""
 
     def __call__(self, request: OCRRequest) -> dict[str, str]:
+        """Classify an image and run the matching local OCR pipeline.
+
+        Args:
+            request: OCR metadata and image source information.
+
+        Returns:
+            A result mapping containing the inferred content type and text.
+        """
         classification = self.classify_image(request)
         if classification == "code":
             try:
@@ -75,6 +83,14 @@ class LocalOCRPipeline(BaseOCRPipeline):
         return {"type": "latex", "payload": result}
 
     def classify_image(self, request: OCRRequest) -> str:
+        """Classify an image as code, table, latex, or generic figure.
+
+        Args:
+            request: OCR metadata and image source information.
+
+        Returns:
+            A classification label used to choose the OCR backend.
+        """
         pix2text_classification = self._classify_with_pix2text(request)
         if pix2text_classification is not None:
             return pix2text_classification
@@ -83,6 +99,14 @@ class LocalOCRPipeline(BaseOCRPipeline):
         return "figure"
 
     def _classify_with_pix2text(self, request: OCRRequest) -> str | None:
+        """Ask Pix2Text whether the image looks like a table or formula.
+
+        Args:
+            request: OCR metadata and image source information.
+
+        Returns:
+            ``table`` or ``latex`` when detected, otherwise ``None``.
+        """
         try:
             model = self._load_page_ocr_model()
             with self.input_image_path(request) as image_path:
@@ -99,6 +123,14 @@ class LocalOCRPipeline(BaseOCRPipeline):
         return None
 
     def _matches_code_histogram(self, request: OCRRequest) -> bool:
+        """Heuristically detect code screenshots from their color palette.
+
+        Args:
+            request: OCR metadata and image source information.
+
+        Returns:
+            ``True`` when the image resembles a code editor screenshot.
+        """
         try:
             image = self.load_image(request)
         except Exception:
@@ -124,6 +156,15 @@ class LocalOCRPipeline(BaseOCRPipeline):
         image,
         palette: tuple[tuple[int, int, int], ...],
     ) -> list[float]:
+        """Measure how closely image pixels match a reference color palette.
+
+        Args:
+            image: Pillow image to sample.
+            palette: Ordered RGB palette to compare against.
+
+        Returns:
+            Match ratios for each palette color across the sampled image.
+        """
         counts = [0] * len(palette)
         pixels = image.load()
         total = image.width * image.height
@@ -148,6 +189,15 @@ class LocalOCRPipeline(BaseOCRPipeline):
         *,
         background_threshold: float,
     ) -> bool:
+        """Decide whether palette-match ratios look like a code screenshot.
+
+        Args:
+            match_ratios: Pixel-match ratios for the reference palette.
+            background_threshold: Minimum background ratio required for a hit.
+
+        Returns:
+            ``True`` when the ratios satisfy the code-image heuristic.
+        """
         background_ratio = match_ratios[0]
         foreground_ratio = match_ratios[1]
         accent_hits = sum(1 for ratio in match_ratios[2:] if ratio >= _ACCENT_THRESHOLD)
@@ -162,6 +212,15 @@ class LocalOCRPipeline(BaseOCRPipeline):
         left: tuple[int, int, int],
         right: tuple[int, int, int],
     ) -> float:
+        """Compute Euclidean distance between two RGB colors.
+
+        Args:
+            left: First RGB color tuple.
+            right: Second RGB color tuple.
+
+        Returns:
+            Numeric color distance between the two tuples.
+        """
         return (
             ((left[0] - right[0]) ** 2)
             + ((left[1] - right[1]) ** 2)
@@ -169,6 +228,14 @@ class LocalOCRPipeline(BaseOCRPipeline):
         ) ** 0.5
 
     def _iter_page_elements(self, page: Any) -> list[Any]:
+        """Extract page elements from Pix2Text page results.
+
+        Args:
+            page: Pix2Text response object or dict-like payload.
+
+        Returns:
+            A list of detected page elements, or an empty list.
+        """
         elements = getattr(page, "elements", None)
         if isinstance(elements, list):
             return elements
@@ -179,6 +246,14 @@ class LocalOCRPipeline(BaseOCRPipeline):
         return []
 
     def _normalize_element_type(self, element: Any) -> str | None:
+        """Normalize Pix2Text element types to the pipeline's labels.
+
+        Args:
+            element: Pix2Text element object or dict-like payload.
+
+        Returns:
+            ``table``, ``formula``, or ``None`` when no mapping applies.
+        """
         raw_type = None
         if isinstance(element, dict):
             raw_type = element.get("type")
@@ -200,6 +275,14 @@ class LocalOCRPipeline(BaseOCRPipeline):
 
     @lru_cache(maxsize=1)
     def _load_latex_ocr_model(self):
+        """Create and cache the Pix2Text LaTeX OCR model.
+
+        Args:
+            None.
+
+        Returns:
+            A configured Pix2Text LaTeX OCR model instance.
+        """
         try:
             from pix2text.latex_ocr import LatexOCR
         except ImportError as exc:  # pragma: no cover - depends on optional dependency.
@@ -211,6 +294,14 @@ class LocalOCRPipeline(BaseOCRPipeline):
 
     @lru_cache(maxsize=1)
     def _load_page_ocr_model(self):
+        """Create and cache the Pix2Text page OCR model.
+
+        Args:
+            None.
+
+        Returns:
+            A configured Pix2Text page OCR model instance.
+        """
         try:
             from pix2text import Pix2Text
         except ImportError as exc:  # pragma: no cover - depends on optional dependency.
@@ -232,12 +323,30 @@ class LocalOCRPipeline(BaseOCRPipeline):
         return Pix2Text(**config)
 
     def _run_latex_ocr(self, model, image_path: str) -> str:
+        """Run LaTeX OCR against an image file path.
+
+        Args:
+            model: Loaded LaTeX OCR model instance.
+            image_path: Filesystem path to the source image.
+
+        Returns:
+            Normalized LaTeX text extracted from the image.
+        """
         if hasattr(model, "recognize"):
             result = model.recognize(image_path, use_post_process=True)
             return _normalize_latex_ocr_result(result)
         return _normalize_latex_ocr_result(model(image_path))
 
     def _run_table_ocr(self, model, image_path: str) -> str:
+        """Run page/table OCR against an image file path.
+
+        Args:
+            model: Loaded page OCR model instance.
+            image_path: Filesystem path to the source image.
+
+        Returns:
+            Normalized markdown or text extracted from the table image.
+        """
         if hasattr(model, "recognize_page"):
             result = model.recognize_page(image_path, page_id="0")
             return _normalize_page_ocr_result(result)
@@ -247,6 +356,14 @@ class LocalOCRPipeline(BaseOCRPipeline):
         return ""
 
     def _run_code_ocr(self, image) -> str:
+        """Run Tesseract OCR against a code screenshot image.
+
+        Args:
+            image: Pillow image containing a code screenshot.
+
+        Returns:
+            Normalized source text extracted from the image.
+        """
         try:
             import pytesseract
         except ImportError as exc:  # pragma: no cover - depends on optional dependency.
@@ -265,6 +382,14 @@ class LocalOCRPipeline(BaseOCRPipeline):
 
 
 def _latex_ocr_model_config() -> dict[str, object]:
+    """Build configuration kwargs for the Pix2Text LaTeX model.
+
+    Args:
+        None.
+
+    Returns:
+        A mapping of model and processor configuration values.
+    """
     more_processor_configs: dict[str, object] = {"use_fast": True}
     more_model_configs: dict[str, object] = {
         "use_cache": False,
@@ -281,12 +406,28 @@ def _latex_ocr_model_config() -> dict[str, object]:
 
 
 def _page_ocr_model_config() -> dict[str, object]:
+    """Build configuration kwargs for the Pix2Text page model.
+
+    Args:
+        None.
+
+    Returns:
+        A mapping of page-model configuration values.
+    """
     return {
         "enable_table": True,
     }
 
 
 def _normalize_latex_ocr_result(result) -> str:
+    """Normalize LaTeX OCR output from different backend return shapes.
+
+    Args:
+        result: OCR backend result object, string, mapping, or list.
+
+    Returns:
+        Cleaned LaTeX text extracted from the result.
+    """
     if isinstance(result, str):
         return result.strip()
     if isinstance(result, dict):
@@ -302,6 +443,14 @@ def _normalize_latex_ocr_result(result) -> str:
 
 
 def _normalize_page_ocr_result(result) -> str:
+    """Normalize page OCR output into a plain markdown or text string.
+
+    Args:
+        result: OCR backend result object, string, mapping, or model output.
+
+    Returns:
+        Cleaned markdown or text extracted from the result.
+    """
     if isinstance(result, str):
         return result.strip()
     if isinstance(result, dict):
@@ -324,17 +473,41 @@ def _normalize_page_ocr_result(result) -> str:
 
 
 def _normalize_code_ocr_result(result) -> str:
+    """Normalize raw Tesseract output for code snippets.
+
+    Args:
+        result: OCR result object or string returned by Tesseract.
+
+    Returns:
+        Cleaned code text with normalized line endings.
+    """
     text = str(result).replace("\r\n", "\n").strip()
     text = "\n".join(line.rstrip() for line in text.splitlines()).strip()
     return text
 
 
 def _prepare_code_image_for_ocr(image):
+    """Convert a code screenshot into a high-contrast OCR-friendly image.
+
+    Args:
+        image: Pillow image containing a code screenshot.
+
+    Returns:
+        A binarized Pillow image optimized for text extraction.
+    """
     grayscale = image.convert("L")
     return grayscale.point(lambda value: 255 if value > 180 else 0, mode="1")
 
 
 def _call_to_markdown(to_markdown) -> str:
+    """Call a backend ``to_markdown`` helper with flexible signatures.
+
+    Args:
+        to_markdown: Callable returning markdown directly or via a temp dir.
+
+    Returns:
+        Normalized markdown text, or an empty string on signature mismatch.
+    """
     try:
         result = to_markdown()
     except TypeError:
@@ -348,6 +521,15 @@ def _call_to_markdown(to_markdown) -> str:
 
 
 def _normalize_markdown_artifact(result, fallback_dir: Path | None = None) -> str:
+    """Resolve markdown text from backend return values or artifact files.
+
+    Args:
+        result: Backend return value, path, or directory-like artifact.
+        fallback_dir: Optional directory to search for generated markdown.
+
+    Returns:
+        Extracted markdown text, or an empty string when unavailable.
+    """
     if isinstance(result, str):
         return result.strip()
     if isinstance(result, Path):

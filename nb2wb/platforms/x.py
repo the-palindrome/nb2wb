@@ -14,5 +14,12 @@ class XArticlesBuilder(ProfiledBuilder):
     """Compatibility wrapper for the X target profile."""
 
     def __init__(self) -> None:
-        super().__init__(get_target_profile("x"))
+        """Initialize the compatibility builder for X Articles pages.
 
+        Args:
+            None.
+
+        Returns:
+            ``None``. The builder is configured with the X profile.
+        """
+        super().__init__(get_target_profile("x"))

@@ -106,7 +106,14 @@ class Config:
 
 
 def load_config_from_dict(data: Mapping[str, Any] | None) -> Config:
-    """Load config from an in-memory mapping using the same schema as YAML config files."""
+    """Load config from an in-memory mapping using the YAML schema.
+
+    Args:
+        data: Mapping containing config values, or ``None`` for defaults.
+
+    Returns:
+        A fully constructed ``Config`` instance.
+    """
     if data is None:
         return Config()
     if not isinstance(data, Mapping):
@@ -122,6 +129,12 @@ def load_config(path: Optional[Path]) -> Config:
 
     Sub-configs (code, latex, table) inherit the top-level ``image_width`` and
     ``border_radius`` unless explicitly overridden in the YAML.
+
+    Args:
+        path: Optional path to the YAML config file.
+
+    Returns:
+        A fully constructed ``Config`` instance.
     """
     if path is None or not path.exists():
         return Config()
@@ -136,7 +149,14 @@ def load_config(path: Optional[Path]) -> Config:
 
 
 def _build_config_from_mapping(data: dict[str, Any]) -> Config:
-    """Build Config from a parsed config mapping."""
+    """Build a ``Config`` object from a parsed config mapping.
+
+    Args:
+        data: Parsed config mapping loaded from YAML or an API payload.
+
+    Returns:
+        A fully constructed ``Config`` instance.
+    """
     top_width = data.get("image_width", 1920)
     top_radius = data.get("border_radius", 0)
 
@@ -188,7 +208,15 @@ def resolve_target_options(
     config_target_options: TargetPageOptions | Mapping[str, Any] | None,
     runtime_target_options: TargetPageOptions | Mapping[str, Any] | None,
 ) -> TargetPageOptions:
-    """Merge config and runtime target options with runtime precedence."""
+    """Merge config and runtime target options with runtime precedence.
+
+    Args:
+        config_target_options: Target options coming from persistent config.
+        runtime_target_options: Target options supplied at call time.
+
+    Returns:
+        One normalized ``TargetPageOptions`` object.
+    """
     base = normalize_page_options(config_target_options)
     override = normalize_page_options(runtime_target_options)
     return merge_page_options(base, override)
@@ -204,6 +232,14 @@ def apply_target_profile_defaults(
     Apply target-profile render defaults to config.
 
     Returns a new Config with target-optimized rendering settings.
+
+    Args:
+        config: Base config to copy and specialize.
+        platform: Publishing target key whose defaults should be applied.
+        target_options: Optional target overrides that can affect defaults.
+
+    Returns:
+        A new config containing target-specific render settings.
     """
     try:
         defaults = get_target_profile(platform).render_defaults
@@ -243,5 +279,13 @@ def apply_target_profile_defaults(
 
 
 def apply_platform_defaults(config: Config, platform: str) -> Config:
-    """Backward-compatible alias for profile-derived defaults."""
+    """Apply profile-derived defaults using the legacy helper name.
+
+    Args:
+        config: Base config to copy and specialize.
+        platform: Publishing target key whose defaults should be applied.
+
+    Returns:
+        A new config containing target-specific render settings.
+    """
     return apply_target_profile_defaults(config, platform)
