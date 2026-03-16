@@ -16,6 +16,7 @@ class TestHtmlReader:
 
         assert payload["format"] == "html"
         assert "Hello" in payload["content"]
+        assert payload["source_dir"] == str(tmp_path.resolve())
 
     def test_load_html_payload_reads_htm_file(self, tmp_path: Path):
         html_path = tmp_path / "post.htm"

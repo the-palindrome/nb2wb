@@ -94,6 +94,7 @@ Behavior:
 - preserves unsupported/unknown code blocks as fenced markdown
 - keeps ordinary images as markdown images
 - turns heuristically detected code/LaTeX/table images into placeholder cells with `cell.metadata["wb2nb"]`
+- when `Pix2Text` is installed, LaTeX-classified images are OCR'd into markdown math cells before placeholder fallback, using `LatexOCR` with `use_fast=True` and ONNX whenever possible
 
 Current scaffold-supported code languages:
 
@@ -107,9 +108,11 @@ Current scaffold-supported code languages:
 
 Notes:
 
-- OCR for code, LaTeX, and table images is not implemented yet
+- code and table OCR are not implemented yet
+- LaTeX OCR uses `Pix2Text` when installed; otherwise the reverse path keeps the existing placeholder cell behavior
 - the reverse path accepts in-memory HTML strings or `{"format": "html", "content": ...}` payloads
 - file paths are loaded via `nb2wb.load_html_payload()`
+- reverse OCR device selection is automatic by default; override it with `wb2nb --device ...` or `nb2wb.revert(..., device=...)`
 
 ## Cell Tags
 

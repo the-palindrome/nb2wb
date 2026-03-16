@@ -43,6 +43,7 @@ nb2wb report.ipynb --serve
 nb2wb report.ipynb --raw -o post_raw.html
 wb2nb article.html
 wb2nb article.htm -o recovered.ipynb
+wb2nb article.html --device cuda
 ```
 
 ## Reverse Conversion
@@ -52,6 +53,7 @@ wb2nb article.htm -o recovered.ipynb
 | Option | Description |
 |---|---|
 | `-o, --output PATH` | Output notebook path (default: `<input>.ipynb`) |
+| `--device {auto,cpu,cuda,gpu,mps}` | OCR device for Pix2Text; default is automatic device selection |
 
 Current reverse-conversion behavior:
 

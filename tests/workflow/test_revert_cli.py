@@ -38,3 +38,21 @@ class TestRevertCli:
         assert notebook.cells[0].cell_type == "code"
         assert notebook.cells[0].metadata["language"] == "python"
         assert notebook.metadata["wb2nb"]["source_format"] == "html"
+
+    def test_wb2nb_forwards_device_to_api(self, tmp_path: Path, monkeypatch):
+        html_path = tmp_path / "post.html"
+        html_path.write_text("<html><body><p>Hello</p></body></html>", encoding="utf-8")
+        seen: dict[str, object] = {}
+
+        def fake_revert(document, *, device=None):
+            seen["document"] = document
+            seen["device"] = device
+            return nbformat.v4.new_notebook()
+
+        monkeypatch.setattr("nb2wb.revert_cli.revert", fake_revert)
+
+        _run_cli(["wb2nb", str(html_path), "--device", "cuda"])
+
+        assert seen["device"] == "cuda"
+        assert isinstance(seen["document"], dict)
+        assert seen["document"]["format"] == "html"

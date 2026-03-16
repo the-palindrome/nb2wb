@@ -14,6 +14,7 @@ def load_html_payload(path_like: str | Path) -> Mapping[str, str]:
     return {
         "format": "html",
         "content": path.read_text(encoding="utf-8"),
+        "source_dir": str(path.parent.resolve()),
     }
 
 

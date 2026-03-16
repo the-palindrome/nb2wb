@@ -3,6 +3,7 @@ from __future__ import annotations
 import nbformat
 
 import nb2wb
+import nb2wb.reverter as reverter
 
 
 class TestReverter:
@@ -133,6 +134,56 @@ class TestReverter:
         assert notebook.cells[0].cell_type == "markdown"
         assert notebook.cells[0].metadata["wb2nb"]["classification"] == "latex"
         assert "OCR-extracted LaTeX" in notebook.cells[0].source
+
+    def test_revert_latex_image_uses_pix2text_output_when_available(self, monkeypatch):
+        seen: dict[str, object] = {}
+
+        def fake_extract_latex(image, *, device=None):
+            seen["device"] = device
+            return r"\frac{1}{2}"
+
+        monkeypatch.setattr(reverter, "extract_latex", fake_extract_latex)
+
+        notebook = nb2wb.revert(
+            """
+            <html><body>
+              <figure>
+                <img src="equation.png" alt="LaTeX equation">
+              </figure>
+            </body></html>
+            """,
+            device="cuda",
+        )
+
+        assert notebook.cells[0].cell_type == "markdown"
+        assert notebook.cells[0].source == "$$\n\\frac{1}{2}\n$$"
+        assert notebook.cells[0].metadata["wb2nb"]["classification"] == "latex"
+        assert notebook.cells[0].metadata["wb2nb"]["ocr_status"] == "complete"
+        assert notebook.cells[0].metadata["wb2nb"]["ocr_engine"] == "pix2text"
+        assert seen["device"] == "cuda"
+
+    def test_revert_latex_image_falls_back_to_placeholder_when_pix2text_fails(self, monkeypatch):
+        monkeypatch.setattr(
+            reverter,
+            "extract_latex",
+            lambda image, *, device=None: (_ for _ in ()).throw(RuntimeError("Pix2Text unavailable")),
+        )
+
+        notebook = nb2wb.revert(
+            """
+            <html><body>
+              <figure>
+                <img src="equation.png" alt="LaTeX equation">
+              </figure>
+            </body></html>
+            """
+        )
+
+        assert notebook.cells[0].cell_type == "markdown"
+        assert "OCR-extracted LaTeX" in notebook.cells[0].source
+        assert notebook.cells[0].metadata["wb2nb"]["classification"] == "latex"
+        assert notebook.cells[0].metadata["wb2nb"]["ocr_status"] == "failed"
+        assert "Pix2Text unavailable" in notebook.cells[0].metadata["wb2nb"]["ocr_error"]
 
     def test_revert_table_image_creates_markdown_placeholder(self):
         notebook = nb2wb.revert(

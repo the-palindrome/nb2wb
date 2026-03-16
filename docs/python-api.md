@@ -26,6 +26,7 @@ import nb2wb
 
 payload = nb2wb.load_html_payload("article.html")
 notebook = nb2wb.revert(payload)
+gpu_notebook = nb2wb.revert(payload, device="cuda")
 ```
 
 ## Parameter Reference
@@ -48,15 +49,18 @@ import nb2wb
 
 notebook = nb2wb.revert(
     document,
+    device=None,
 )
 ```
 
 | Parameter | Type | Meaning |
 |---|---|---|
 | `document` | `str \| Mapping[str, Any]` | In-memory HTML payload; `Path` objects are rejected |
+| `device` | `str \| None` | Pix2Text OCR device override: `cpu`, `cuda`, `gpu`, `mps`; `None` means automatic device selection |
 
 `nb2wb.revert()` returns an `nbformat.NotebookNode`.
 It accepts raw HTML strings and mapping payloads such as `{"format": "html", "content": "<html...>"}`.
+When `Pix2Text` is installed, LaTeX-classified images are OCR'd into markdown math cells; otherwise they keep the placeholder fallback. Leaving `device=None` uses Pix2Text's automatic device selection. The reverse OCR path uses Pix2Text's `LatexOCR` with `use_fast=True` and ONNX whenever the target device supports it.
 
 ## Input Formats (Detailed)
 

@@ -23,6 +23,7 @@ from .html_reader import load_html_payload
 from .md_reader import read_md_text
 from .platforms import get_builder, list_platforms
 from .qmd_reader import read_qmd_text
+from .reverse_images import normalize_ocr_device
 from .reverter import Reverter
 
 _CONTROL_CHAR_RE = re.compile(r"[\x00-\x1f\x7f]")
@@ -116,10 +117,21 @@ def supported_targets() -> list[str]:
 
 def revert(
     document: str | Mapping[str, Any],
+    *,
+    device: str | None = None,
 ) -> nbformat.NotebookNode:
-    """Convert an HTML document into a scaffolded Jupyter notebook."""
-    html_document = _coerce_html_payload(document)
-    return Reverter().revert_html(html_document)
+    """Convert an HTML document into a scaffolded Jupyter notebook.
+
+    Args:
+        document: In-memory HTML content payload.
+        device: Optional Pix2Text OCR device override (``cpu``, ``cuda``,
+            ``gpu``, ``mps``). ``None`` uses automatic device selection.
+    """
+    html_document, source_dir = _coerce_html_payload(document)
+    return Reverter(
+        source_dir=source_dir,
+        ocr_device=normalize_ocr_device(device),
+    ).revert_html(html_document)
 
 
 def load_input_payload(path_like: str | Path) -> Mapping[str, Any] | nbformat.NotebookNode:
@@ -207,14 +219,14 @@ def _coerce_api_payload(
     return _coerce_notebook_node(notebook)
 
 
-def _coerce_html_payload(document: str | Mapping[str, Any]) -> str:
+def _coerce_html_payload(document: str | Mapping[str, Any]) -> tuple[str, Path | None]:
     if isinstance(document, Path):
         raise TypeError(
             "revert() accepts in-memory HTML payloads only. "
             "Use load_html_payload(path) to read files first."
         )
     if isinstance(document, str):
-        return document
+        return document, None
     if not isinstance(document, Mapping):
         raise TypeError(
             "document must be an in-memory HTML payload: raw HTML string or "
@@ -234,7 +246,14 @@ def _coerce_html_payload(document: str | Mapping[str, Any]) -> str:
             "In-memory HTML payload must include string content via 'content' "
             "(or 'source'/'text')."
         )
-    return content
+
+    source_dir_raw = document.get("source_dir")
+    source_dir: Path | None = None
+    if source_dir_raw is not None:
+        if not isinstance(source_dir_raw, (str, Path)):
+            raise TypeError("In-memory HTML payload field 'source_dir' must be path-like.")
+        source_dir = _resolve_working_dir(source_dir_raw)
+    return content, source_dir
 
 
 def _coerce_notebook_node(

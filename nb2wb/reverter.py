@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import html
+from pathlib import Path
 import re
 from typing import Iterable
 
@@ -13,6 +14,7 @@ from .reverse_images import (
     DefaultImageClassifier,
     ImageCandidate,
     ImageClassification,
+    extract_latex,
     infer_supported_language,
     normalize_supported_language,
 )
@@ -72,6 +74,8 @@ class ImageBlock:
     alt: str
     classification: ImageClassification
     language: str | None
+    ocr_text: str | None = None
+    ocr_error: str | None = None
 
 
 Block = ProseBlock | CodeBlock | ImageBlock
@@ -80,8 +84,15 @@ Block = ProseBlock | CodeBlock | ImageBlock
 class Reverter:
     """Convert HTML content into a scaffolded notebook."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        source_dir: Path | None = None,
+        ocr_device: str | None = None,
+    ) -> None:
         self._classifier = DefaultImageClassifier()
+        self._source_dir = source_dir
+        self._ocr_device = ocr_device
 
     def revert_html(self, document: str) -> nbformat.NotebookNode:
         soup = BeautifulSoup(document, "html.parser")
@@ -199,9 +210,17 @@ class Reverter:
                 "ocr_status": "pending",
             }
             if block.classification == "latex":
-                cell = nbformat.v4.new_markdown_cell(
-                    _latex_placeholder(block.src, block.alt)
-                )
+                if block.ocr_text is not None:
+                    cell = nbformat.v4.new_markdown_cell(_latex_markdown(block.ocr_text))
+                    metadata["ocr_status"] = "complete"
+                    metadata["ocr_engine"] = "pix2text"
+                else:
+                    cell = nbformat.v4.new_markdown_cell(
+                        _latex_placeholder(block.src, block.alt)
+                    )
+                    metadata["ocr_status"] = "failed"
+                    if block.ocr_error is not None:
+                        metadata["ocr_error"] = block.ocr_error
                 cell.metadata["wb2nb"] = metadata
                 cells.append(cell)
                 continue
@@ -271,13 +290,23 @@ class Reverter:
             classes=tuple(dict.fromkeys([*_collect_classes(tag), *img_classes])),
             caption=_caption_text(tag),
             nearby_text=_nearby_text(tag),
+            source_dir=self._source_dir,
         )
         classification = self._classifier.classify(candidate)
+        ocr_text: str | None = None
+        ocr_error: str | None = None
+        if classification == "latex":
+            try:
+                ocr_text = extract_latex(candidate, device=self._ocr_device)
+            except Exception as exc:
+                ocr_error = str(exc)
         return ImageBlock(
             src=candidate.src,
             alt=candidate.alt,
             classification=classification,
             language=infer_supported_language(candidate) if classification == "code" else None,
+            ocr_text=ocr_text,
+            ocr_error=ocr_error,
         )
 
     def _merge_adjacent_prose(self, blocks: list[Block]) -> list[Block]:
@@ -366,6 +395,13 @@ def _latex_placeholder(src: str, alt: str) -> str:
         "TODO(wb2nb): Replace this placeholder with OCR-extracted LaTeX.\n\n"
         f"Source image: `{src}`{description}"
     )
+
+
+def _latex_markdown(latex: str) -> str:
+    stripped = latex.strip()
+    if stripped.startswith("$$") and stripped.endswith("$$"):
+        return stripped
+    return f"$$\n{stripped}\n$$"
 
 
 def _code_placeholder(src: str, alt: str) -> str:

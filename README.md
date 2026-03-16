@@ -42,6 +42,12 @@ cd nb2wb
 pip install -e ".[dev]"
 ```
 
+To enable LaTeX OCR for reverse HTML-to-notebook conversion:
+
+```bash
+pip install -e ".[ocr]"
+```
+
 ## Quick Start (CLI)
 
 ```bash
@@ -59,6 +65,7 @@ nb2wb report.ipynb --warnings
 nb2wb report.ipynb -t ghost --image-strategy embed --article-width 900
 wb2nb article.html
 wb2nb article.html -o recovered.ipynb
+wb2nb article.html --device cuda
 ```
 
 ## Quick Start (Python API)
@@ -109,6 +116,9 @@ html = nb2wb.convert(
 # Reverse HTML back into a scaffolded notebook
 payload = nb2wb.load_html_payload("article.html")
 notebook = nb2wb.revert(payload)
+
+# Force Pix2Text onto a specific device when desired
+notebook = nb2wb.revert(payload, device="cuda")
 ```
 
 `nb2wb.convert()` is content-only; use `load_input_payload()` (or typed loaders) for filesystem inputs.
@@ -124,6 +134,8 @@ filesystem path.
 For reverse conversion, `load_html_payload()` returns `{"format": "html", "content": ...}`.
 The first scaffold uses HTML heuristics to create markdown/code cells and emits
 visible placeholder cells for code/LaTeX/table images pending OCR support.
+When `Pix2Text` is installed via `.[ocr]`, LaTeX-classified images are OCR'd into markdown math cells before falling back to placeholders. The reverse OCR path now uses `LatexOCR` with `use_fast=True` and the ONNX backend whenever the selected device supports it.
+Pass `--device` to `wb2nb` or `device=...` to `nb2wb.revert()` to force `cpu`, `cuda`, `gpu`, or `mps`; leaving it unset uses automatic device selection.
 
 ## Security at a Glance
 
