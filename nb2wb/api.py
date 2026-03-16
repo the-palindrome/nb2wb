@@ -19,9 +19,11 @@ from .config import (
     resolve_target_options,
 )
 from .converter import Converter
+from .html_reader import load_html_payload
 from .md_reader import read_md_text
 from .platforms import get_builder, list_platforms
 from .qmd_reader import read_qmd_text
+from .reverter import Reverter
 
 _CONTROL_CHAR_RE = re.compile(r"[\x00-\x1f\x7f]")
 _ALLOWED_INPUT_SUFFIXES = frozenset({".ipynb", ".qmd", ".md"})
@@ -34,6 +36,7 @@ _TEXT_PAYLOAD_ALIASES: dict[str, str] = {
     "qmd": "qmd",
     "quarto": "qmd",
 }
+_HTML_PAYLOAD_ALIASES = {"html", "htm"}
 _QMD_CHUNK_RE = re.compile(r"^```\{(\w[\w.-]*)", re.MULTILINE)
 _CANONICAL_NBFORMAT = 4
 _CANONICAL_NBFORMAT_MINOR = 5
@@ -109,6 +112,14 @@ def convert(
 def supported_targets() -> list[str]:
     """Return supported target platform names."""
     return list_platforms()
+
+
+def revert(
+    document: str | Mapping[str, Any],
+) -> nbformat.NotebookNode:
+    """Convert an HTML document into a scaffolded Jupyter notebook."""
+    html_document = _coerce_html_payload(document)
+    return Reverter().revert_html(html_document)
 
 
 def load_input_payload(path_like: str | Path) -> Mapping[str, Any] | nbformat.NotebookNode:
@@ -194,6 +205,36 @@ def _coerce_api_payload(
     if text_node is not None:
         return text_node
     return _coerce_notebook_node(notebook)
+
+
+def _coerce_html_payload(document: str | Mapping[str, Any]) -> str:
+    if isinstance(document, Path):
+        raise TypeError(
+            "revert() accepts in-memory HTML payloads only. "
+            "Use load_html_payload(path) to read files first."
+        )
+    if isinstance(document, str):
+        return document
+    if not isinstance(document, Mapping):
+        raise TypeError(
+            "document must be an in-memory HTML payload: raw HTML string or "
+            "a mapping with format/content fields."
+        )
+
+    fmt_raw = document.get("format")
+    if not isinstance(fmt_raw, str):
+        raise TypeError("In-memory HTML payload field 'format' must be a string.")
+    fmt = fmt_raw.strip().lower().lstrip(".")
+    if fmt not in _HTML_PAYLOAD_ALIASES:
+        raise TypeError("In-memory HTML payload 'format' must be one of: html, htm.")
+
+    content = document.get("content", document.get("source", document.get("text")))
+    if not isinstance(content, str):
+        raise TypeError(
+            "In-memory HTML payload must include string content via 'content' "
+            "(or 'source'/'text')."
+        )
+    return content
 
 
 def _coerce_notebook_node(

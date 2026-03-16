@@ -19,6 +19,15 @@ html = nb2wb.convert(
 )
 ```
 
+Reverse conversion:
+
+```python
+import nb2wb
+
+payload = nb2wb.load_html_payload("article.html")
+notebook = nb2wb.revert(payload)
+```
+
 ## Parameter Reference
 
 | Parameter | Type | Meaning |
@@ -31,6 +40,23 @@ html = nb2wb.convert(
 | `warnings_mode` | `bool` | Render `stderr` stream outputs (warnings/logs); off by default |
 | `working_dir` | `str \| Path \| None` | Execution working directory when `execute=True`; defaults to the current directory and must resolve to an existing directory |
 | `raw_mode` | `bool` | Strip wrapper chrome (`<head>`, toolbar, JS) |
+
+## Reverse API
+
+```python
+import nb2wb
+
+notebook = nb2wb.revert(
+    document,
+)
+```
+
+| Parameter | Type | Meaning |
+|---|---|---|
+| `document` | `str \| Mapping[str, Any]` | In-memory HTML payload; `Path` objects are rejected |
+
+`nb2wb.revert()` returns an `nbformat.NotebookNode`.
+It accepts raw HTML strings and mapping payloads such as `{"format": "html", "content": "<html...>"}`.
 
 ## Input Formats (Detailed)
 
@@ -95,6 +121,7 @@ Use loader helpers for filesystem inputs:
 | Helper | Input | Output payload |
 |---|---|---|
 | `nb2wb.load_input_payload(path)` | `.ipynb`, `.md`, `.qmd` | notebook node (`.ipynb`) or text mapping (`.md`/`.qmd`) |
+| `nb2wb.load_html_payload(path)` | `.html`, `.htm` | `{"format": "html", "content": "..."}` |
 | `nb2wb.load_notebook_payload(path)` | `.ipynb` | validated `NotebookNode` |
 | `nb2wb.load_markdown_payload(path)` | `.md` | `{"format": "md", "content": "..."}` |
 | `nb2wb.load_quarto_payload(path)` | `.qmd` | `{"format": "qmd", "content": "..."}` |
@@ -102,6 +129,15 @@ Use loader helpers for filesystem inputs:
 Use loader helpers whenever your source is a filesystem path.
 The Markdown and Quarto helpers intentionally return text payload mappings; the
 actual parsing step still happens inside `nb2wb.convert()`.
+The HTML helper does the same for `nb2wb.revert()`.
+
+## Reverse Conversion Behavior
+
+- prose HTML becomes markdown cells
+- supported code languages become code cells
+- unsupported/unknown code languages become fenced markdown code blocks
+- ordinary images remain markdown images
+- images classified heuristically as code, LaTeX, or tables become placeholder cells with `metadata["wb2nb"]`
 
 ## Output Formats (Detailed)
 

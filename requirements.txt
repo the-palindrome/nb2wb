@@ -7,4 +7,6 @@ Pillow>=9.0
 Pygments>=2.10
 PyYAML>=6.0
 Markdown>=3.4
+beautifulsoup4>=4.12
+markdownify>=0.13
 unicodeit>=0.7

@@ -82,6 +82,35 @@ Notes:
 - when auto-detection is ambiguous, prefer explicit mapping payloads
 - file paths are loaded via `nb2wb.load_input_payload()` (or typed loader helpers), then passed to `nb2wb.convert()`
 
+## `.html` / `.htm`
+
+Supported for reverse conversion via `wb2nb` and `nb2wb.revert()`.
+
+Behavior:
+
+- parses the HTML document body (`<article>`, `<main>`, then `<body>`)
+- converts prose HTML into markdown cells
+- converts recognized code blocks into notebook code cells when the language is scaffold-supported
+- preserves unsupported/unknown code blocks as fenced markdown
+- keeps ordinary images as markdown images
+- turns heuristically detected code/LaTeX/table images into placeholder cells with `cell.metadata["wb2nb"]`
+
+Current scaffold-supported code languages:
+
+- `python`, `py`
+- `r`
+- `julia`, `jl`
+- `bash`, `sh`, `shell`, `zsh`
+- `javascript`, `js`
+- `typescript`, `ts`
+- `sql`
+
+Notes:
+
+- OCR for code, LaTeX, and table images is not implemented yet
+- the reverse path accepts in-memory HTML strings or `{"format": "html", "content": ...}` payloads
+- file paths are loaded via `nb2wb.load_html_payload()`
+
 ## Cell Tags
 
 | Tag | Behavior |

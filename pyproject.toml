@@ -38,6 +38,8 @@ dependencies = [
     # Parsing
     "PyYAML>=6.0",
     "markdown>=3.4",
+    "beautifulsoup4>=4.12",
+    "markdownify>=0.13",
     "unicodeit>=0.7",
 ]
 
@@ -56,6 +58,7 @@ docs = [
 
 [project.scripts]
 nb2wb = "nb2wb.cli:main"
+wb2nb = "nb2wb.revert_cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

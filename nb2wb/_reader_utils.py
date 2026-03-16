@@ -30,7 +30,11 @@ def make_notebook(
 ) -> nbformat.NotebookNode:
     """Build a notebook with consistent language metadata."""
     nb = nbformat.v4.new_notebook()
-    nb.metadata["kernelspec"] = {"language": language, "name": language}
+    nb.metadata["kernelspec"] = {
+        "language": language,
+        "name": language,
+        "display_name": language,
+    }
     nb.metadata["language_info"] = {"name": language}
     nb.cells = cells
     return nb

@@ -9,7 +9,9 @@ import nb2wb.api as api
 class TestPublicApi:
     def test_top_level_exports_convert(self):
         assert callable(nb2wb.convert)
+        assert callable(nb2wb.revert)
         assert callable(nb2wb.load_input_payload)
+        assert callable(nb2wb.load_html_payload)
         assert callable(nb2wb.load_markdown_payload)
         assert callable(nb2wb.load_quarto_payload)
         assert callable(nb2wb.load_notebook_payload)

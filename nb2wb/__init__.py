@@ -5,9 +5,11 @@ from importlib.metadata import PackageNotFoundError, version
 from .api import (
     convert,
     load_input_payload,
+    load_html_payload,
     load_markdown_payload,
     load_notebook_payload,
     load_quarto_payload,
+    revert,
     supported_targets,
 )
 from .config import CodeConfig, Config, LatexConfig, SafetyConfig, TableConfig
@@ -25,7 +27,9 @@ __all__ = [
     "TableConfig",
     "SafetyConfig",
     "convert",
+    "revert",
     "load_input_payload",
+    "load_html_payload",
     "load_notebook_payload",
     "load_markdown_payload",
     "load_quarto_payload",

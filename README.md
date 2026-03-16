@@ -4,12 +4,15 @@
 
 `nb2wb` converts Jupyter Notebooks and other notebook-style content into publishable HTML with a neutral default mode plus platform profiles for Substack, Medium, X Articles, LinkedIn, Dev.to, Hashnode, Ghost, and WordPress.
 
+It also includes a reverse scaffold for converting HTML posts back into Jupyter notebooks.
+
 Supported inputs:
 
 - Jupyter notebooks (`.ipynb`)
 - Quarto documents (`.qmd`)
 - Markdown documents (`.md`)
 - in-memory Jupyter notebook payloads (`dict` / `NotebookNode`)
+- HTML documents (`.html`, `.htm`) for reverse conversion via `wb2nb` / `nb2wb.revert()`
 
 ## Documentation
 
@@ -54,6 +57,8 @@ nb2wb notebook.ipynb --raw -o article_raw.html
 nb2wb report.qmd --execute
 nb2wb report.ipynb --warnings
 nb2wb report.ipynb -t ghost --image-strategy embed --article-width 900
+wb2nb article.html
+wb2nb article.html -o recovered.ipynb
 ```
 
 ## Quick Start (Python API)
@@ -100,15 +105,25 @@ html = nb2wb.convert(
         "article_width_px": 780,
     },
 )
+
+# Reverse HTML back into a scaffolded notebook
+payload = nb2wb.load_html_payload("article.html")
+notebook = nb2wb.revert(payload)
 ```
 
 `nb2wb.convert()` is content-only; use `load_input_payload()` (or typed loaders) for filesystem inputs.
+
+`nb2wb.revert()` is also content-only; use `load_html_payload()` for filesystem HTML inputs.
 
 Loader helpers return a validated `NotebookNode` for `.ipynb` inputs and
 `{"format": ..., "content": ...}` mappings for `.md` and `.qmd` inputs.
 Passing a `Path` object to `nb2wb.convert()` raises `TypeError`. Passing a
 plain string such as `"notebook.ipynb"` is treated as document text, not as a
 filesystem path.
+
+For reverse conversion, `load_html_payload()` returns `{"format": "html", "content": ...}`.
+The first scaffold uses HTML heuristics to create markdown/code cells and emits
+visible placeholder cells for code/LaTeX/table images pending OCR support.
 
 ## Security at a Glance
 

@@ -4,6 +4,7 @@
 
 ```text
 nb2wb <input.{ipynb|qmd|md}> [options]
+wb2nb <input.{html|htm}> [options]
 ```
 
 ## Options
@@ -40,7 +41,25 @@ nb2wb notes.md --execute
 nb2wb report.ipynb --warnings
 nb2wb report.ipynb --serve
 nb2wb report.ipynb --raw -o post_raw.html
+wb2nb article.html
+wb2nb article.htm -o recovered.ipynb
 ```
+
+## Reverse Conversion
+
+`wb2nb` converts HTML posts into scaffolded Jupyter notebooks.
+
+| Option | Description |
+|---|---|
+| `-o, --output PATH` | Output notebook path (default: `<input>.ipynb`) |
+
+Current reverse-conversion behavior:
+
+- prose HTML is converted into markdown cells
+- recognized HTML code blocks become notebook code cells for scaffold-supported languages
+- unsupported/unknown code languages are preserved as fenced markdown code blocks
+- ordinary images remain markdown images
+- images heuristically classified as code, LaTeX, or tables become visible placeholder cells with `cell.metadata.wb2nb`
 
 ## Execution Semantics
 
