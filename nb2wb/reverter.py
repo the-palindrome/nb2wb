@@ -10,7 +10,8 @@ from bs4 import BeautifulSoup, NavigableString, Tag
 import nbformat
 
 from ._reader_utils import make_notebook
-from .ocr.local import OCRRequest, local_ocr_pipeline
+from .ocr.base import OCRRequest
+from .ocr.local import local_ocr_pipeline
 from .reverse_images import infer_supported_language_from_parts, normalize_supported_language
 
 try:

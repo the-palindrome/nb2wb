@@ -1,15 +1,20 @@
 from __future__ import annotations
 
-from .local import OCRRequest
+from .base import BaseOCRPipeline, OCRRequest
 
 
-def multimodal_llm_pipeline(request: OCRRequest) -> dict[str, str]:
+class MultimodalLLMPipeline(BaseOCRPipeline):
     """Placeholder multimodal OCR pipeline."""
-    _ = request
-    return {"type": "figure", "payload": ""}
 
+    def __call__(self, request: OCRRequest) -> dict[str, str]:
+        _ = request
+        return {"type": "figure", "payload": ""}
+
+
+multimodal_llm_pipeline = MultimodalLLMPipeline()
 
 __all__ = [
+    "MultimodalLLMPipeline",
     "OCRRequest",
     "multimodal_llm_pipeline",
 ]

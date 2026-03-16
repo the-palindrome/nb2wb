@@ -5,7 +5,6 @@ import tempfile
 
 from PIL import Image
 
-import nb2wb.ocr.local as local_module
 from nb2wb.ocr.local import (
     OCRRequest,
     _latex_ocr_model_config,
@@ -41,7 +40,7 @@ class TestLocalOcrPipeline:
             def recognize(self, image_path, use_post_process=True):
                 return {"text": r"\alpha + \beta"}
 
-        monkeypatch.setattr(local_module, "_load_latex_ocr_model", lambda: StubLatexOCR())
+        monkeypatch.setattr(local_ocr_pipeline, "_load_latex_ocr_model", lambda: StubLatexOCR())
 
         with tempfile.TemporaryDirectory() as td:
             image_path = Path(td) / "eq.png"
@@ -54,7 +53,7 @@ class TestLocalOcrPipeline:
 
     def test_pipeline_returns_figure_when_recognition_fails(self, monkeypatch):
         monkeypatch.setattr(
-            local_module,
+            local_ocr_pipeline,
             "_load_latex_ocr_model",
             lambda: (_ for _ in ()).throw(RuntimeError("no model")),
         )
@@ -79,7 +78,7 @@ class TestLocalOcrPipeline:
 
     def test_pipeline_returns_code_for_successful_tesseract_recognition(self, monkeypatch):
         monkeypatch.setattr(
-            local_module,
+            local_ocr_pipeline,
             "_run_code_ocr",
             lambda image: "print(42)\nvalue = 1",
         )
@@ -103,7 +102,7 @@ class TestLocalOcrPipeline:
             def recognize_page(self, image_path, page_id="0"):
                 return {"markdown": "|A|B|\n|-|-|\n|1|2|"}
 
-        monkeypatch.setattr(local_module, "_load_page_ocr_model", lambda: StubPageOCR())
+        monkeypatch.setattr(local_ocr_pipeline, "_load_page_ocr_model", lambda: StubPageOCR())
 
         with tempfile.TemporaryDirectory() as td:
             image_path = Path(td) / "table.png"
