@@ -24,6 +24,7 @@ Reverse conversion:
 ```python
 import nb2wb
 from nb2wb.ocr.openai import OpenAIOCRPipeline
+from nb2wb.ocr.gemini import GeminiOCRPipeline
 
 payload = nb2wb.load_html_payload("article.html")
 notebook = nb2wb.revert(payload)
@@ -31,9 +32,13 @@ custom_notebook = nb2wb.revert(
     payload,
     ocr_pipeline=lambda request: {"type": "figure", "payload": ""},
 )
-llm_notebook = nb2wb.revert(
+openai_notebook = nb2wb.revert(
     payload,
     ocr_pipeline=OpenAIOCRPipeline(model="your-model-name", api_key="..."),
+)
+gemini_notebook = nb2wb.revert(
+    payload,
+    ocr_pipeline=GeminiOCRPipeline(model="gemini-2.0-flash", api_key="..."),
 )
 ```
 
@@ -72,6 +77,7 @@ When `ocr_pipeline` is `None`, image transcription is skipped and images remain 
 The explicit local OCR pipeline is `nb2wb.ocr.local.local_ocr_pipeline`.
 It receives image context including `src`, `alt`, `title`, CSS classes, caption text, nearby text, and `source_dir`, returns typed OCR results such as `{"type": "latex", "payload": "..."}`, and currently handles LaTeX/table images with Pix2Text plus code images with Tesseract.
 The OpenAI-backed alternative is `nb2wb.ocr.openai.OpenAIOCRPipeline(model=..., api_key=...)`.
+The Google Gemini-backed alternative is `nb2wb.ocr.gemini.GeminiOCRPipeline(model=..., api_key=...)`, which reads its API key from `GEMINI_API_KEY` or `GOOGLE_API_KEY` when no explicit key is provided.
 Use `load_html_payload()` when your HTML references local assets so `source_dir` is available during OCR.
 The built-in OCR pipelines only read local paths and `data:` URIs, so remote image URLs stay linked figures unless you provide a custom OCR pipeline.
 

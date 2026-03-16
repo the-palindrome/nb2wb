@@ -54,6 +54,12 @@ To enable OpenAI multimodal OCR:
 pip install -e ".[openai]"
 ```
 
+To enable Google Gemini multimodal OCR:
+
+```bash
+pip install -e ".[gemini]"
+```
+
 ## Quick Start (CLI)
 
 ```bash
@@ -73,6 +79,7 @@ wb2nb article.html
 wb2nb article.html -o recovered.ipynb
 wb2nb article.html --ocr-pipeline local
 OPENAI_API_KEY=... wb2nb article.html --ocr-pipeline openai --model gpt-4.1-mini
+GEMINI_API_KEY=... wb2nb article.html --ocr-pipeline gemini --model gemini-2.0-flash
 ```
 
 ## Quick Start (Python API)
@@ -80,6 +87,7 @@ OPENAI_API_KEY=... wb2nb article.html --ocr-pipeline openai --model gpt-4.1-mini
 ```python
 import nb2wb
 from nb2wb.ocr.openai import OpenAIOCRPipeline
+from nb2wb.ocr.gemini import GeminiOCRPipeline
 
 # Path input via loader helper
 payload = nb2wb.load_input_payload("notebook.ipynb")
@@ -135,6 +143,14 @@ llm_notebook = nb2wb.revert(
     payload,
     ocr_pipeline=OpenAIOCRPipeline(
         model="gpt-4.1-mini",
+        api_key="...",
+    ),
+)
+
+gemini_notebook = nb2wb.revert(
+    payload,
+    ocr_pipeline=GeminiOCRPipeline(
+        model="gemini-2.0-flash",
         api_key="...",
     ),
 )

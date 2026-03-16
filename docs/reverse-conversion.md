@@ -33,6 +33,7 @@ wb2nb article.html
 wb2nb article.html -o recovered.ipynb
 wb2nb article.html --ocr-pipeline local
 OPENAI_API_KEY=... wb2nb article.html --ocr-pipeline openai --model your-model-name
+GEMINI_API_KEY=... wb2nb article.html --ocr-pipeline gemini --model gemini-2.0-flash
 ```
 
 Use the Python API when the HTML already lives in memory:
@@ -40,13 +41,21 @@ Use the Python API when the HTML already lives in memory:
 ```python
 import nb2wb
 from nb2wb.ocr.openai import OpenAIOCRPipeline
+from nb2wb.ocr.gemini import GeminiOCRPipeline
 
 payload = nb2wb.load_html_payload("article.html")
 notebook = nb2wb.revert(payload)
 
+# With OpenAI OCR
 ocr_notebook = nb2wb.revert(
     payload,
     ocr_pipeline=OpenAIOCRPipeline(model="your-model-name", api_key="..."),
+)
+
+# With Gemini OCR
+gemini_notebook = nb2wb.revert(
+    payload,
+    ocr_pipeline=GeminiOCRPipeline(model="gemini-2.0-flash", api_key="..."),
 )
 ```
 
@@ -95,6 +104,24 @@ pipeline = OpenAIOCRPipeline(model="your-model-name")
 ```
 
 The OpenAI pipeline sends the image plus surrounding HTML context to the Responses API and expects structured JSON back.
+
+### Google Gemini OCR
+
+Install the Gemini extra:
+
+```bash
+pip install nb2wb[gemini]
+```
+
+Then provide `GEMINI_API_KEY` (or `GOOGLE_API_KEY`) and a model name:
+
+```python
+from nb2wb.ocr.gemini import GeminiOCRPipeline
+
+pipeline = GeminiOCRPipeline(model="gemini-2.0-flash")
+```
+
+The Gemini pipeline works the same way as the OpenAI pipeline: it sends the image and its surrounding HTML context to the Gemini API and returns structured classification results. You can pass an explicit `api_key` argument, or let the pipeline pick up the key from the `GEMINI_API_KEY` or `GOOGLE_API_KEY` environment variables.
 
 ## Important Image-Source Limitation
 

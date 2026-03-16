@@ -45,6 +45,7 @@ wb2nb article.html
 wb2nb article.htm -o recovered.ipynb
 wb2nb article.html --ocr-pipeline local
 OPENAI_API_KEY=... wb2nb article.html --ocr-pipeline openai --model your-model-name
+GEMINI_API_KEY=... wb2nb article.html --ocr-pipeline gemini --model gemini-2.0-flash
 ```
 
 ## Reverse Conversion
@@ -54,8 +55,8 @@ OPENAI_API_KEY=... wb2nb article.html --ocr-pipeline openai --model your-model-n
 | Option | Description |
 |---|---|
 | `-o, --output PATH` | Output notebook path (default: `<input>.ipynb`) |
-| `--ocr-pipeline {local,openai}` | Optional OCR pipeline for image-based reverse conversion; if omitted, OCR is skipped |
-| `--model MODEL` | Required when `--ocr-pipeline openai`; selects the model |
+| `--ocr-pipeline {local,openai,gemini}` | Optional OCR pipeline for image-based reverse conversion; if omitted, OCR is skipped |
+| `--model MODEL` | Required when `--ocr-pipeline openai` or `gemini`; selects the model |
 
 Current reverse-conversion behavior:
 
@@ -66,6 +67,7 @@ Current reverse-conversion behavior:
 - if `--ocr-pipeline` is provided, every image is passed to the selected OCR pipeline with its HTML context
 - the OCR pipeline decides whether each image is treated as a linked figure or converted into code/markdown notebook content
 - `openai` requires `OPENAI_API_KEY` in the environment and fails fast on missing credentials or API errors
+- `gemini` requires `GEMINI_API_KEY` or `GOOGLE_API_KEY` in the environment and fails fast on missing credentials or API errors
 - the built-in OCR pipelines only process local paths and `data:` images; remote `http/https` image URLs keep the figure fallback
 
 For a fuller workflow guide, see [Reverse Conversion](reverse-conversion.md).

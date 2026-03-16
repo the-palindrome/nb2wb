@@ -9,8 +9,9 @@ pip install nb2wb
 Optional extras:
 
 ```bash
-pip install nb2wb[ocr]     # local reverse-conversion OCR
+pip install nb2wb[ocr]     # local reverse-conversion OCR (Pix2Text + Tesseract)
 pip install nb2wb[openai]  # OpenAI-backed reverse-conversion OCR
+pip install nb2wb[gemini]  # Google Gemini-backed reverse-conversion OCR
 ```
 
 The local OCR path also needs the `tesseract` binary on `PATH` for code-image OCR.
@@ -54,6 +55,7 @@ wb2nb article.html
 wb2nb article.html -o recovered.ipynb
 wb2nb article.html --ocr-pipeline local
 OPENAI_API_KEY=... wb2nb article.html --ocr-pipeline openai --model your-model-name
+GEMINI_API_KEY=... wb2nb article.html --ocr-pipeline gemini --model gemini-2.0-flash
 ```
 
 Reverse conversion keeps images linked by default.
