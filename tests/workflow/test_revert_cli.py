@@ -56,3 +56,86 @@ class TestRevertCli:
         assert seen["ocr_pipeline"] is None
         assert isinstance(seen["document"], dict)
         assert seen["document"]["format"] == "html"
+
+    def test_wb2nb_multimodal_llm_requires_openai_model(self, tmp_path: Path, monkeypatch, capsys):
+        html_path = tmp_path / "post.html"
+        html_path.write_text("<html><body><p>Hello</p></body></html>", encoding="utf-8")
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+
+        try:
+            _invoke_cli(["wb2nb", str(html_path), "--ocr-pipeline", "multimodal-llm"])
+        except SystemExit as exc:
+            assert exc.code == 2
+        else:  # pragma: no cover
+            raise AssertionError("expected parser error for missing --openai-model")
+
+        captured = capsys.readouterr()
+        assert "--openai-model is required" in captured.err
+
+    def test_wb2nb_multimodal_llm_requires_openai_api_key(self, tmp_path: Path, monkeypatch, capsys):
+        html_path = tmp_path / "post.html"
+        html_path.write_text("<html><body><p>Hello</p></body></html>", encoding="utf-8")
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+        try:
+            _invoke_cli(
+                [
+                    "wb2nb",
+                    str(html_path),
+                    "--ocr-pipeline",
+                    "multimodal-llm",
+                    "--openai-model",
+                    "gpt-4.1-mini",
+                ]
+            )
+        except SystemExit as exc:
+            assert exc.code == 2
+        else:  # pragma: no cover
+            raise AssertionError("expected parser error for missing OPENAI_API_KEY")
+
+        captured = capsys.readouterr()
+        assert "OPENAI_API_KEY environment variable is required" in captured.err
+
+    def test_wb2nb_multimodal_llm_constructs_pipeline_and_passes_to_api(
+        self,
+        tmp_path: Path,
+        monkeypatch,
+    ):
+        html_path = tmp_path / "post.html"
+        html_path.write_text("<html><body><p>Hello</p></body></html>", encoding="utf-8")
+        seen: dict[str, object] = {}
+        sentinel = object()
+
+        class FakePipeline:
+            def __init__(self, *, model, api_key=None, client=None):
+                seen["model"] = model
+                seen["api_key"] = api_key
+                seen["client"] = client
+
+            def __call__(self, request):
+                return sentinel
+
+        def fake_revert(document, *, ocr_pipeline=None):
+            seen["document"] = document
+            seen["ocr_pipeline"] = ocr_pipeline
+            return nbformat.v4.new_notebook()
+
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+        monkeypatch.setattr("nb2wb.revert_cli.MultimodalLLMPipeline", FakePipeline)
+        monkeypatch.setattr("nb2wb.revert_cli.revert", fake_revert)
+
+        _run_cli(
+            [
+                "wb2nb",
+                str(html_path),
+                "--ocr-pipeline",
+                "multimodal-llm",
+                "--openai-model",
+                "gpt-4.1-mini",
+            ]
+        )
+
+        assert seen["model"] == "gpt-4.1-mini"
+        assert seen["api_key"] is None
+        assert isinstance(seen["document"], dict)
+        assert isinstance(seen["ocr_pipeline"], FakePipeline)

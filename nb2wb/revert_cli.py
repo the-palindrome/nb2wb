@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import sys
 from pathlib import Path
@@ -8,6 +9,7 @@ from pathlib import Path
 import nbformat
 
 from .api import load_html_payload, revert
+from .ocr.multimodal_llm import MultimodalLLMPipeline
 
 _CONTROL_CHAR_RE = re.compile(r"[\x00-\x1f\x7f]")
 _ALLOWED_INPUT_SUFFIXES = frozenset({".html", ".htm"})
@@ -26,7 +28,29 @@ def main() -> None:
         default=None,
         help="Output notebook path (default: <document>.ipynb)",
     )
+    parser.add_argument(
+        "--ocr-pipeline",
+        choices=("local", "multimodal-llm"),
+        default="local",
+        help="OCR pipeline to use for image-based reverse conversion.",
+    )
+    parser.add_argument(
+        "--openai-model",
+        default=None,
+        help="OpenAI model to use when --ocr-pipeline multimodal-llm is selected.",
+    )
     args = parser.parse_args()
+
+    if args.ocr_pipeline == "multimodal-llm":
+        if not args.openai_model:
+            parser.error(
+                "--openai-model is required when --ocr-pipeline multimodal-llm is selected"
+            )
+        if not os.getenv("OPENAI_API_KEY"):
+            parser.error(
+                "OPENAI_API_KEY environment variable is required when "
+                "--ocr-pipeline multimodal-llm is selected"
+            )
 
     try:
         document_path = _sanitize_cli_path(
@@ -43,10 +67,18 @@ def main() -> None:
         print(f"Error: {exc}", file=sys.stderr)
         sys.exit(1)
 
+    try:
+        ocr_pipeline = None
+        if args.ocr_pipeline == "multimodal-llm":
+            ocr_pipeline = MultimodalLLMPipeline(model=args.openai_model)
+    except (RuntimeError, ValueError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
+
     print(f"Reverting '{document_path}' into a notebook …")
     try:
         payload = load_html_payload(document_path)
-        notebook = revert(payload)
+        notebook = revert(payload, ocr_pipeline=ocr_pipeline)
     except Exception as exc:
         print(f"Conversion failed: {exc}", file=sys.stderr)
         sys.exit(1)

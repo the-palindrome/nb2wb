@@ -59,6 +59,9 @@ ocr = [
     "pix2text>=1.1.0",
     "pytesseract>=0.3.10",
 ]
+openai = [
+    "openai>=1.68.0",
+]
 
 [project.scripts]
 nb2wb = "nb2wb.cli:main"

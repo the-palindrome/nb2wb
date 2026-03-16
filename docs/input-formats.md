@@ -111,7 +111,7 @@ Notes:
 - the OCR pipeline itself decides whether an image is treated as `figure`, `table`, `code`, or `latex`
 - code OCR in the built-in pipeline uses `Tesseract` via `pytesseract` when installed and the `tesseract` binary is available on PATH; otherwise code-like images keep the linked-figure fallback
 - LaTeX OCR and table OCR in the built-in pipeline use `Pix2Text` when installed; otherwise the reverse path keeps the image linked as a figure
-- a placeholder multimodal OCR entrypoint lives at `nb2wb.ocr.multimodal_llm`
+- an OpenAI-backed multimodal OCR pipeline is available via `nb2wb.ocr.multimodal_llm.MultimodalLLMPipeline`
 - the reverse path accepts in-memory HTML strings or `{"format": "html", "content": ...}` payloads
 - file paths are loaded via `nb2wb.load_html_payload()`
 - a custom OCR pipeline can be supplied via `nb2wb.revert(..., ocr_pipeline=...)`

@@ -3,13 +3,33 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import Any
 
-from ..reverse_images import infer_supported_language_from_parts
 from .base import BaseOCRPipeline, OCRRequest
 
-_LATEX_HINTS = ("math", "latex", "equation", "formula")
-_CODE_HINTS = ("code", "snippet", "source", "terminal")
-_TABLE_HINTS = ("table", "tabular", "dataframe", "grid")
+_LIGHT_CODE_PALETTE = (
+    (255, 255, 255),
+    (36, 41, 47),
+    (5, 80, 174),
+    (130, 80, 223),
+    (207, 34, 46),
+    (17, 99, 41),
+    (149, 56, 0),
+)
+_DARK_CODE_PALETTE = (
+    (30, 30, 30),
+    (212, 212, 212),
+    (86, 156, 214),
+    (206, 145, 120),
+    (220, 220, 170),
+    (197, 134, 192),
+    (78, 201, 176),
+)
+_PALETTE_DISTANCE_THRESHOLD = 38
+_DARK_BACKGROUND_THRESHOLD = 0.32
+_LIGHT_BACKGROUND_THRESHOLD = 0.45
+_ACCENT_THRESHOLD = 0.015
+_MIN_ACCENT_MATCHES = 2
 
 
 class LocalOCRPipeline(BaseOCRPipeline):
@@ -55,16 +75,128 @@ class LocalOCRPipeline(BaseOCRPipeline):
         return {"type": "latex", "payload": result}
 
     def classify_image(self, request: OCRRequest) -> str:
-        haystack = self.classification_haystack(request)
-        if any(hint in haystack for hint in _LATEX_HINTS):
-            return "latex"
-        if any(hint in haystack for hint in _CODE_HINTS):
-            return "code"
-        if any(hint in haystack for hint in _TABLE_HINTS):
-            return "table"
-        if infer_supported_language_from_parts(self.candidate_texts(request)) is not None:
+        pix2text_classification = self._classify_with_pix2text(request)
+        if pix2text_classification is not None:
+            return pix2text_classification
+        if self._matches_code_histogram(request):
             return "code"
         return "figure"
+
+    def _classify_with_pix2text(self, request: OCRRequest) -> str | None:
+        try:
+            model = self._load_page_ocr_model()
+            with self.input_image_path(request) as image_path:
+                page = model.recognize_page(image_path, page_id="0", table_as_image=True)
+        except Exception:
+            return None
+
+        for element in self._iter_page_elements(page):
+            element_type = self._normalize_element_type(element)
+            if element_type == "table":
+                return "table"
+            if element_type == "formula":
+                return "latex"
+        return None
+
+    def _matches_code_histogram(self, request: OCRRequest) -> bool:
+        try:
+            image = self.load_image(request)
+        except Exception:
+            return False
+
+        samples = image.convert("RGB").resize((96, 96))
+        total = samples.width * samples.height
+        if total == 0:
+            return False
+
+        light_matches = self._palette_match_ratios(samples, _LIGHT_CODE_PALETTE)
+        dark_matches = self._palette_match_ratios(samples, _DARK_CODE_PALETTE)
+        return self._is_code_palette_match(
+            light_matches,
+            background_threshold=_LIGHT_BACKGROUND_THRESHOLD,
+        ) or self._is_code_palette_match(
+            dark_matches,
+            background_threshold=_DARK_BACKGROUND_THRESHOLD,
+        )
+
+    def _palette_match_ratios(
+        self,
+        image,
+        palette: tuple[tuple[int, int, int], ...],
+    ) -> list[float]:
+        counts = [0] * len(palette)
+        pixels = image.load()
+        total = image.width * image.height
+        for y in range(image.height):
+            for x in range(image.width):
+                pixel = pixels[x, y]
+                best_index = None
+                best_distance = None
+                for index, color in enumerate(palette):
+                    distance = self._color_distance(pixel, color)
+                    if best_distance is None or distance < best_distance:
+                        best_index = index
+                        best_distance = distance
+                if best_index is not None and best_distance is not None:
+                    if best_distance <= _PALETTE_DISTANCE_THRESHOLD:
+                        counts[best_index] += 1
+        return [count / total for count in counts]
+
+    def _is_code_palette_match(
+        self,
+        match_ratios: list[float],
+        *,
+        background_threshold: float,
+    ) -> bool:
+        background_ratio = match_ratios[0]
+        foreground_ratio = match_ratios[1]
+        accent_hits = sum(1 for ratio in match_ratios[2:] if ratio >= _ACCENT_THRESHOLD)
+        return (
+            background_ratio >= background_threshold
+            and foreground_ratio >= 0.02
+            and accent_hits >= _MIN_ACCENT_MATCHES
+        )
+
+    def _color_distance(
+        self,
+        left: tuple[int, int, int],
+        right: tuple[int, int, int],
+    ) -> float:
+        return (
+            ((left[0] - right[0]) ** 2)
+            + ((left[1] - right[1]) ** 2)
+            + ((left[2] - right[2]) ** 2)
+        ) ** 0.5
+
+    def _iter_page_elements(self, page: Any) -> list[Any]:
+        elements = getattr(page, "elements", None)
+        if isinstance(elements, list):
+            return elements
+        if isinstance(page, dict):
+            raw_elements = page.get("elements")
+            if isinstance(raw_elements, list):
+                return raw_elements
+        return []
+
+    def _normalize_element_type(self, element: Any) -> str | None:
+        raw_type = None
+        if isinstance(element, dict):
+            raw_type = element.get("type")
+        else:
+            raw_type = getattr(element, "type", None)
+
+        if raw_type is None:
+            return None
+        if isinstance(raw_type, str):
+            normalized = raw_type.lower()
+        else:
+            normalized = str(raw_type).split(".")[-1].lower()
+
+        if "table" in normalized:
+            return "table"
+        if "formula" in normalized or normalized in {"isolated", "embedding"}:
+            return "formula"
+        return None
 
     @lru_cache(maxsize=1)
     def _load_latex_ocr_model(self):

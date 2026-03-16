@@ -48,6 +48,12 @@ To enable LaTeX OCR for reverse HTML-to-notebook conversion:
 pip install -e ".[ocr]"
 ```
 
+To enable OpenAI multimodal OCR:
+
+```bash
+pip install -e ".[openai]"
+```
+
 ## Quick Start (CLI)
 
 ```bash
@@ -65,12 +71,14 @@ nb2wb report.ipynb --warnings
 nb2wb report.ipynb -t ghost --image-strategy embed --article-width 900
 wb2nb article.html
 wb2nb article.html -o recovered.ipynb
+OPENAI_API_KEY=... wb2nb article.html --ocr-pipeline multimodal-llm --openai-model gpt-4.1-mini
 ```
 
 ## Quick Start (Python API)
 
 ```python
 import nb2wb
+from nb2wb.ocr.multimodal_llm import MultimodalLLMPipeline
 
 # Path input via loader helper
 payload = nb2wb.load_input_payload("notebook.ipynb")
@@ -121,6 +129,14 @@ notebook = nb2wb.revert(
     payload,
     ocr_pipeline=lambda request: {"type": "figure", "payload": ""},
 )
+
+llm_notebook = nb2wb.revert(
+    payload,
+    ocr_pipeline=MultimodalLLMPipeline(
+        model="gpt-4.1-mini",
+        api_key="...",
+    ),
+)
 ```
 
 `nb2wb.convert()` is content-only; use `load_input_payload()` (or typed loaders) for filesystem inputs.
@@ -134,11 +150,11 @@ plain string such as `"notebook.ipynb"` is treated as document text, not as a
 filesystem path.
 
 For reverse conversion, `load_html_payload()` returns `{"format": "html", "content": ...}`.
-The reverse path uses HTML heuristics plus an OCR pipeline hook to create markdown/code cells.
+The reverse path uses an OCR pipeline hook to create markdown/code cells.
 `nb2wb.revert(..., ocr_pipeline=...)` accepts a callable returning
 `{"type": "latex"|"code"|"table"|"figure", "payload": "..."}`.
 The OCR pipeline receives image context such as `src`, `alt`, `title`, CSS classes, caption text, nearby text, and `source_dir`, and decides the final image type itself.
-The built-in default pipeline lives at `nb2wb.ocr.local` and currently classifies images from that context, OCRs LaTeX-like images and table-like images with Pix2Text, uses Tesseract for code-like images, and falls back to linked figures when OCR is unavailable. A placeholder multimodal entrypoint also exists at `nb2wb.ocr.multimodal_llm`.
+The built-in default pipeline lives at `nb2wb.ocr.local` and currently uses Pix2Text page classification plus Tesseract-backed OCR locally. An explicit OpenAI-backed alternative lives at `nb2wb.ocr.multimodal_llm.MultimodalLLMPipeline` and uses the Responses API with structured output.
 
 ## Security at a Glance
 

@@ -23,12 +23,17 @@ Reverse conversion:
 
 ```python
 import nb2wb
+from nb2wb.ocr.multimodal_llm import MultimodalLLMPipeline
 
 payload = nb2wb.load_html_payload("article.html")
 notebook = nb2wb.revert(payload)
 custom_notebook = nb2wb.revert(
     payload,
     ocr_pipeline=lambda request: {"type": "figure", "payload": ""},
+)
+llm_notebook = nb2wb.revert(
+    payload,
+    ocr_pipeline=MultimodalLLMPipeline(model="gpt-4.1-mini", api_key="..."),
 )
 ```
 
@@ -64,8 +69,8 @@ notebook = nb2wb.revert(
 `nb2wb.revert()` returns an `nbformat.NotebookNode`.
 It accepts raw HTML strings and mapping payloads such as `{"format": "html", "content": "<html...>"}`.
 The built-in default OCR pipeline is `nb2wb.ocr.local.local_ocr_pipeline`.
-It receives image context including `src`, `alt`, `title`, CSS classes, caption text, nearby text, and `source_dir`, returns typed OCR results such as `{"type": "latex", "payload": "..."}`, and currently handles LaTeX-oriented and table-oriented images with Pix2Text plus code-oriented images with Tesseract.
-The placeholder multimodal alternative lives at `nb2wb.ocr.multimodal_llm.multimodal_llm_pipeline`.
+It receives image context including `src`, `alt`, `title`, CSS classes, caption text, nearby text, and `source_dir`, returns typed OCR results such as `{"type": "latex", "payload": "..."}`, and currently handles LaTeX/table images with Pix2Text plus code images with Tesseract.
+The OpenAI-backed multimodal alternative is `nb2wb.ocr.multimodal_llm.MultimodalLLMPipeline(model=..., api_key=...)`.
 
 ## Input Formats (Detailed)
 
