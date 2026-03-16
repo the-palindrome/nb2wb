@@ -9,6 +9,7 @@ from pathlib import Path
 import nbformat
 
 from .api import load_html_payload, revert
+from .ocr.gemini import GeminiOCRPipeline
 from .ocr.local import local_ocr_pipeline
 from .ocr.openai import OpenAIOCRPipeline
 
@@ -39,26 +40,33 @@ def main() -> None:
     )
     parser.add_argument(
         "--ocr-pipeline",
-        choices=("local", "openai"),
+        choices=("local", "openai", "gemini"),
         default=None,
         help="Optional OCR pipeline for image-based reverse conversion.",
     )
     parser.add_argument(
         "--model",
         default=None,
-        help="Model to use when --ocr-pipeline openai is selected.",
+        help="Model to use when --ocr-pipeline openai or gemini is selected.",
     )
     args = parser.parse_args()
 
-    if args.ocr_pipeline == "openai":
+    if args.ocr_pipeline in {"openai", "gemini"}:
         if not args.model:
             parser.error(
-                "--model is required when --ocr-pipeline openai is selected"
+                "--model is required when --ocr-pipeline openai or gemini is selected"
             )
+    if args.ocr_pipeline == "openai":
         if not os.getenv("OPENAI_API_KEY"):
             parser.error(
                 "OPENAI_API_KEY environment variable is required when "
                 "--ocr-pipeline openai is selected"
+            )
+    if args.ocr_pipeline == "gemini":
+        if not os.getenv("GEMINI_API_KEY") and not os.getenv("GOOGLE_API_KEY"):
+            parser.error(
+                "GEMINI_API_KEY or GOOGLE_API_KEY environment variable is required "
+                "when --ocr-pipeline gemini is selected"
             )
 
     try:
@@ -82,6 +90,8 @@ def main() -> None:
             ocr_pipeline = local_ocr_pipeline
         elif args.ocr_pipeline == "openai":
             ocr_pipeline = OpenAIOCRPipeline(model=args.model)
+        elif args.ocr_pipeline == "gemini":
+            ocr_pipeline = GeminiOCRPipeline(model=args.model)
     except (RuntimeError, ValueError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         sys.exit(1)

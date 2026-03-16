@@ -62,6 +62,9 @@ ocr = [
 openai = [
     "openai>=1.68.0",
 ]
+gemini = [
+    "google-genai>=1.0.0",
+]
 
 [project.scripts]
 nb2wb = "nb2wb.cli:main"

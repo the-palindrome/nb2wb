@@ -2,7 +2,7 @@
 
 `nb2wb` converts Jupyter Notebooks and notebook-like documents into platform-ready HTML for copy/paste publishing.
 
-Use this documentation for end-to-end usage: local CLI runs, Python API integration, server-side deployment, and security hardening.
+Use this documentation for end-to-end usage: local CLI runs, Python API integration, forward notebook-to-HTML conversion, reverse HTML-to-notebook scaffolding, server-side deployment, and security hardening.
 
 ```{toctree}
 :maxdepth: 2
@@ -12,6 +12,7 @@ feature-tour
 getting-started
 cli-reference
 python-api
+reverse-conversion
 input-formats
 configuration
 platforms
@@ -31,9 +32,10 @@ development
 ## What nb2wb Does
 
 - Converts `.ipynb`, `.qmd`, and `.md` into full HTML pages.
+- Converts `.html` and `.htm` back into scaffolded notebooks through `wb2nb` and `nb2wb.revert()`.
 - Preserves math and code fidelity by rendering display math and code blocks as images.
 - Supports Substack, Medium, X Articles, LinkedIn, Dev.to, Hashnode, Ghost, and WordPress output wrappers.
-- Provides a Python API (`nb2wb.convert`) for backend integration.
+- Provides Python APIs for both conversion (`nb2wb.convert`) and reverse scaffolding (`nb2wb.revert`).
 - Applies mandatory server-safe sanitization and notebook resource limits.
 
 ## Quick Links

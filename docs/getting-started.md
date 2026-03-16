@@ -6,6 +6,15 @@
 pip install nb2wb
 ```
 
+Optional extras:
+
+```bash
+pip install nb2wb[ocr]     # local reverse-conversion OCR
+pip install nb2wb[openai]  # OpenAI-backed reverse-conversion OCR
+```
+
+The local OCR path also needs the `tesseract` binary on `PATH` for code-image OCR.
+
 For development:
 
 ```bash
@@ -35,6 +44,20 @@ nb2wb notebook.ipynb --open
 nb2wb notebook.ipynb --raw -o article_raw.html
 nb2wb notebook.ipynb -t ghost --image-strategy embed --article-width 900
 ```
+
+## First Reverse Conversion
+
+Use `wb2nb` when you want to recover a notebook scaffold from an HTML post:
+
+```bash
+wb2nb article.html
+wb2nb article.html -o recovered.ipynb
+wb2nb article.html --ocr-pipeline local
+OPENAI_API_KEY=... wb2nb article.html --ocr-pipeline openai --model your-model-name
+```
+
+Reverse conversion keeps images linked by default.
+Add OCR only when you want image-based equations, tables, or code screenshots turned into notebook cells.
 
 ## First Conversion (Python API)
 
@@ -70,6 +93,18 @@ html = nb2wb.convert(notebook_payload_dict, target="medium", raw_mode=True)
 
 In raw mode, output omits `<head>`, toolbar/header controls, and JavaScript.
 
+## Reverse Conversion from Python
+
+```python
+import nb2wb
+
+payload = nb2wb.load_html_payload("article.html")
+notebook = nb2wb.revert(payload)
+```
+
+Use `load_html_payload()` for filesystem HTML so relative image paths resolve from the HTML file's directory.
+The built-in OCR pipelines work best with local file paths and `data:` images rather than remote image URLs.
+
 ## Local Serve Mode (for copyable-image workflows)
 
 ```bash
@@ -92,4 +127,5 @@ Requirements:
 
 - [CLI Reference](cli-reference.md)
 - [Python API](python-api.md)
+- [Reverse Conversion](reverse-conversion.md)
 - [Server Integration](server-integration.md)

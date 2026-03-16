@@ -76,3 +76,17 @@ For details, see [Security](security.md).
 - Cells tagged `hide-cell` are omitted from final output.
 - `latex-preamble` cells are hidden from output but still extend the LaTeX preamble.
 - Raw notebook cells are skipped.
+
+## 8. Reverse Conversion and OCR
+
+`nb2wb` also supports the opposite direction through `wb2nb` and `nb2wb.revert()`.
+This reverse path rebuilds prose and recognized code blocks as notebook cells and keeps ordinary images linked in markdown unless you opt into OCR.
+
+When OCR is enabled:
+
+- image equations can become markdown math cells
+- image tables can become markdown table cells
+- code screenshots can become code cells
+- failed or unsupported OCR falls back to linked figures
+
+For workflow details and OCR limitations, see [Reverse Conversion](reverse-conversion.md).

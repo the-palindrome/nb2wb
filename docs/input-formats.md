@@ -111,12 +111,16 @@ Notes:
 - by default, reverse conversion does not OCR images
 - the explicit local OCR pipeline lives at `nb2wb.ocr.local`
 - the OCR pipeline itself decides whether an image is treated as `figure`, `table`, `code`, or `latex`
+- the built-in OCR pipelines only read local file paths, relative paths resolved from `source_dir`, and `data:` URIs
+- remote `http/https` image URLs are not downloaded for OCR by the built-in pipelines and therefore keep the figure fallback
 - code OCR in the built-in pipeline uses `Tesseract` via `pytesseract` when installed and the `tesseract` binary is available on PATH; otherwise code-like images keep the linked-figure fallback
 - LaTeX OCR and table OCR in the built-in pipeline use `Pix2Text` when installed; otherwise the reverse path keeps the image linked as a figure
 - an OpenAI-backed OCR pipeline is available via `nb2wb.ocr.openai.OpenAIOCRPipeline`
 - the reverse path accepts in-memory HTML strings or `{"format": "html", "content": ...}` payloads
 - file paths are loaded via `nb2wb.load_html_payload()`
 - a custom OCR pipeline can be supplied via `nb2wb.revert(..., ocr_pipeline=...)`
+
+See [Reverse Conversion](reverse-conversion.md) for the full HTML-to-notebook workflow.
 
 ## Cell Tags
 

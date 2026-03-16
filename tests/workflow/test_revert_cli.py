@@ -156,3 +156,96 @@ class TestRevertCli:
         assert seen["api_key"] is None
         assert isinstance(seen["document"], dict)
         assert isinstance(seen["ocr_pipeline"], FakePipeline)
+
+    def test_wb2nb_gemini_requires_model(self, tmp_path: Path, monkeypatch, capsys):
+        html_path = tmp_path / "post.html"
+        html_path.write_text("<html><body><p>Hello</p></body></html>", encoding="utf-8")
+        monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+
+        try:
+            _invoke_cli(["wb2nb", str(html_path), "--ocr-pipeline", "gemini"])
+        except SystemExit as exc:
+            assert exc.code == 2
+        else:  # pragma: no cover
+            raise AssertionError("expected parser error for missing --model")
+
+        captured = capsys.readouterr()
+        assert "--model is required" in captured.err
+
+    def test_wb2nb_gemini_requires_gemini_or_google_api_key(
+        self,
+        tmp_path: Path,
+        monkeypatch,
+        capsys,
+    ):
+        html_path = tmp_path / "post.html"
+        html_path.write_text("<html><body><p>Hello</p></body></html>", encoding="utf-8")
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+
+        try:
+            _invoke_cli(
+                [
+                    "wb2nb",
+                    str(html_path),
+                    "--ocr-pipeline",
+                    "gemini",
+                    "--model",
+                    "gemini-2.0-flash",
+                ]
+            )
+        except SystemExit as exc:
+            assert exc.code == 2
+        else:  # pragma: no cover
+            raise AssertionError(
+                "expected parser error for missing GEMINI_API_KEY/GOOGLE_API_KEY"
+            )
+
+        captured = capsys.readouterr()
+        assert "GEMINI_API_KEY or GOOGLE_API_KEY environment variable is required" in (
+            captured.err
+        )
+
+    def test_wb2nb_gemini_constructs_pipeline_and_passes_to_api(
+        self,
+        tmp_path: Path,
+        monkeypatch,
+    ):
+        html_path = tmp_path / "post.html"
+        html_path.write_text("<html><body><p>Hello</p></body></html>", encoding="utf-8")
+        seen: dict[str, object] = {}
+        sentinel = object()
+
+        class FakePipeline:
+            def __init__(self, *, model, api_key=None, client=None):
+                seen["model"] = model
+                seen["api_key"] = api_key
+                seen["client"] = client
+
+            def __call__(self, request):
+                return sentinel
+
+        def fake_revert(document, *, ocr_pipeline=None):
+            seen["document"] = document
+            seen["ocr_pipeline"] = ocr_pipeline
+            return nbformat.v4.new_notebook()
+
+        monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+        monkeypatch.setattr("nb2wb.revert_cli.GeminiOCRPipeline", FakePipeline)
+        monkeypatch.setattr("nb2wb.revert_cli.revert", fake_revert)
+
+        _run_cli(
+            [
+                "wb2nb",
+                str(html_path),
+                "--ocr-pipeline",
+                "gemini",
+                "--model",
+                "gemini-2.0-flash",
+            ]
+        )
+
+        assert seen["model"] == "gemini-2.0-flash"
+        assert seen["api_key"] is None
+        assert isinstance(seen["document"], dict)
+        assert isinstance(seen["ocr_pipeline"], FakePipeline)

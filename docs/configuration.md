@@ -87,7 +87,8 @@ output.
 
 - `code.image_width`, `latex.image_width`, and `table.image_width` inherit top-level `image_width` unless overridden.
 - `code.border_radius`, `latex.border_radius`, and `table.border_radius` inherit top-level `border_radius` unless overridden.
-- Color fields use hex format (for example `#ffffff`, `#000000`, `#ff0000`).
+- Hex colors are the most portable choice (for example `#ffffff`, `#000000`, `#ff0000`).
+- Many color fields also accept other Pillow or Matplotlib color strings, but sticking to hex keeps behavior easiest to reason about across renderers.
 
 ## Default Behavior
 
@@ -96,39 +97,71 @@ output.
 
 ## Platform Defaults
 
-Target profiles apply render defaults automatically for each supported target:
+Target profiles apply render defaults automatically after config loading.
+These defaults affect rendering and preview wrapping even when you do not set explicit overrides.
 
-- `default`
-- `substack`
-- `medium`
-- `x`
-- `linkedin`
-- `devto`
-- `hashnode`
-- `ghost`
-- `wordpress`
+Current profile groups:
 
-Examples:
+- `default`: no render overrides; uses the base config values.
+- `substack`: keeps the base article width and switches tables to image mode with card-style table defaults.
+- `medium`, `x`, `linkedin`: use narrower article widths, copyable images in normal mode, and reduced code/LaTeX/table dimensions for tighter layouts.
+- `devto`, `hashnode`, `ghost`, `wordpress`: use wider article widths and table image defaults tuned for broader editor layouts.
 
-- `default`: no render overrides; uses base config values
-- top-level `image_width`:
-  - `700` for `medium`
-  - `680` for `x`
-  - `760` for `linkedin`
-  - `860` for `devto`
-  - `840` for `hashnode`
-  - `900` for `ghost`
-  - `920` for `wordpress`
-- `code.font_size`: `42`
-- `code.image_width`: `1200`
-- `latex.font_size`: `35`
-- `latex.padding`: `50`
+Built-in article widths:
 
-Table fallback defaults by platform:
+- `medium`: `700`
+- `x`: `680`
+- `linkedin`: `760`
+- `devto`: `860`
+- `hashnode`: `840`
+- `ghost`: `900`
+- `wordpress`: `920`
 
-- `substack`: `table.mode: "image"`
-- `medium` / `x` / `linkedin`: `table.mode: "image"` (+ narrow-layout table defaults)
-- `devto` / `hashnode` / `ghost` / `wordpress`: `table.mode: "image"` (+ medium-width defaults)
+Shared narrow-layout render defaults for `medium`, `x`, and `linkedin`:
+
+- `code.font_size: 42`
+- `code.image_width: 1200`
+- `code.padding_x: 30`
+- `code.padding_y: 30`
+- `latex.font_size: 35`
+- `latex.padding: 50`
+- `table.mode: "image"`
+
+Table image defaults by profile family:
+
+- `substack`: image tables with rounded card styling
+- `medium`, `x`, `linkedin`: image tables with narrower spacing and reduced shadow
+- `devto`, `hashnode`, `ghost`, `wordpress`: image tables with medium-width card styling
+
+## Wrapper Overrides via `target_options`
+
+`target_options` controls wrapper behavior after render defaults are applied.
+You can set it in YAML, pass it to `nb2wb.convert(..., target_options=...)`, or mix both and let runtime values win.
+
+Common overrides:
+
+- `image_strategy`
+- `raw_image_strategy`
+- `copy_script_mode`
+- `article_width_px`
+- `table_mode`
+- `toolbar_message`
+- `theme_overrides`
+
+Example:
+
+```yaml
+target_options:
+  article_width_px: 820
+  toolbar_message: "Paste into your editor, then review images."
+  theme_overrides:
+    body-background: "#f7f7f7"
+    content-background: "#ffffff"
+    toolbar-background: "#111827"
+```
+
+`article_width_px` writes the wrapper's `body-max-width`.
+`theme_overrides` merges on top of the selected target profile theme instead of replacing it wholesale.
 
 ## Fast Table Rendering (Opt-In)
 

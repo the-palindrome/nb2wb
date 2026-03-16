@@ -33,7 +33,7 @@ custom_notebook = nb2wb.revert(
 )
 llm_notebook = nb2wb.revert(
     payload,
-    ocr_pipeline=OpenAIOCRPipeline(model="gpt-4.1-mini", api_key="..."),
+    ocr_pipeline=OpenAIOCRPipeline(model="your-model-name", api_key="..."),
 )
 ```
 
@@ -72,6 +72,8 @@ When `ocr_pipeline` is `None`, image transcription is skipped and images remain 
 The explicit local OCR pipeline is `nb2wb.ocr.local.local_ocr_pipeline`.
 It receives image context including `src`, `alt`, `title`, CSS classes, caption text, nearby text, and `source_dir`, returns typed OCR results such as `{"type": "latex", "payload": "..."}`, and currently handles LaTeX/table images with Pix2Text plus code images with Tesseract.
 The OpenAI-backed alternative is `nb2wb.ocr.openai.OpenAIOCRPipeline(model=..., api_key=...)`.
+Use `load_html_payload()` when your HTML references local assets so `source_dir` is available during OCR.
+The built-in OCR pipelines only read local paths and `data:` URIs, so remote image URLs stay linked figures unless you provide a custom OCR pipeline.
 
 ## Input Formats (Detailed)
 
@@ -152,7 +154,21 @@ The HTML helper does the same for `nb2wb.revert()`.
 - supported code languages become code cells
 - unsupported/unknown code languages become fenced markdown code blocks
 - ordinary images remain markdown images
-- images classified heuristically as code, LaTeX, or tables become placeholder cells with `metadata["wb2nb"]`
+- images classified by the OCR pipeline as code, LaTeX, or tables become derived markdown/code cells with `metadata["wb2nb"]`
+
+## Reverse Result Metadata
+
+Reverse conversion marks the notebook with:
+
+```python
+notebook.metadata["wb2nb"] = {
+    "source_format": "html",
+    "reverse_scaffold": 1,
+}
+```
+
+When OCR turns an image into a markdown or code cell, that cell also receives `metadata["wb2nb"]` with the original image source and OCR classification.
+Use this metadata when you need to review or post-process OCR-derived cells after the scaffold step.
 
 ## Output Formats (Detailed)
 

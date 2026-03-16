@@ -50,6 +50,54 @@ Use `--raw` (CLI) or `raw_mode=True` (Python API) to remove preview chrome from 
 - `linkedin`: copyable image wrappers in normal mode.
 - `devto`, `hashnode`, `ghost`, `wordpress`: embed-first defaults and direct paste flow.
 
+## Wrapper Customization
+
+Use `target_options` when you want to keep a target profile but tune the wrapper around it.
+This is the main place to override toolbar copy behavior, article width, helper text, and preview theme variables.
+
+Example:
+
+```python
+import nb2wb
+
+html = nb2wb.convert(
+    notebook_payload,
+    target="medium",
+    target_options={
+        "article_width_px": 760,
+        "toolbar_message": "Paste into Medium, then copy any missing images from the preview.",
+        "theme_overrides": {
+            "body-background": "#faf7f2",
+            "content-background": "#ffffff",
+            "toolbar-background": "#14532d",
+        },
+    },
+)
+```
+
+Useful override keys include:
+
+- `article_width_px`
+- `toolbar_message`
+- `copy_script_mode`
+- `image_strategy`
+- `raw_image_strategy`
+- `table_mode`
+- `theme_overrides`
+
+Common `theme_overrides` keys include:
+
+- `body-background`
+- `body-max-width`
+- `content-background`
+- `content-padding`
+- `toolbar-background`
+- `toolbar-button-background`
+- `link-color`
+
+Profile theme overrides merge with the selected target theme.
+You only need to provide the keys you want to change.
+
 ## `--serve` Mode
 
 `--serve` converts embedded image data URIs into extracted image files and then
