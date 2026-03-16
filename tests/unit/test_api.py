@@ -1,10 +1,11 @@
 """Unit tests for the public Python API (nb2wb.convert)."""
 from __future__ import annotations
 
+from pathlib import Path
+
 import nbformat
 import nb2wb
 import nb2wb.api as api
-import pytest
 
 
 class TestPublicApi:
@@ -54,13 +55,14 @@ class TestPublicApi:
 
         assert "Config Path" in html
 
-    def test_revert_forwards_device_to_reverter(self, monkeypatch):
+    def test_revert_forwards_ocr_pipeline_to_reverter(self, monkeypatch):
         seen: dict[str, object] = {}
+        pipeline = lambda request: {"type": "figure", "payload": ""}
 
         class FakeReverter:
-            def __init__(self, *, source_dir=None, ocr_device=None):
+            def __init__(self, *, source_dir=None, ocr_pipeline=None):
                 seen["source_dir"] = source_dir
-                seen["ocr_device"] = ocr_device
+                seen["ocr_pipeline"] = ocr_pipeline
 
             def revert_html(self, document):
                 seen["document"] = document
@@ -68,19 +70,19 @@ class TestPublicApi:
 
         monkeypatch.setattr(api, "Reverter", FakeReverter)
 
-        notebook = nb2wb.revert("<p>Hello</p>", device="cuda")
+        notebook = nb2wb.revert("<p>Hello</p>", ocr_pipeline=pipeline)
 
         assert isinstance(notebook, nbformat.NotebookNode)
         assert seen["document"] == "<p>Hello</p>"
-        assert seen["ocr_device"] == "cuda"
+        assert seen["ocr_pipeline"] is pipeline
         assert seen["source_dir"] is None
 
-    def test_revert_defaults_device_to_automatic_selection(self, monkeypatch):
+    def test_revert_defaults_ocr_pipeline_to_builtin_default(self, monkeypatch):
         seen: dict[str, object] = {}
 
         class FakeReverter:
-            def __init__(self, *, source_dir=None, ocr_device=None):
-                seen["ocr_device"] = ocr_device
+            def __init__(self, *, source_dir=None, ocr_pipeline=None):
+                seen["ocr_pipeline"] = ocr_pipeline
 
             def revert_html(self, document):
                 return nbformat.v4.new_notebook()
@@ -89,11 +91,29 @@ class TestPublicApi:
 
         nb2wb.revert("<p>Hello</p>")
 
-        assert seen["ocr_device"] is None
+        assert seen["ocr_pipeline"] is None
 
-    def test_revert_rejects_invalid_device(self):
-        with pytest.raises(ValueError, match="device must be one of"):
-            nb2wb.revert("<p>Hello</p>", device="tpu")
+    def test_revert_forwards_source_dir_from_html_payload(self, monkeypatch, tmp_path: Path):
+        seen: dict[str, object] = {}
+
+        class FakeReverter:
+            def __init__(self, *, source_dir=None, ocr_pipeline=None):
+                seen["source_dir"] = source_dir
+
+            def revert_html(self, document):
+                return nbformat.v4.new_notebook()
+
+        monkeypatch.setattr(api, "Reverter", FakeReverter)
+
+        nb2wb.revert(
+            {
+                "format": "html",
+                "content": "<p>Hello</p>",
+                "source_dir": str(tmp_path),
+            }
+        )
+
+        assert seen["source_dir"] == tmp_path.resolve()
 
     def test_convert_accepts_notebook_payload_dict(self):
         notebook_dict = {

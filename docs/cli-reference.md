@@ -43,7 +43,6 @@ nb2wb report.ipynb --serve
 nb2wb report.ipynb --raw -o post_raw.html
 wb2nb article.html
 wb2nb article.htm -o recovered.ipynb
-wb2nb article.html --device cuda
 ```
 
 ## Reverse Conversion
@@ -53,7 +52,6 @@ wb2nb article.html --device cuda
 | Option | Description |
 |---|---|
 | `-o, --output PATH` | Output notebook path (default: `<input>.ipynb`) |
-| `--device {auto,cpu,cuda,gpu,mps}` | OCR device for Pix2Text; default is automatic device selection |
 
 Current reverse-conversion behavior:
 
@@ -61,7 +59,7 @@ Current reverse-conversion behavior:
 - recognized HTML code blocks become notebook code cells for scaffold-supported languages
 - unsupported/unknown code languages are preserved as fenced markdown code blocks
 - ordinary images remain markdown images
-- images heuristically classified as code, LaTeX, or tables become visible placeholder cells with `cell.metadata.wb2nb`
+- images heuristically classified as code, LaTeX, or tables are routed through the built-in default OCR pipeline and then converted into cells or linked figures
 
 ## Execution Semantics
 

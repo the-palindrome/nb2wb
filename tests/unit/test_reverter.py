@@ -3,7 +3,6 @@ from __future__ import annotations
 import nbformat
 
 import nb2wb
-import nb2wb.reverter as reverter
 
 
 class TestReverter:
@@ -88,7 +87,7 @@ class TestReverter:
         assert "![chart](plain.png)" in notebook.cells[0].source
         assert "Outro" in notebook.cells[0].source
 
-    def test_revert_code_image_with_supported_language_creates_code_placeholder(self):
+    def test_revert_code_image_with_supported_language_defaults_to_linked_figure(self):
         notebook = nb2wb.revert(
             """
             <html><body>
@@ -99,12 +98,10 @@ class TestReverter:
             """
         )
 
-        assert notebook.cells[0].cell_type == "code"
-        assert notebook.cells[0].metadata["language"] == "python"
-        assert notebook.cells[0].metadata["wb2nb"]["classification"] == "code"
-        assert "source_image: snippet.png" in notebook.cells[0].source
+        assert notebook.cells[0].cell_type == "markdown"
+        assert "![Python code snippet](snippet.png)" in notebook.cells[0].source
 
-    def test_revert_code_image_without_supported_language_creates_fenced_markdown_placeholder(self):
+    def test_revert_code_image_without_supported_language_defaults_to_linked_figure(self):
         notebook = nb2wb.revert(
             """
             <html><body>
@@ -116,11 +113,9 @@ class TestReverter:
         )
 
         assert notebook.cells[0].cell_type == "markdown"
-        assert notebook.cells[0].metadata["wb2nb"]["classification"] == "code"
-        assert notebook.cells[0].source.startswith("```")
-        assert "unsupported or unknown language image" in notebook.cells[0].source
+        assert "![terminal screenshot](snippet.png)" in notebook.cells[0].source
 
-    def test_revert_latex_image_creates_markdown_placeholder(self):
+    def test_revert_latex_image_defaults_to_linked_figure(self):
         notebook = nb2wb.revert(
             """
             <html><body>
@@ -132,18 +127,9 @@ class TestReverter:
         )
 
         assert notebook.cells[0].cell_type == "markdown"
-        assert notebook.cells[0].metadata["wb2nb"]["classification"] == "latex"
-        assert "OCR-extracted LaTeX" in notebook.cells[0].source
+        assert "![LaTeX equation](equation.png)" in notebook.cells[0].source
 
-    def test_revert_latex_image_uses_pix2text_output_when_available(self, monkeypatch):
-        seen: dict[str, object] = {}
-
-        def fake_extract_latex(image, *, device=None):
-            seen["device"] = device
-            return r"\frac{1}{2}"
-
-        monkeypatch.setattr(reverter, "extract_latex", fake_extract_latex)
-
+    def test_revert_latex_image_uses_ocr_pipeline_output_when_available(self):
         notebook = nb2wb.revert(
             """
             <html><body>
@@ -152,40 +138,74 @@ class TestReverter:
               </figure>
             </body></html>
             """,
-            device="cuda",
+            ocr_pipeline=lambda request: {"type": "latex", "payload": r"\frac{1}{2}"},
         )
 
         assert notebook.cells[0].cell_type == "markdown"
         assert notebook.cells[0].source == "$$\n\\frac{1}{2}\n$$"
         assert notebook.cells[0].metadata["wb2nb"]["classification"] == "latex"
-        assert notebook.cells[0].metadata["wb2nb"]["ocr_status"] == "complete"
-        assert notebook.cells[0].metadata["wb2nb"]["ocr_engine"] == "pix2text"
-        assert seen["device"] == "cuda"
+        assert notebook.cells[0].metadata["wb2nb"]["ocr_type"] == "latex"
 
-    def test_revert_latex_image_falls_back_to_placeholder_when_pix2text_fails(self, monkeypatch):
-        monkeypatch.setattr(
-            reverter,
-            "extract_latex",
-            lambda image, *, device=None: (_ for _ in ()).throw(RuntimeError("Pix2Text unavailable")),
-        )
-
+    def test_revert_code_image_uses_ocr_pipeline_output_for_code_cell(self):
         notebook = nb2wb.revert(
             """
             <html><body>
-              <figure>
-                <img src="equation.png" alt="LaTeX equation">
+              <figure class="code-snippet language-python">
+                <img src="snippet.png" alt="Python code snippet">
               </figure>
             </body></html>
+            """,
+            ocr_pipeline=lambda request: {"type": "code", "payload": "print(42)"},
+        )
+
+        assert notebook.cells[0].cell_type == "code"
+        assert notebook.cells[0].source == "print(42)"
+        assert notebook.cells[0].metadata["language"] == "python"
+        assert notebook.cells[0].metadata["wb2nb"]["ocr_type"] == "code"
+
+    def test_revert_table_image_uses_ocr_pipeline_output_for_markdown_cell(self):
+        notebook = nb2wb.revert(
             """
+            <html><body>
+              <figure class="table">
+                <img src="table.png" alt="Model comparison table">
+              </figure>
+            </body></html>
+            """,
+            ocr_pipeline=lambda request: {"type": "table", "payload": "|A|B|\n|-|-|\n|1|2|"},
         )
 
         assert notebook.cells[0].cell_type == "markdown"
-        assert "OCR-extracted LaTeX" in notebook.cells[0].source
-        assert notebook.cells[0].metadata["wb2nb"]["classification"] == "latex"
-        assert notebook.cells[0].metadata["wb2nb"]["ocr_status"] == "failed"
-        assert "Pix2Text unavailable" in notebook.cells[0].metadata["wb2nb"]["ocr_error"]
+        assert notebook.cells[0].source == "|A|B|\n|-|-|\n|1|2|"
+        assert notebook.cells[0].metadata["wb2nb"]["ocr_type"] == "table"
 
-    def test_revert_table_image_creates_markdown_placeholder(self):
+    def test_revert_figure_ocr_result_keeps_image_linked_in_markdown(self):
+        notebook = nb2wb.revert(
+            """
+            <html><body>
+              <figure class="table">
+                <img src="figure.png" alt="Chart figure">
+              </figure>
+            </body></html>
+            """,
+            ocr_pipeline=lambda request: {"type": "figure", "payload": ""},
+        )
+
+        assert notebook.cells[0].cell_type == "markdown"
+        assert "![Chart figure](figure.png)" in notebook.cells[0].source
+
+    def test_revert_rejects_invalid_ocr_result(self):
+        try:
+            nb2wb.revert(
+                "<html><body><figure><img src='equation.png' alt='LaTeX equation'></figure></body></html>",
+                ocr_pipeline=lambda request: {"type": "bogus", "payload": ""},
+            )
+        except ValueError as exc:
+            assert "ocr_pipeline result 'type' must be one of" in str(exc)
+        else:  # pragma: no cover
+            raise AssertionError("expected invalid OCR result to raise ValueError")
+
+    def test_revert_table_image_defaults_to_linked_figure(self):
         notebook = nb2wb.revert(
             """
             <html><body>
@@ -197,8 +217,7 @@ class TestReverter:
         )
 
         assert notebook.cells[0].cell_type == "markdown"
-        assert notebook.cells[0].metadata["wb2nb"]["classification"] == "table"
-        assert "OCR-extracted table content" in notebook.cells[0].source
+        assert "![Model comparison table](table.png)" in notebook.cells[0].source
 
     def test_revert_bare_figure_does_not_crash_and_preserves_text(self):
         notebook = nb2wb.revert(

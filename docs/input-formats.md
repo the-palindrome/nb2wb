@@ -93,8 +93,7 @@ Behavior:
 - converts recognized code blocks into notebook code cells when the language is scaffold-supported
 - preserves unsupported/unknown code blocks as fenced markdown
 - keeps ordinary images as markdown images
-- turns heuristically detected code/LaTeX/table images into placeholder cells with `cell.metadata["wb2nb"]`
-- when `Pix2Text` is installed, LaTeX-classified images are OCR'd into markdown math cells before placeholder fallback, using `LatexOCR` with `use_fast=True` and ONNX whenever possible
+- routes heuristically detected code/LaTeX/table images through the OCR pipeline and then converts typed OCR results into cells or linked figures
 
 Current scaffold-supported code languages:
 
@@ -108,11 +107,12 @@ Current scaffold-supported code languages:
 
 Notes:
 
-- code and table OCR are not implemented yet
-- LaTeX OCR uses `Pix2Text` when installed; otherwise the reverse path keeps the existing placeholder cell behavior
+- the built-in default OCR pipeline lives at `nb2wb.ocr.pix2text`
+- code and table OCR are not implemented in the built-in pipeline yet, so those cases currently degrade to linked figures unless a custom `ocr_pipeline` is supplied
+- LaTeX OCR in the built-in pipeline uses `Pix2Text` when installed; otherwise the reverse path keeps the image linked as a figure
 - the reverse path accepts in-memory HTML strings or `{"format": "html", "content": ...}` payloads
 - file paths are loaded via `nb2wb.load_html_payload()`
-- reverse OCR device selection is automatic by default; override it with `wb2nb --device ...` or `nb2wb.revert(..., device=...)`
+- a custom OCR pipeline can be supplied via `nb2wb.revert(..., ocr_pipeline=...)`
 
 ## Cell Tags
 

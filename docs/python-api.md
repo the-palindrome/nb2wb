@@ -26,7 +26,10 @@ import nb2wb
 
 payload = nb2wb.load_html_payload("article.html")
 notebook = nb2wb.revert(payload)
-gpu_notebook = nb2wb.revert(payload, device="cuda")
+custom_notebook = nb2wb.revert(
+    payload,
+    ocr_pipeline=lambda request: {"type": "figure", "payload": ""},
+)
 ```
 
 ## Parameter Reference
@@ -49,18 +52,19 @@ import nb2wb
 
 notebook = nb2wb.revert(
     document,
-    device=None,
+    ocr_pipeline=None,
 )
 ```
 
 | Parameter | Type | Meaning |
 |---|---|---|
 | `document` | `str \| Mapping[str, Any]` | In-memory HTML payload; `Path` objects are rejected |
-| `device` | `str \| None` | Pix2Text OCR device override: `cpu`, `cuda`, `gpu`, `mps`; `None` means automatic device selection |
+| `ocr_pipeline` | `Callable \| None` | Optional OCR callable returning `{"type", "payload"}` for image-derived content |
 
 `nb2wb.revert()` returns an `nbformat.NotebookNode`.
 It accepts raw HTML strings and mapping payloads such as `{"format": "html", "content": "<html...>"}`.
-When `Pix2Text` is installed, LaTeX-classified images are OCR'd into markdown math cells; otherwise they keep the placeholder fallback. Leaving `device=None` uses Pix2Text's automatic device selection. The reverse OCR path uses Pix2Text's `LatexOCR` with `use_fast=True` and ONNX whenever the target device supports it.
+The built-in default OCR pipeline is `nb2wb.ocr.pix2text.pix2text_ocr_pipeline`.
+It returns typed OCR results such as `{"type": "latex", "payload": "..."}` and currently handles LaTeX-oriented images with Pix2Text.
 
 ## Input Formats (Detailed)
 

@@ -4,17 +4,17 @@ from dataclasses import dataclass
 import html
 from pathlib import Path
 import re
-from typing import Iterable
+from typing import Callable, Iterable
 
 from bs4 import BeautifulSoup, NavigableString, Tag
 import nbformat
 
 from ._reader_utils import make_notebook
+from .ocr.pix2text import OCRRequest, pix2text_ocr_pipeline
 from .reverse_images import (
     DefaultImageClassifier,
     ImageCandidate,
     ImageClassification,
-    extract_latex,
     infer_supported_language,
     normalize_supported_language,
 )
@@ -74,8 +74,7 @@ class ImageBlock:
     alt: str
     classification: ImageClassification
     language: str | None
-    ocr_text: str | None = None
-    ocr_error: str | None = None
+    ocr_result: dict[str, str] | None = None
 
 
 Block = ProseBlock | CodeBlock | ImageBlock
@@ -88,11 +87,11 @@ class Reverter:
         self,
         *,
         source_dir: Path | None = None,
-        ocr_device: str | None = None,
+        ocr_pipeline: Callable[[OCRRequest], dict[str, str]] | None = None,
     ) -> None:
         self._classifier = DefaultImageClassifier()
         self._source_dir = source_dir
-        self._ocr_device = ocr_device
+        self._ocr_pipeline = ocr_pipeline or pix2text_ocr_pipeline
 
     def revert_html(self, document: str) -> nbformat.NotebookNode:
         soup = BeautifulSoup(document, "html.parser")
@@ -207,44 +206,18 @@ class Reverter:
                 "classification": block.classification,
                 "src": block.src,
                 "alt": block.alt,
-                "ocr_status": "pending",
             }
-            if block.classification == "latex":
-                if block.ocr_text is not None:
-                    cell = nbformat.v4.new_markdown_cell(_latex_markdown(block.ocr_text))
-                    metadata["ocr_status"] = "complete"
-                    metadata["ocr_engine"] = "pix2text"
-                else:
-                    cell = nbformat.v4.new_markdown_cell(
-                        _latex_placeholder(block.src, block.alt)
-                    )
-                    metadata["ocr_status"] = "failed"
-                    if block.ocr_error is not None:
-                        metadata["ocr_error"] = block.ocr_error
-                cell.metadata["wb2nb"] = metadata
-                cells.append(cell)
-                continue
-            if block.classification == "table":
-                cell = nbformat.v4.new_markdown_cell(
-                    _table_placeholder(block.src, block.alt)
-                )
-                cell.metadata["wb2nb"] = metadata
-                cells.append(cell)
-                continue
-            if block.language is not None:
-                cell = nbformat.v4.new_code_cell(_code_placeholder(block.src, block.alt))
-                cell.metadata["language"] = block.language
-                cell.metadata["wb2nb"] = metadata
-                cells.append(cell)
-                continue
-            cell = nbformat.v4.new_markdown_cell(
-                _fenced_code_block(
-                    _unsupported_code_placeholder(block.src, block.alt),
-                    "",
-                )
+            ocr_result = block.ocr_result or {"type": "figure", "payload": ""}
+            metadata["ocr_type"] = ocr_result["type"]
+            cell = _ocr_result_to_cell(
+                ocr_result,
+                language=block.language,
             )
-            cell.metadata["wb2nb"] = metadata
-            cells.append(cell)
+            if cell is not None:
+                cell.metadata["wb2nb"] = metadata
+                cells.append(cell)
+                continue
+            pending_markdown.append(_markdown_image(block.src, block.alt))
 
         flush_markdown()
         return cells
@@ -290,23 +263,23 @@ class Reverter:
             classes=tuple(dict.fromkeys([*_collect_classes(tag), *img_classes])),
             caption=_caption_text(tag),
             nearby_text=_nearby_text(tag),
-            source_dir=self._source_dir,
         )
         classification = self._classifier.classify(candidate)
-        ocr_text: str | None = None
-        ocr_error: str | None = None
-        if classification == "latex":
-            try:
-                ocr_text = extract_latex(candidate, device=self._ocr_device)
-            except Exception as exc:
-                ocr_error = str(exc)
+        ocr_result = None
+        if classification in {"latex", "code", "table"}:
+            request = OCRRequest(
+                src=candidate.src,
+                alt=candidate.alt,
+                classification=classification,
+                source_dir=self._source_dir,
+            )
+            ocr_result = _normalize_ocr_result(self._ocr_pipeline(request))
         return ImageBlock(
             src=candidate.src,
             alt=candidate.alt,
             classification=classification,
             language=infer_supported_language(candidate) if classification == "code" else None,
-            ocr_text=ocr_text,
-            ocr_error=ocr_error,
+            ocr_result=ocr_result,
         )
 
     def _merge_adjacent_prose(self, blocks: list[Block]) -> list[Block]:
@@ -389,43 +362,11 @@ def _markdown_image(src: str, alt: str) -> str:
     return f"![{alt}]({src})"
 
 
-def _latex_placeholder(src: str, alt: str) -> str:
-    description = f" (alt: {alt})" if alt else ""
-    return (
-        "TODO(wb2nb): Replace this placeholder with OCR-extracted LaTeX.\n\n"
-        f"Source image: `{src}`{description}"
-    )
-
-
 def _latex_markdown(latex: str) -> str:
     stripped = latex.strip()
     if stripped.startswith("$$") and stripped.endswith("$$"):
         return stripped
     return f"$$\n{stripped}\n$$"
-
-
-def _code_placeholder(src: str, alt: str) -> str:
-    description = f" | alt: {alt}" if alt else ""
-    return (
-        "# TODO(wb2nb): Replace this placeholder with OCR-extracted code.\n"
-        f"# source_image: {src}{description}"
-    )
-
-
-def _unsupported_code_placeholder(src: str, alt: str) -> str:
-    description = f" (alt: {alt})" if alt else ""
-    return (
-        "TODO(wb2nb): Replace this placeholder with OCR-extracted code from an "
-        f"unsupported or unknown language image.\n\nSource image: {src}{description}"
-    )
-
-
-def _table_placeholder(src: str, alt: str) -> str:
-    description = f" (alt: {alt})" if alt else ""
-    return (
-        "TODO(wb2nb): Replace this placeholder with OCR-extracted table content.\n\n"
-        f"Source image: `{src}`{description}"
-    )
 
 
 def _html_to_markdown(fragment: str) -> str:
@@ -494,3 +435,42 @@ def _collapse_markdown(parts: list[str]) -> str:
     text = "".join(parts)
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
+
+
+def _normalize_ocr_result(result: object) -> dict[str, str]:
+    if not isinstance(result, dict):
+        raise TypeError("ocr_pipeline must return a dict with 'type' and 'payload'.")
+
+    result_type = result.get("type")
+    payload = result.get("payload")
+    allowed_types = {"latex", "code", "table", "figure"}
+    if result_type not in allowed_types:
+        allowed = ", ".join(sorted(allowed_types))
+        raise ValueError(f"ocr_pipeline result 'type' must be one of: {allowed}")
+    if not isinstance(payload, str):
+        raise TypeError("ocr_pipeline result 'payload' must be a string.")
+    if result_type == "figure" and payload != "":
+        raise ValueError("ocr_pipeline result 'figure' must use an empty payload.")
+
+    return {"type": result_type, "payload": payload}
+
+
+def _ocr_result_to_cell(
+    result: dict[str, str],
+    *,
+    language: str | None,
+) -> nbformat.NotebookNode | None:
+    result_type = result["type"]
+    payload = result["payload"]
+
+    if result_type == "figure":
+        return None
+    if result_type == "latex":
+        return nbformat.v4.new_markdown_cell(_latex_markdown(payload))
+    if result_type == "table":
+        return nbformat.v4.new_markdown_cell(payload)
+
+    cell = nbformat.v4.new_code_cell(payload)
+    if language is not None:
+        cell.metadata["language"] = language
+    return cell

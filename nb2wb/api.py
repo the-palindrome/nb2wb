@@ -6,7 +6,7 @@ import re
 import warnings
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import nbformat
 from nbformat.v4.convert import upgrade_output as _upgrade_v4_output
@@ -21,9 +21,9 @@ from .config import (
 from .converter import Converter
 from .html_reader import load_html_payload
 from .md_reader import read_md_text
+from .ocr.pix2text import OCRRequest
 from .platforms import get_builder, list_platforms
 from .qmd_reader import read_qmd_text
-from .reverse_images import normalize_ocr_device
 from .reverter import Reverter
 
 _CONTROL_CHAR_RE = re.compile(r"[\x00-\x1f\x7f]")
@@ -118,19 +118,18 @@ def supported_targets() -> list[str]:
 def revert(
     document: str | Mapping[str, Any],
     *,
-    device: str | None = None,
+    ocr_pipeline: Callable[[OCRRequest], dict[str, str]] | None = None,
 ) -> nbformat.NotebookNode:
     """Convert an HTML document into a scaffolded Jupyter notebook.
 
     Args:
         document: In-memory HTML content payload.
-        device: Optional Pix2Text OCR device override (``cpu``, ``cuda``,
-            ``gpu``, ``mps``). ``None`` uses automatic device selection.
+        ocr_pipeline: Optional OCR callable returning ``{"type", "payload"}``.
     """
     html_document, source_dir = _coerce_html_payload(document)
     return Reverter(
         source_dir=source_dir,
-        ocr_device=normalize_ocr_device(device),
+        ocr_pipeline=ocr_pipeline,
     ).revert_html(html_document)
 
 

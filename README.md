@@ -65,7 +65,6 @@ nb2wb report.ipynb --warnings
 nb2wb report.ipynb -t ghost --image-strategy embed --article-width 900
 wb2nb article.html
 wb2nb article.html -o recovered.ipynb
-wb2nb article.html --device cuda
 ```
 
 ## Quick Start (Python API)
@@ -117,8 +116,11 @@ html = nb2wb.convert(
 payload = nb2wb.load_html_payload("article.html")
 notebook = nb2wb.revert(payload)
 
-# Force Pix2Text onto a specific device when desired
-notebook = nb2wb.revert(payload, device="cuda")
+# Provide a custom OCR pipeline when desired
+notebook = nb2wb.revert(
+    payload,
+    ocr_pipeline=lambda request: {"type": "figure", "payload": ""},
+)
 ```
 
 `nb2wb.convert()` is content-only; use `load_input_payload()` (or typed loaders) for filesystem inputs.
@@ -132,10 +134,10 @@ plain string such as `"notebook.ipynb"` is treated as document text, not as a
 filesystem path.
 
 For reverse conversion, `load_html_payload()` returns `{"format": "html", "content": ...}`.
-The first scaffold uses HTML heuristics to create markdown/code cells and emits
-visible placeholder cells for code/LaTeX/table images pending OCR support.
-When `Pix2Text` is installed via `.[ocr]`, LaTeX-classified images are OCR'd into markdown math cells before falling back to placeholders. The reverse OCR path now uses `LatexOCR` with `use_fast=True` and the ONNX backend whenever the selected device supports it.
-Pass `--device` to `wb2nb` or `device=...` to `nb2wb.revert()` to force `cpu`, `cuda`, `gpu`, or `mps`; leaving it unset uses automatic device selection.
+The reverse path uses HTML heuristics plus an OCR pipeline hook to create markdown/code cells.
+`nb2wb.revert(..., ocr_pipeline=...)` accepts a callable returning
+`{"type": "latex"|"code"|"table"|"figure", "payload": "..."}`.
+The built-in default pipeline lives at `nb2wb.ocr.pix2text` and currently OCRs LaTeX-like images with Pix2Text before falling back to linked figures.
 
 ## Security at a Glance
 

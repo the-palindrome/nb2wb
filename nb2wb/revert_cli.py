@@ -11,7 +11,6 @@ from .api import load_html_payload, revert
 
 _CONTROL_CHAR_RE = re.compile(r"[\x00-\x1f\x7f]")
 _ALLOWED_INPUT_SUFFIXES = frozenset({".html", ".htm"})
-_OCR_DEVICE_CHOICES = ("auto", "cpu", "cuda", "gpu", "mps")
 
 
 def main() -> None:
@@ -26,15 +25,6 @@ def main() -> None:
         type=Path,
         default=None,
         help="Output notebook path (default: <document>.ipynb)",
-    )
-    parser.add_argument(
-        "--device",
-        choices=_OCR_DEVICE_CHOICES,
-        default=None,
-        help=(
-            "OCR device for Pix2Text (`cpu`, `cuda`, `gpu`, `mps`). "
-            "Default: automatic device selection."
-        ),
     )
     args = parser.parse_args()
 
@@ -56,7 +46,7 @@ def main() -> None:
     print(f"Reverting '{document_path}' into a notebook …")
     try:
         payload = load_html_payload(document_path)
-        notebook = revert(payload, device=args.device)
+        notebook = revert(payload)
     except Exception as exc:
         print(f"Conversion failed: {exc}", file=sys.stderr)
         sys.exit(1)
