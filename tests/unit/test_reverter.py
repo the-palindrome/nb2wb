@@ -163,6 +163,32 @@ class TestReverter:
         assert notebook.cells[0].metadata["language"] == "python"
         assert notebook.cells[0].metadata["wb2nb"]["ocr_type"] == "code"
 
+    def test_revert_passes_image_context_into_ocr_pipeline(self):
+        seen: dict[str, object] = {}
+
+        def pipeline(request):
+            seen["request"] = request
+            return {"type": "figure", "payload": ""}
+
+        nb2wb.revert(
+            """
+            <html><body>
+              <figure class="code-snippet language-python">
+                <img src="snippet.png" alt="Python code snippet" title="Snippet">
+                <figcaption>Example caption</figcaption>
+              </figure>
+            </body></html>
+            """,
+            ocr_pipeline=pipeline,
+        )
+
+        request = seen["request"]
+        assert request.src == "snippet.png"
+        assert request.alt == "Python code snippet"
+        assert request.title == "Snippet"
+        assert request.caption == "Example caption"
+        assert request.classes == ("code-snippet", "language-python")
+
     def test_revert_table_image_uses_ocr_pipeline_output_for_markdown_cell(self):
         notebook = nb2wb.revert(
             """

@@ -137,7 +137,8 @@ For reverse conversion, `load_html_payload()` returns `{"format": "html", "conte
 The reverse path uses HTML heuristics plus an OCR pipeline hook to create markdown/code cells.
 `nb2wb.revert(..., ocr_pipeline=...)` accepts a callable returning
 `{"type": "latex"|"code"|"table"|"figure", "payload": "..."}`.
-The built-in default pipeline lives at `nb2wb.ocr.pix2text` and currently OCRs LaTeX-like images with Pix2Text before falling back to linked figures.
+The OCR pipeline receives image context such as `src`, `alt`, `title`, CSS classes, caption text, nearby text, and `source_dir`, and decides the final image type itself.
+The built-in default pipeline lives at `nb2wb.ocr.local` and currently classifies images from that context, OCRs LaTeX-like images and table-like images with Pix2Text, uses Tesseract for code-like images, and falls back to linked figures when OCR is unavailable. A placeholder multimodal entrypoint also exists at `nb2wb.ocr.multimodal_llm`.
 
 ## Security at a Glance
 

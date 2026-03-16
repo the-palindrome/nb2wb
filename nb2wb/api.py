@@ -21,7 +21,7 @@ from .config import (
 from .converter import Converter
 from .html_reader import load_html_payload
 from .md_reader import read_md_text
-from .ocr.pix2text import OCRRequest
+from .ocr.local import OCRRequest
 from .platforms import get_builder, list_platforms
 from .qmd_reader import read_qmd_text
 from .reverter import Reverter

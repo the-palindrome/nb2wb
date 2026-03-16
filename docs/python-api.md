@@ -59,12 +59,13 @@ notebook = nb2wb.revert(
 | Parameter | Type | Meaning |
 |---|---|---|
 | `document` | `str \| Mapping[str, Any]` | In-memory HTML payload; `Path` objects are rejected |
-| `ocr_pipeline` | `Callable \| None` | Optional OCR callable returning `{"type", "payload"}` for image-derived content |
+| `ocr_pipeline` | `Callable \| None` | Optional OCR callable that receives image context and returns `{"type", "payload"}` |
 
 `nb2wb.revert()` returns an `nbformat.NotebookNode`.
 It accepts raw HTML strings and mapping payloads such as `{"format": "html", "content": "<html...>"}`.
-The built-in default OCR pipeline is `nb2wb.ocr.pix2text.pix2text_ocr_pipeline`.
-It returns typed OCR results such as `{"type": "latex", "payload": "..."}` and currently handles LaTeX-oriented images with Pix2Text.
+The built-in default OCR pipeline is `nb2wb.ocr.local.local_ocr_pipeline`.
+It receives image context including `src`, `alt`, `title`, CSS classes, caption text, nearby text, and `source_dir`, returns typed OCR results such as `{"type": "latex", "payload": "..."}`, and currently handles LaTeX-oriented and table-oriented images with Pix2Text plus code-oriented images with Tesseract.
+The placeholder multimodal alternative lives at `nb2wb.ocr.multimodal_llm.multimodal_llm_pipeline`.
 
 ## Input Formats (Detailed)
 

@@ -1,12 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from pathlib import PurePosixPath
 import re
-from typing import Literal
-from urllib.parse import unquote, urlparse
-
-ImageClassification = Literal["code", "latex", "table", "other"]
+from typing import Iterable
 
 SUPPORTED_LANGUAGE_ALIASES: dict[str, str] = {
     "python": "python",
@@ -26,40 +21,11 @@ SUPPORTED_LANGUAGE_ALIASES: dict[str, str] = {
 }
 
 _LANGUAGE_HINT_RE = re.compile(r"\b([a-z][a-z0-9+-]{0,30})\b")
-_LATEX_HINTS = ("math", "latex", "equation", "formula")
-_CODE_HINTS = ("code", "snippet", "source", "terminal")
-_TABLE_HINTS = ("table", "tabular", "dataframe", "grid")
 
 
-@dataclass(frozen=True)
-class ImageCandidate:
-    src: str
-    alt: str = ""
-    title: str = ""
-    classes: tuple[str, ...] = ()
-    caption: str = ""
-    nearby_text: str = ""
-
-
-class DefaultImageClassifier:
-    """Classify images using HTML metadata only."""
-
-    def classify(self, image: ImageCandidate) -> ImageClassification:
-        haystack = _classification_haystack(image)
-        if any(hint in haystack for hint in _LATEX_HINTS):
-            return "latex"
-        if any(hint in haystack for hint in _CODE_HINTS):
-            return "code"
-        if any(hint in haystack for hint in _TABLE_HINTS):
-            return "table"
-        if infer_supported_language(image) is not None:
-            return "code"
-        return "other"
-
-
-def infer_supported_language(image: ImageCandidate) -> str | None:
-    """Infer a scaffold-supported language from image metadata."""
-    for text in _candidate_texts(image):
+def infer_supported_language_from_parts(parts: Iterable[str]) -> str | None:
+    """Infer a scaffold-supported language from free-form metadata strings."""
+    for text in parts:
         normalized = normalize_supported_language(text)
         if normalized is not None:
             return normalized
@@ -83,28 +49,3 @@ def normalize_supported_language(raw: str | None) -> str | None:
         if token in SUPPORTED_LANGUAGE_ALIASES:
             return SUPPORTED_LANGUAGE_ALIASES[token]
     return None
-
-
-def _classification_haystack(image: ImageCandidate) -> str:
-    return " ".join(_candidate_texts(image)).lower()
-
-
-def _candidate_texts(image: ImageCandidate) -> list[str]:
-    filename = _filename_from_src(image.src)
-    parts = [
-        image.alt,
-        image.title,
-        image.caption,
-        image.nearby_text,
-        " ".join(image.classes),
-        filename,
-    ]
-    return [part for part in parts if part]
-
-
-def _filename_from_src(src: str) -> str:
-    if not src:
-        return ""
-    parsed = urlparse(src)
-    path = parsed.path or src
-    return unquote(PurePosixPath(path).name)

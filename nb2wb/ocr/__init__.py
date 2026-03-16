@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from .pix2text import OCRRequest, pix2text_ocr_pipeline
+from .local import OCRRequest, local_ocr_pipeline
+from .multimodal_llm import multimodal_llm_pipeline
 
 __all__ = [
     "OCRRequest",
-    "pix2text_ocr_pipeline",
+    "local_ocr_pipeline",
+    "multimodal_llm_pipeline",
 ]

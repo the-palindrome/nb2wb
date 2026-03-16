@@ -10,14 +10,8 @@ from bs4 import BeautifulSoup, NavigableString, Tag
 import nbformat
 
 from ._reader_utils import make_notebook
-from .ocr.pix2text import OCRRequest, pix2text_ocr_pipeline
-from .reverse_images import (
-    DefaultImageClassifier,
-    ImageCandidate,
-    ImageClassification,
-    infer_supported_language,
-    normalize_supported_language,
-)
+from .ocr.local import OCRRequest, local_ocr_pipeline
+from .reverse_images import infer_supported_language_from_parts, normalize_supported_language
 
 try:
     from markdownify import markdownify as _markdownify
@@ -72,9 +66,8 @@ class CodeBlock:
 class ImageBlock:
     src: str
     alt: str
-    classification: ImageClassification
     language: str | None
-    ocr_result: dict[str, str] | None = None
+    ocr_result: dict[str, str]
 
 
 Block = ProseBlock | CodeBlock | ImageBlock
@@ -89,9 +82,8 @@ class Reverter:
         source_dir: Path | None = None,
         ocr_pipeline: Callable[[OCRRequest], dict[str, str]] | None = None,
     ) -> None:
-        self._classifier = DefaultImageClassifier()
         self._source_dir = source_dir
-        self._ocr_pipeline = ocr_pipeline or pix2text_ocr_pipeline
+        self._ocr_pipeline = ocr_pipeline or local_ocr_pipeline
 
     def revert_html(self, document: str) -> nbformat.NotebookNode:
         soup = BeautifulSoup(document, "html.parser")
@@ -196,28 +188,26 @@ class Reverter:
                     )
                 continue
 
-            if block.classification == "other":
+            ocr_result = block.ocr_result
+            if ocr_result["type"] == "figure":
                 pending_markdown.append(_markdown_image(block.src, block.alt))
                 continue
 
             flush_markdown()
             metadata = {
                 "source_kind": "image",
-                "classification": block.classification,
+                "classification": ocr_result["type"],
                 "src": block.src,
                 "alt": block.alt,
             }
-            ocr_result = block.ocr_result or {"type": "figure", "payload": ""}
             metadata["ocr_type"] = ocr_result["type"]
             cell = _ocr_result_to_cell(
                 ocr_result,
                 language=block.language,
             )
-            if cell is not None:
-                cell.metadata["wb2nb"] = metadata
-                cells.append(cell)
-                continue
-            pending_markdown.append(_markdown_image(block.src, block.alt))
+            assert cell is not None
+            cell.metadata["wb2nb"] = metadata
+            cells.append(cell)
 
         flush_markdown()
         return cells
@@ -256,29 +246,20 @@ class Reverter:
         img = tag if tag.name == "img" else tag.find("img")
         assert isinstance(img, Tag)
         img_classes = tuple(_collect_classes(img))
-        candidate = ImageCandidate(
+        request = OCRRequest(
             src=img.get("src", ""),
             alt=img.get("alt", ""),
             title=img.get("title", ""),
             classes=tuple(dict.fromkeys([*_collect_classes(tag), *img_classes])),
             caption=_caption_text(tag),
             nearby_text=_nearby_text(tag),
+            source_dir=self._source_dir,
         )
-        classification = self._classifier.classify(candidate)
-        ocr_result = None
-        if classification in {"latex", "code", "table"}:
-            request = OCRRequest(
-                src=candidate.src,
-                alt=candidate.alt,
-                classification=classification,
-                source_dir=self._source_dir,
-            )
-            ocr_result = _normalize_ocr_result(self._ocr_pipeline(request))
+        ocr_result = _normalize_ocr_result(self._ocr_pipeline(request))
         return ImageBlock(
-            src=candidate.src,
-            alt=candidate.alt,
-            classification=classification,
-            language=infer_supported_language(candidate) if classification == "code" else None,
+            src=request.src,
+            alt=request.alt,
+            language=_infer_image_language(request, ocr_result),
             ocr_result=ocr_result,
         )
 
@@ -349,6 +330,21 @@ def _nearby_text(tag: Tag) -> str:
         if text:
             parts.append(text)
     return " ".join(dict.fromkeys(parts))
+
+
+def _infer_image_language(request: OCRRequest, ocr_result: dict[str, str]) -> str | None:
+    if ocr_result["type"] != "code":
+        return None
+    return infer_supported_language_from_parts(
+        (
+            request.alt,
+            request.title,
+            request.caption,
+            request.nearby_text,
+            " ".join(request.classes),
+            request.src,
+        )
+    )
 
 
 def _fenced_code_block(source: str, language: str) -> str:

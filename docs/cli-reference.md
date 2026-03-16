@@ -58,8 +58,8 @@ Current reverse-conversion behavior:
 - prose HTML is converted into markdown cells
 - recognized HTML code blocks become notebook code cells for scaffold-supported languages
 - unsupported/unknown code languages are preserved as fenced markdown code blocks
-- ordinary images remain markdown images
-- images heuristically classified as code, LaTeX, or tables are routed through the built-in default OCR pipeline and then converted into cells or linked figures
+- every image is passed to the built-in OCR pipeline with its HTML context
+- the OCR pipeline decides whether each image is treated as a linked figure or converted into code/markdown notebook content
 
 ## Execution Semantics
 
