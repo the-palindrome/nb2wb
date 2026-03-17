@@ -145,8 +145,8 @@ def minimal_config():
 @pytest.fixture
 def x_platform_config():
     """Return X platform configuration."""
-    from nb2wb.config import Config, apply_platform_defaults
-    return apply_platform_defaults(Config(), "x")
+    from nb2wb.config import Config, apply_target_profile_defaults
+    return apply_target_profile_defaults(Config(), "x")
 
 
 # ==============================================================================

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import re
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Mapping
 
-_CONTROL_CHAR_RE = re.compile(r"[\x00-\x1f\x7f]")
+from ._path_utils import sanitize_input_file_path
+
 _ALLOWED_HTML_SUFFIXES = frozenset({".html", ".htm"})
 
 
@@ -34,17 +34,8 @@ def _sanitize_html_path(path_like: str | Path) -> Path:
     Returns:
         A validated ``Path`` pointing to an existing HTML file.
     """
-    raw = str(path_like)
-    if _CONTROL_CHAR_RE.search(raw):
-        raise ValueError("input path contains invalid control characters")
-
-    path = Path(path_like)
-    suffix = path.suffix.lower()
-    if suffix not in _ALLOWED_HTML_SUFFIXES:
-        allowed = ", ".join(sorted(_ALLOWED_HTML_SUFFIXES))
-        raise ValueError(f"input path must use one of: {allowed}")
-    if not path.exists():
-        raise FileNotFoundError(f"input path '{path}' not found.")
-    if not path.is_file():
-        raise ValueError(f"input path '{path}' must be a file.")
-    return path
+    return sanitize_input_file_path(
+        path_like,
+        allowed_suffixes=_ALLOWED_HTML_SUFFIXES,
+        label="input path",
+    )

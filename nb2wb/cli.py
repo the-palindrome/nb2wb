@@ -12,11 +12,11 @@ import webbrowser
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 
+from ._path_utils import sanitize_optional_cli_path
 from .api import convert as convert_notebook
 from .api import load_input_payload
 from .platforms import list_platforms, MIME_TO_EXT
 
-_CONTROL_CHAR_RE = re.compile(r"[\x00-\x1f\x7f]")
 _ALLOWED_INPUT_SUFFIXES = frozenset({".ipynb", ".qmd", ".md"})
 
 
@@ -368,25 +368,12 @@ def _sanitize_cli_path(
     Returns:
         The validated path, or ``None`` when no path was provided.
     """
-    if path is None:
-        return None
-
-    raw = str(path)
-    if _CONTROL_CHAR_RE.search(raw):
-        raise ValueError(f"{arg_name} contains invalid control characters")
-
-    if allowed_suffixes is not None:
-        suffix = path.suffix.lower()
-        if suffix not in allowed_suffixes:
-            allowed = ", ".join(sorted(allowed_suffixes))
-            raise ValueError(
-                f"{arg_name} must use one of: {allowed}"
-            )
-
-    if must_exist and not path.exists():
-        raise FileNotFoundError(f"'{path}' not found.")
-
-    return path
+    return sanitize_optional_cli_path(
+        path,
+        label=arg_name,
+        must_exist=must_exist,
+        allowed_suffixes=allowed_suffixes,
+    )
 
 
 if __name__ == "__main__":

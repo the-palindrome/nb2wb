@@ -16,7 +16,6 @@ from nb2wb.config import (
     apply_target_profile_defaults,
     load_config,
     load_config_from_dict,
-    apply_platform_defaults,
 )
 
 
@@ -308,7 +307,7 @@ class TestPlatformDefaults:
     def test_substack_platform_enables_table_images(self):
         """Substack defaults enable table image fallback while preserving core sizing."""
         config = Config()
-        result = apply_platform_defaults(config, "substack")
+        result = apply_target_profile_defaults(config, "substack")
         assert result.image_width == config.image_width
         assert result.code.font_size == config.code.font_size
         assert result.latex.font_size == config.latex.font_size
@@ -319,7 +318,7 @@ class TestPlatformDefaults:
     def test_x_platform_smaller_dimensions(self):
         """X platform has smaller dimensions for mobile."""
         config = Config()
-        result = apply_platform_defaults(config, "x")
+        result = apply_target_profile_defaults(config, "x")
         # Top-level should be smaller
         assert result.image_width == 680
         # Code config should be adjusted
@@ -344,13 +343,13 @@ class TestPlatformDefaults:
         """X platform preserves custom theme."""
         config = Config()
         config.code.theme = "github"
-        result = apply_platform_defaults(config, "x")
+        result = apply_target_profile_defaults(config, "x")
         assert result.code.theme == "github"
 
     def test_x_platform_preserves_top_border_radius(self):
         """X platform preserves top-level border_radius."""
         config = Config(border_radius=20)
-        result = apply_platform_defaults(config, "x")
+        result = apply_target_profile_defaults(config, "x")
         # Top-level border_radius is preserved
         assert result.border_radius == 20
         # But sub-configs get new CodeConfig/LatexConfig instances with platform defaults
@@ -359,7 +358,7 @@ class TestPlatformDefaults:
     def test_unknown_platform_unchanged(self):
         """Unknown platform returns config unchanged."""
         config = Config()
-        result = apply_platform_defaults(config, "unknown_platform")
+        result = apply_target_profile_defaults(config, "unknown_platform")
         assert result.image_width == config.image_width
         assert result.code.font_size == config.code.font_size
 
@@ -487,7 +486,7 @@ border_radius: 20
 code:
   theme: "github"
 """)
-        result = apply_platform_defaults(config, "x")
+        result = apply_target_profile_defaults(config, "x")
         # X platform defaults applied
         assert result.image_width == 680
         assert result.code.font_size == 42
