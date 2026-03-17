@@ -45,6 +45,14 @@ _MIN_COL_WIDTH = 64
 
 @dataclass
 class _Cell:
+    """Parsed table cell content and layout metadata.
+
+    Attributes:
+        text: Normalized text content extracted from the cell.
+        align: Horizontal alignment for the cell text.
+        is_header: Whether the cell belongs to a header row.
+    """
+
     text: str
     align: str
     is_header: bool
@@ -54,6 +62,14 @@ class _TableParser(HTMLParser):
     """Extract simple table rows/cells from HTML output."""
 
     def __init__(self) -> None:
+        """Initialize parser state for one HTML table.
+
+        Args:
+            None.
+
+        Returns:
+            ``None``. The parser starts with empty row and cell state.
+        """
         super().__init__(convert_charrefs=True)
         self.rows: list[list[_Cell]] = []
         self._thead_depth = 0
@@ -62,6 +78,15 @@ class _TableParser(HTMLParser):
         self._chunks: list[str] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        """Track row and cell state for an opening HTML tag.
+
+        Args:
+            tag: Lower- or mixed-case HTML tag name.
+            attrs: Raw HTML attributes attached to the tag.
+
+        Returns:
+            ``None``. Parser state is updated in place.
+        """
         name = tag.lower()
 
         if name == "thead":
@@ -97,6 +122,14 @@ class _TableParser(HTMLParser):
             self._chunks.append("- ")
 
     def handle_endtag(self, tag: str) -> None:
+        """Finalize rows and cells when closing HTML tags are seen.
+
+        Args:
+            tag: Lower- or mixed-case HTML tag name.
+
+        Returns:
+            ``None``. Parser state is updated in place.
+        """
         name = tag.lower()
 
         if name == "thead" and self._thead_depth:
@@ -121,14 +154,38 @@ class _TableParser(HTMLParser):
                 self._chunks.append("\n")
 
     def handle_data(self, data: str) -> None:
+        """Append text content to the current table cell buffer.
+
+        Args:
+            data: Text emitted by the HTML parser.
+
+        Returns:
+            ``None``. The cell text buffer is updated in place.
+        """
         if self._current_cell is not None:
             self._chunks.append(data)
 
 
 def render_tables_as_images(html: str, config: TableConfig) -> str:
-    """Replace each HTML ``<table>`` fragment with an equivalent PNG ``<img>``."""
+    """Replace HTML tables with equivalent PNG image tags.
+
+    Args:
+        html: HTML fragment that may contain ``<table>`` elements.
+        config: Active table rendering configuration.
+
+    Returns:
+        HTML with matched tables replaced by rendered image tags.
+    """
 
     def _replace(match: re.Match[str]) -> str:
+        """Render one matched HTML table into an image tag.
+
+        Args:
+            match: Regex match containing the full table fragment.
+
+        Returns:
+            Replacement ``<img>`` HTML, or the original table on failure.
+        """
         table_html = match.group(0)
         try:
             uri = render_table_html(table_html, config)
@@ -145,7 +202,15 @@ def render_tables_as_images(html: str, config: TableConfig) -> str:
 
 
 def render_table_html(table_html: str, config: TableConfig) -> str:
-    """Render one HTML table fragment to a PNG data URI."""
+    """Render one HTML table fragment to a PNG data URI.
+
+    Args:
+        table_html: Raw HTML fragment containing one table.
+        config: Active table rendering configuration.
+
+    Returns:
+        A ``data:image/png`` URI for the rendered table.
+    """
     rows = _parse_rows(table_html)
     if not rows:
         raise ValueError("No table rows found.")
@@ -249,6 +314,14 @@ def render_table_html(table_html: str, config: TableConfig) -> str:
 
 
 def _parse_rows(table_html: str) -> list[list[_Cell]]:
+    """Parse HTML table markup into normalized row and cell objects.
+
+    Args:
+        table_html: Raw HTML fragment containing one ``<table>`` element.
+
+    Returns:
+        Parsed rows with per-cell text and alignment metadata.
+    """
     parser = _TableParser()
     parser.feed(table_html)
     parser.close()
@@ -256,6 +329,14 @@ def _parse_rows(table_html: str) -> list[list[_Cell]]:
 
 
 def _extract_align(attrs: dict[str, str]) -> str:
+    """Determine text alignment for a table cell from HTML attributes.
+
+    Args:
+        attrs: Attribute mapping collected from a ``th`` or ``td`` tag.
+
+    Returns:
+        ``left``, ``center``, or ``right`` alignment for the cell.
+    """
     align = attrs.get("align", "").strip().lower()
     if align in {"left", "center", "right"}:
         return align
@@ -268,6 +349,14 @@ def _extract_align(attrs: dict[str, str]) -> str:
 
 
 def _normalize_cell_text(text: str) -> str:
+    """Collapse whitespace in extracted table-cell text.
+
+    Args:
+        text: Raw text content collected from the HTML parser.
+
+    Returns:
+        Normalized cell text with cleaned spaces and line breaks.
+    """
     normalized = text.replace("\xa0", " ")
     normalized = _SPACE_RE.sub(" ", normalized)
     normalized = re.sub(r" *\n *", "\n", normalized)
@@ -283,6 +372,19 @@ def _initial_col_widths(
     font: ImageFont.ImageFont,
     header_font: ImageFont.ImageFont,
 ) -> list[int]:
+    """Estimate natural column widths before fitting to the target canvas.
+
+    Args:
+        rows: Parsed table rows and cells.
+        col_count: Total number of table columns.
+        config: Active table rendering configuration.
+        draw: PIL drawing context used for text measurement.
+        font: Body-cell font.
+        header_font: Header-cell font.
+
+    Returns:
+        Initial column widths in pixels.
+    """
     widths = [_MIN_COL_WIDTH + 2 * config.cell_padding_x for _ in range(col_count)]
     for row in rows:
         for idx, cell in enumerate(row):
@@ -293,6 +395,16 @@ def _initial_col_widths(
 
 
 def _fit_col_widths(widths: list[int], target: int, minimum: int) -> list[int]:
+    """Scale column widths to fit an available table width budget.
+
+    Args:
+        widths: Natural column widths in pixels.
+        target: Desired combined width of all columns.
+        minimum: Minimum width each column must retain.
+
+    Returns:
+        Adjusted column widths whose total approximates the target.
+    """
     if not widths:
         return widths
 
@@ -344,6 +456,17 @@ def _wrap_text(
     draw: ImageDraw.ImageDraw,
     font: ImageFont.ImageFont,
 ) -> list[str]:
+    """Wrap table-cell text into lines that fit a target width.
+
+    Args:
+        text: Cell text to wrap.
+        max_width: Maximum allowed line width in pixels.
+        draw: PIL drawing context used for text measurement.
+        font: Font used to render the text.
+
+    Returns:
+        A list of wrapped text lines.
+    """
     if not text:
         return [""]
 
@@ -384,6 +507,17 @@ def _break_long_word(
     draw: ImageDraw.ImageDraw,
     font: ImageFont.ImageFont,
 ) -> list[str]:
+    """Split a single long token into pieces that fit the column width.
+
+    Args:
+        token: Word-like token that does not fit on one line.
+        max_width: Maximum allowed line width in pixels.
+        draw: PIL drawing context used for text measurement.
+        font: Font used to render the text.
+
+    Returns:
+        A list of token fragments that each fit within the width.
+    """
     if not token:
         return [""]
 
@@ -412,6 +546,21 @@ def _draw_cells(
     border_width: int,
     config: TableConfig,
 ) -> None:
+    """Paint cell backgrounds and text onto the table image.
+
+    Args:
+        draw: PIL drawing context for the table image.
+        rows: Parsed table rows and cells.
+        wrapped_rows: Wrapped text lines with fonts and line heights.
+        row_heights: Pixel heights for each table row.
+        col_widths: Pixel widths for each table column.
+        table_x: Left offset for drawing the table.
+        border_width: Width of the grid border in pixels.
+        config: Active table rendering configuration.
+
+    Returns:
+        ``None``. Drawing happens on the provided canvas.
+    """
     y = border_width
     body_row_idx = 0
     for row_idx, row in enumerate(rows):
@@ -461,6 +610,20 @@ def _draw_grid(
     border_width: int,
     border_color: str,
 ) -> None:
+    """Draw the outer border and inner grid lines for a table image.
+
+    Args:
+        draw: PIL drawing context for the table image.
+        row_heights: Pixel heights for each table row.
+        col_widths: Pixel widths for each table column.
+        table_x: Left offset for drawing the table.
+        table_height: Total table height in pixels.
+        border_width: Width of the grid border in pixels.
+        border_color: Color used for the grid lines.
+
+    Returns:
+        ``None``. Grid lines are painted onto the canvas.
+    """
     x = table_x
     for idx in range(len(col_widths) + 1):
         draw.rectangle(
@@ -495,6 +658,24 @@ def _draw_cell_text(
     line_height: int,
     pad_x: int,
 ) -> None:
+    """Draw wrapped text inside a single table cell.
+
+    Args:
+        draw: PIL drawing context for the table image.
+        lines: Wrapped text lines to render.
+        x: Left coordinate of the cell.
+        y: Top coordinate of the cell.
+        width: Cell width in pixels.
+        height: Cell height in pixels.
+        align: Horizontal alignment for the text.
+        color: Text color.
+        font: Font used to render the text.
+        line_height: Pixel height allocated per line.
+        pad_x: Horizontal text padding inside the cell.
+
+    Returns:
+        ``None``. Text is painted onto the canvas.
+    """
     if not lines:
         return
 
@@ -515,10 +696,28 @@ def _draw_cell_text(
 
 
 def _max_line_width(lines: list[str], draw: ImageDraw.ImageDraw, font: ImageFont.ImageFont) -> float:
+    """Measure the widest line in a list of wrapped text lines.
+
+    Args:
+        lines: Candidate text lines to measure.
+        draw: PIL drawing context used for text measurement.
+        font: Font used to render the text.
+
+    Returns:
+        The maximum line width in pixels.
+    """
     return max((_text_width(line, draw, font) for line in lines), default=0.0)
 
 
 def _line_height(font: ImageFont.ImageFont) -> int:
+    """Estimate the rendered height of one text line for a font.
+
+    Args:
+        font: Font whose line height should be measured.
+
+    Returns:
+        Pixel height for one rendered line, including gap spacing.
+    """
     try:
         asc, desc = font.getmetrics()
         return asc + desc + _LINE_GAP
@@ -527,6 +726,16 @@ def _line_height(font: ImageFont.ImageFont) -> int:
 
 
 def _text_width(text: str, draw: ImageDraw.ImageDraw, font: ImageFont.ImageFont) -> float:
+    """Measure rendered text width with graceful fallbacks.
+
+    Args:
+        text: Text string to measure.
+        draw: PIL drawing context used for text measurement.
+        font: Font used to render the text.
+
+    Returns:
+        Approximate width of the text in pixels.
+    """
     try:
         return float(draw.textlength(text, font=font))
     except Exception:
@@ -539,6 +748,15 @@ def _text_width(text: str, draw: ImageDraw.ImageDraw, font: ImageFont.ImageFont)
 
 @lru_cache(maxsize=64)
 def _load_font(preferred_font: str, size: int) -> ImageFont.ImageFont:
+    """Load the preferred table font with platform-specific fallbacks.
+
+    Args:
+        preferred_font: Font family name or filesystem path to try first.
+        size: Requested font size in pixels.
+
+    Returns:
+        A Pillow font object suitable for table rendering.
+    """
     path = Path(preferred_font)
     if path.exists():
         try:
@@ -568,6 +786,14 @@ def _load_font(preferred_font: str, size: int) -> ImageFont.ImageFont:
 
 @lru_cache(maxsize=1)
 def _candidate_fonts() -> list[str]:
+    """Return platform-specific fallback font candidates.
+
+    Args:
+        None.
+
+    Returns:
+        An ordered list of font paths appropriate for the host platform.
+    """
     platform = sys.platform
     if platform.startswith("linux"):
         return _FONT_CANDIDATES["linux"]
@@ -577,6 +803,14 @@ def _candidate_fonts() -> list[str]:
 
 
 def _shadow_extent(config: TableConfig) -> int:
+    """Compute how much canvas padding is needed for the table shadow.
+
+    Args:
+        config: Active table rendering configuration.
+
+    Returns:
+        The number of pixels the shadow can extend beyond the table bounds.
+    """
     if not config.shadow or config.shadow_alpha <= 0:
         return 0
     return max(
@@ -587,6 +821,16 @@ def _shadow_extent(config: TableConfig) -> int:
 
 
 def _new_canvas(width: int, height: int, background: str) -> Image.Image:
+    """Create the RGBA canvas used for table rendering.
+
+    Args:
+        width: Canvas width in pixels.
+        height: Canvas height in pixels.
+        background: Canvas background color or ``transparent``.
+
+    Returns:
+        A new RGBA Pillow image.
+    """
     if background.strip().lower() == "transparent":
         return Image.new("RGBA", (width, height), (0, 0, 0, 0))
     r, g, b = ImageColor.getrgb(background)
@@ -594,6 +838,16 @@ def _new_canvas(width: int, height: int, background: str) -> Image.Image:
 
 
 def _draw_shadow(canvas: Image.Image, box: tuple[int, int, int, int], config: TableConfig) -> None:
+    """Render a blurred drop shadow behind the table bounds.
+
+    Args:
+        canvas: Target canvas to composite the shadow onto.
+        box: Table bounding box as ``(x0, y0, x1, y1)``.
+        config: Active table rendering configuration.
+
+    Returns:
+        ``None``. The shadow is composited onto the canvas.
+    """
     layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(layer)
     x0, y0, x1, y1 = box
@@ -616,6 +870,15 @@ def _draw_shadow(canvas: Image.Image, box: tuple[int, int, int, int], config: Ta
 
 
 def _color_with_alpha(color: str, alpha: int) -> tuple[int, int, int, int]:
+    """Combine an RGB color and alpha channel into one RGBA tuple.
+
+    Args:
+        color: Color string understood by Pillow.
+        alpha: Alpha channel value between 0 and 255.
+
+    Returns:
+        A four-tuple of red, green, blue, and alpha components.
+    """
     r, g, b = ImageColor.getrgb(color)
     a = max(0, min(255, int(alpha)))
     return (r, g, b, a)

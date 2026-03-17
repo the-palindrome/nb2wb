@@ -1,0 +1,138 @@
+from __future__ import annotations
+
+import argparse
+import os
+import sys
+from pathlib import Path
+
+import nbformat
+
+from ._path_utils import sanitize_optional_cli_path
+from .api import load_html_payload, revert
+from .ocr.gemini import GeminiOCRPipeline
+from .ocr.local import local_ocr_pipeline
+from .ocr.openai import OpenAIOCRPipeline
+
+_ALLOWED_INPUT_SUFFIXES = frozenset({".html", ".htm"})
+
+
+def main() -> None:
+    """Run the ``wb2nb`` command-line entry point.
+
+    Args:
+        None.
+
+    Returns:
+        ``None``. The function writes output or exits with a CLI error.
+    """
+    parser = argparse.ArgumentParser(
+        prog="wb2nb",
+        description="Convert HTML posts into scaffolded Jupyter notebooks",
+    )
+    parser.add_argument("document", type=Path, help="Path to the .html or .htm file")
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=Path,
+        default=None,
+        help="Output notebook path (default: <document>.ipynb)",
+    )
+    parser.add_argument(
+        "--ocr-pipeline",
+        choices=("local", "openai", "gemini"),
+        default=None,
+        help="Optional OCR pipeline for image-based reverse conversion.",
+    )
+    parser.add_argument(
+        "--model",
+        default=None,
+        help="Model to use when --ocr-pipeline openai or gemini is selected.",
+    )
+    args = parser.parse_args()
+
+    if args.ocr_pipeline in {"openai", "gemini"}:
+        if not args.model:
+            parser.error(
+                "--model is required when --ocr-pipeline openai or gemini is selected"
+            )
+    if args.ocr_pipeline == "openai":
+        if not os.getenv("OPENAI_API_KEY"):
+            parser.error(
+                "OPENAI_API_KEY environment variable is required when "
+                "--ocr-pipeline openai is selected"
+            )
+    if args.ocr_pipeline == "gemini":
+        if not os.getenv("GEMINI_API_KEY") and not os.getenv("GOOGLE_API_KEY"):
+            parser.error(
+                "GEMINI_API_KEY or GOOGLE_API_KEY environment variable is required "
+                "when --ocr-pipeline gemini is selected"
+            )
+
+    try:
+        document_path = _sanitize_cli_path(
+            args.document,
+            arg_name="document path",
+            must_exist=True,
+            allowed_suffixes=_ALLOWED_INPUT_SUFFIXES,
+        )
+        output_path = _sanitize_cli_path(
+            args.output or document_path.with_suffix(".ipynb"),
+            arg_name="output path",
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        ocr_pipeline = None
+        if args.ocr_pipeline == "local":
+            ocr_pipeline = local_ocr_pipeline
+        elif args.ocr_pipeline == "openai":
+            ocr_pipeline = OpenAIOCRPipeline(model=args.model)
+        elif args.ocr_pipeline == "gemini":
+            ocr_pipeline = GeminiOCRPipeline(model=args.model)
+    except (RuntimeError, ValueError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"Reverting '{document_path}' into a notebook …")
+    try:
+        payload = load_html_payload(document_path)
+        notebook = revert(payload, ocr_pipeline=ocr_pipeline)
+    except Exception as exc:
+        print(f"Conversion failed: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    with output_path.open("w", encoding="utf-8") as handle:
+        nbformat.write(notebook, handle)
+    print(f"Written → {output_path}")
+
+
+def _sanitize_cli_path(
+    path: Path | None,
+    *,
+    arg_name: str,
+    must_exist: bool = False,
+    allowed_suffixes: frozenset[str] | None = None,
+) -> Path | None:
+    """Validate a CLI path argument before using it.
+
+    Args:
+        path: Parsed path value, or ``None`` when the argument is omitted.
+        arg_name: Human-readable argument label for error messages.
+        must_exist: Whether the path must already exist on disk.
+        allowed_suffixes: Optional set of permitted filename suffixes.
+
+    Returns:
+        The validated path, or ``None`` when no path was provided.
+    """
+    return sanitize_optional_cli_path(
+        path,
+        label=arg_name,
+        must_exist=must_exist,
+        allowed_suffixes=allowed_suffixes,
+    )
+
+
+if __name__ == "__main__":
+    main()

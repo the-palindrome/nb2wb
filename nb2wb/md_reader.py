@@ -47,13 +47,26 @@ def read_md(path: Path) -> nbformat.NotebookNode:
     the ``--execute`` CLI flag (handled in the converter, not here).
     Each code block stores its language in ``cell.metadata["language"]``
     for per-cell syntax highlighting.
+
+    Args:
+        path: Path to the Markdown file on disk.
+
+    Returns:
+        A notebook parsed from the Markdown file.
     """
     text = path.read_text(encoding="utf-8")
     return read_md_text(text)
 
 
 def read_md_text(text: str) -> nbformat.NotebookNode:
-    """Parse in-memory Markdown text into an ``nbformat`` notebook."""
+    """Parse in-memory Markdown text into an ``nbformat`` notebook.
+
+    Args:
+        text: Raw Markdown document text.
+
+    Returns:
+        A notebook parsed from the Markdown text.
+    """
     front_matter, text = _split_front_matter(text)
     language = _detect_language(front_matter, text)
 
@@ -62,7 +75,15 @@ def read_md_text(text: str) -> nbformat.NotebookNode:
 
 
 def _detect_language(fm: dict[str, Any], text: str) -> str:
-    """Detect the default language from front matter or the first code block."""
+    """Detect the default language from front matter or the first code block.
+
+    Args:
+        fm: Parsed YAML front matter mapping.
+        text: Raw Markdown document body.
+
+    Returns:
+        The inferred default notebook language.
+    """
     if "language" in fm:
         return str(fm["language"])
     if "engine" in fm:
@@ -85,7 +106,15 @@ def _detect_language(fm: dict[str, Any], text: str) -> str:
 # ---------------------------------------------------------------------------
 
 def _extract_cells(text: str, default_lang: str) -> list[nbformat.NotebookNode]:
-    """Parse the body of a .md file into a list of notebook cells."""
+    """Parse the body of a Markdown file into notebook cells.
+
+    Args:
+        text: Raw Markdown document body.
+        default_lang: Default language to use for code fences.
+
+    Returns:
+        Parsed notebook cells in document order.
+    """
     cells: list[nbformat.NotebookNode] = []
     pos = 0
 
@@ -141,8 +170,23 @@ def _consume_directives(text: str, tags: list[str]) -> str:
 
     Directives have the form ``<!-- nb2wb: tag1, tag2 -->``.
     Multiple directives are merged.  The cleaned text is returned.
+
+    Args:
+        text: Markdown text that may contain directive comments.
+        tags: Mutable list that collects extracted notebook tags.
+
+    Returns:
+        Markdown text with directive comments removed.
     """
     def _collect(m: re.Match) -> str:
+        """Capture directive tags while removing the matched comment.
+
+        Args:
+            m: Regex match for an ``nb2wb`` directive comment.
+
+        Returns:
+            An empty string so the directive is stripped from the text.
+        """
         directive = m.group(1)
         for part in directive.split(","):
             tag = part.strip()

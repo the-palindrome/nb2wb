@@ -5,7 +5,15 @@ from PIL import Image, ImageDraw
 
 
 def round_corners(img: Image.Image, radius: int) -> Image.Image:
-    """Apply transparent rounded corners via an alpha-channel mask."""
+    """Apply transparent rounded corners via an alpha-channel mask.
+
+    Args:
+        img: Source image to round.
+        radius: Corner radius in pixels.
+
+    Returns:
+        A new RGBA image with rounded transparent corners.
+    """
     rgba = img.convert("RGBA")
     mask = Image.new("L", rgba.size, 0)
     draw = ImageDraw.Draw(mask)

@@ -31,7 +31,14 @@ class TargetPageOptions:
 def normalize_page_options(
     options: Mapping[str, object] | TargetPageOptions | None,
 ) -> TargetPageOptions:
-    """Return a validated TargetPageOptions instance."""
+    """Normalize raw page options into a validated options object.
+
+    Args:
+        options: Mapping, ``TargetPageOptions``, or ``None`` to normalize.
+
+    Returns:
+        A validated ``TargetPageOptions`` instance.
+    """
     if options is None:
         return TargetPageOptions()
     if isinstance(options, TargetPageOptions):
@@ -57,7 +64,15 @@ def merge_page_options(
     base: TargetPageOptions,
     override: TargetPageOptions,
 ) -> TargetPageOptions:
-    """Merge two option objects, with *override* taking precedence."""
+    """Merge two option objects, with overrides taking precedence.
+
+    Args:
+        base: Base option values to start from.
+        override: Override values that should win when provided.
+
+    Returns:
+        A merged ``TargetPageOptions`` instance.
+    """
     return TargetPageOptions(
         image_strategy=override.image_strategy or base.image_strategy,
         raw_image_strategy=override.raw_image_strategy or base.raw_image_strategy,
@@ -74,6 +89,14 @@ def merge_page_options(
 
 
 def _validate_page_options(options: TargetPageOptions) -> None:
+    """Validate target page option values before builder construction.
+
+    Args:
+        options: Page option overrides to validate.
+
+    Returns:
+        ``None``. Raises when an option value is unsupported.
+    """
     if options.image_strategy is not None and options.image_strategy not in IMAGE_STRATEGIES:
         raise ValueError(
             f"Invalid image_strategy={options.image_strategy!r}. "
@@ -99,6 +122,15 @@ def _validate_page_options(options: TargetPageOptions) -> None:
 
 
 def _read_optional_string(options: Mapping[str, object], key: str) -> str | None:
+    """Read an optional string-like option from a mapping.
+
+    Args:
+        options: Raw option mapping supplied by the caller.
+        key: Option key to read.
+
+    Returns:
+        A normalized string value, or ``None`` when the key is absent.
+    """
     value = options.get(key)
     if value is None:
         return None
@@ -106,6 +138,15 @@ def _read_optional_string(options: Mapping[str, object], key: str) -> str | None
 
 
 def _read_optional_int(options: Mapping[str, object], key: str) -> int | None:
+    """Read an optional integer option from a mapping.
+
+    Args:
+        options: Raw option mapping supplied by the caller.
+        key: Option key to read.
+
+    Returns:
+        The coerced integer value, or ``None`` when the key is absent.
+    """
     value = options.get(key)
     if value is None:
         return None
@@ -113,6 +154,14 @@ def _read_optional_int(options: Mapping[str, object], key: str) -> int | None:
 
 
 def _read_theme_overrides(value: object) -> dict[str, str]:
+    """Normalize theme override values into a string-only mapping.
+
+    Args:
+        value: Raw theme override object from user input.
+
+    Returns:
+        A mapping of CSS variable names to string values.
+    """
     if value is None:
         return {}
     if not isinstance(value, Mapping):
@@ -124,6 +173,14 @@ def _read_theme_overrides(value: object) -> dict[str, str]:
 
 
 def _script_from_mode(mode: str) -> str:
+    """Resolve the copy-button script payload for a given mode.
+
+    Args:
+        mode: Requested copy-script mode name.
+
+    Returns:
+        The JavaScript snippet for the mode, or an empty string.
+    """
     if mode == "copyable":
         return COPYABLE_SCRIPT
     if mode == "simple":
@@ -132,7 +189,15 @@ def _script_from_mode(mode: str) -> str:
 
 
 def _resolve_script_mode(requested_mode: str, image_strategy: str) -> str:
-    """Ensure copyable image wrappers always ship with compatible JS."""
+    """Resolve the effective copy-script mode for a target page.
+
+    Args:
+        requested_mode: Copy-script mode requested by config or runtime.
+        image_strategy: Final image strategy used for page generation.
+
+    Returns:
+        The effective script mode compatible with the image strategy.
+    """
     if image_strategy == "copyable":
         return "copyable"
     return requested_mode
@@ -147,14 +212,40 @@ class ProfiledBuilder(PlatformBuilder):
         *,
         options: TargetPageOptions | None = None,
     ) -> None:
+        """Initialize a profile-backed page builder.
+
+        Args:
+            profile: Target profile supplying defaults and theme values.
+            options: Optional page-level overrides for the target profile.
+
+        Returns:
+            ``None``. The builder stores the profile and resolved options.
+        """
         self.profile = profile
         self.options = options or TargetPageOptions()
 
     @property
     def name(self) -> str:
+        """Return the builder's target profile name.
+
+        Args:
+            None.
+
+        Returns:
+            The canonical name of the active target profile.
+        """
         return self.profile.name
 
     def build_page(self, content_html: str, *, raw_mode: bool = False) -> str:
+        """Wrap converted content using the active profile and overrides.
+
+        Args:
+            content_html: Converted notebook body HTML to wrap.
+            raw_mode: Whether to use raw-output image settings and chrome.
+
+        Returns:
+            A complete HTML page for the selected publishing target.
+        """
         strategy = (
             self.options.raw_image_strategy or self.profile.raw_image_strategy
             if raw_mode

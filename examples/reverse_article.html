@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+  <body>
+    <article>
+      <h1>Recovering a Technical Post</h1>
+      <p>
+        This sample HTML is designed for <code>wb2nb</code> and
+        <code>nb2wb.revert()</code>. It includes prose, one recognized code
+        block, one unsupported code block, and a local figure.
+      </p>
+
+      <h2>Why This Example Exists</h2>
+      <p>
+        Reverse conversion is best at recovering structure. It turns prose into
+        markdown cells, preserves code blocks, and keeps figures linked unless
+        you opt into OCR.
+      </p>
+
+      <pre><code class="language-python">def moving_average(values, window):
+    if window &lt;= 0:
+        raise ValueError("window must be positive")
+    return [
+        sum(values[index:index + window]) / window
+        for index in range(len(values) - window + 1)
+    ]
+
+series = [3, 5, 8, 13, 21]
+print(moving_average(series, 3))</code></pre>
+
+      <p>
+        The next block uses an unsupported language on purpose, so the reverse
+        path should preserve it as fenced markdown instead of dropping it.
+      </p>
+
+      <pre><code class="language-mermaid">graph LR
+  notebook[Notebook]
+  notebook --> html[HTML]
+  html --> notebook</code></pre>
+
+      <figure>
+        <img src="image.png" alt="Parallelogram diagram" />
+        <figcaption>
+          A local figure with nearby text and caption context for OCR pipelines.
+        </figcaption>
+      </figure>
+
+      <h2>What You Should See</h2>
+      <ul>
+        <li>A markdown cell for this prose</li>
+        <li>A Python code cell for the recognized code block</li>
+        <li>A fenced markdown block for the Mermaid example</li>
+        <li>A markdown image that stays linked without OCR</li>
+      </ul>
+    </article>
+  </body>
+</html>

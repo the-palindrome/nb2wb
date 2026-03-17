@@ -1,62 +1,77 @@
 # Examples
 
-This directory contains synchronized, feature-focused examples for every
-supported input format.
+This directory is a practical companion to the docs. Every file is meant to demonstrate a real feature combination, not just exist as a placeholder.
 
-## Quick start
+## Recommended Tour
 
-From repository root:
+From the repository root:
 
 ```bash
 nb2wb examples/notebook.ipynb -o examples/notebook.html
-nb2wb examples/markdown.md -o examples/markdown.html
-nb2wb examples/markdown.md --execute -o examples/markdown_exec.html
+nb2wb examples/markdown.md --execute --warnings -o examples/markdown.html
 nb2wb examples/quarto.qmd -o examples/quarto.html
-nb2wb examples/notebook.ipynb -t medium -o examples/medium_preview.html
-nb2wb examples/notebook.ipynb -t x -o examples/x_preview.html
+python3 examples/convert_notebook_api.py
+wb2nb examples/reverse_article.html -o examples/reverse_article.ipynb
+python3 examples/revert_html_api.py
 ```
 
-To test URL-based image workflows for Medium, X, or LinkedIn:
+Add a target profile when you want to inspect platform-specific wrapping:
 
 ```bash
-nb2wb examples/notebook.ipynb -t medium --serve
+nb2wb examples/notebook.ipynb -t medium -o examples/medium_preview.html
+nb2wb examples/x_article.ipynb -t x -o examples/x_article.html
+nb2wb examples/notebook.ipynb --serve
 ```
 
-## Files and purpose
+## Files and Purpose
 
-| File | Format | Purpose |
-|---|---|---|
-| `notebook.ipynb` | Jupyter notebook | Full notebook-mode feature demo, including tags and rich outputs |
-| `markdown.md` | Markdown | Full Markdown-mode demo, including directives and optional `--execute` behavior |
-| `quarto.qmd` | Quarto | Full Quarto-mode demo, including `#|` options and `{output}` chunks |
-| `x_article.ipynb` | Jupyter notebook | Short, publication-style example tuned for X Articles workflow |
-| `config.yaml` | YAML | Annotated configuration reference with practical publication settings |
-| `image.png` | asset | Local image used by Markdown/Quarto/Notebook examples |
+| File | Purpose |
+| --- | --- |
+| `notebook.ipynb` | Full notebook example with tags, figures, rich outputs, and narrative structure |
+| `markdown.md` | Markdown example with front matter, directives, fence tags, tables, figures, and execute-time rich outputs |
+| `quarto.qmd` | Quarto example with front matter, `#|` options, arbitrary tags, `{output}` chunks, and publication-oriented sections |
+| `x_article.ipynb` | Shorter article tuned for the X Articles workflow |
+| `reverse_article.html` | Reverse-conversion source with prose, supported code, unsupported code, and local images |
+| `config.yaml` | Opinionated publication config that demonstrates practical render and wrapper settings |
+| `convert_notebook_api.py` | Forward-conversion API example that writes normal and raw outputs |
+| `revert_html_api.py` | Reverse-conversion API example that writes a scaffolded notebook |
+| `image.png` | Shared local image asset used by forward and reverse examples |
 
-## Feature coverage matrix
+## Forward-Conversion Coverage
 
 | Feature | `notebook.ipynb` | `markdown.md` | `quarto.qmd` |
-|---|---:|---:|---:|
-| Inline math (`$...$`) | ✅ | ✅ | ✅ |
-| Display math (`$$...$$`, environments) | ✅ | ✅ | ✅ |
-| `\label` + `\eqref` | ✅ | ✅ | ✅ |
+| --- | ---: | ---: | ---: |
+| Inline math | ✅ | ✅ | ✅ |
+| Display math | ✅ | ✅ | ✅ |
+| `\label` and `\eqref` | ✅ | ✅ | ✅ |
 | `latex-preamble` support | ✅ | ✅ | ✅ |
-| Code as rendered PNG | ✅ | ✅ | ✅ |
+| Tables | ✅ | ✅ | ✅ |
+| Local images | ✅ | ✅ | ✅ |
+| Code rendered as image | ✅ | ✅ | ✅ |
 | `text-snippet` rendering | ✅ | ✅ | ✅ |
 | `hide-input` | ✅ | ✅ | ✅ |
 | `hide-output` | ✅ | ✅ | ✅ |
 | `hide-cell` | ✅ | ✅ | ✅ |
-| Stream output rendering | ✅ | ✅ (`--execute`) | ✅ |
-| `image/png` output | ✅ | ✅ (`--execute`) | ✅ |
-| `image/svg+xml` output | ✅ | ✅ (`--execute`) | ✅ |
-| `text/html` output | ✅ | ✅ (`--execute`) | ✅ |
 | Markdown directive comments | n/a | ✅ | n/a |
+| Markdown front matter | n/a | ✅ | n/a |
 | Quarto `#|` option mapping | n/a | n/a | ✅ |
 | Quarto `{output}` chunk attachment | n/a | n/a | ✅ |
+| Execute-time HTML output | - | ✅ | ✅ |
+| Execute-time SVG output | - | ✅ | ✅ |
+| Execute-time `stderr` demo | n/a | ✅ | n/a |
+
+## Reverse-Conversion Coverage
+
+`reverse_article.html` demonstrates these reverse behaviors:
+
+- prose becomes markdown cells
+- recognized Python code becomes a code cell
+- unsupported Mermaid code stays fenced in markdown
+- a local image remains linked unless OCR is enabled
+- image captions and nearby text are available to OCR pipelines through context
 
 ## Notes
 
-- `.md` examples only produce code outputs when `--execute` is enabled.
-- `.qmd` examples execute only when `--execute` is enabled, unless outputs are provided via `{output}` chunks.
-- SVG/HTML examples intentionally include unsafe constructs (`<script>`,
-  inline events, `javascript:`) so you can verify sanitization behavior.
+- `markdown.md` is the best single example for forward-conversion features that need `--execute` or `--warnings`.
+- `quarto.qmd` is the best example when you want to inspect how `#|` options and `{output}` chunks map into notebook behavior.
+- `reverse_article.html` is the best starting point for testing `wb2nb` and custom OCR contracts.

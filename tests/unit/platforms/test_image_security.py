@@ -21,9 +21,7 @@ from nb2wb.platforms.base import (
     _is_private_host,
     _MAX_IMAGE_BYTES,
 )
-from nb2wb.platforms.substack import SubstackBuilder
-from nb2wb.platforms.medium import MediumBuilder
-from nb2wb.platforms.x import XArticlesBuilder
+from nb2wb.platforms import get_builder
 
 
 # ---------------------------------------------------------------------------
@@ -259,25 +257,25 @@ class TestToDataUriFallback:
     """_to_data_uri should fail closed on conversion failures."""
 
     def test_returns_empty_on_traversal(self):
-        builder = SubstackBuilder()
+        builder = get_builder("substack")
         result = builder._to_data_uri("../../../etc/passwd")
         assert result == ""
 
     def test_emits_warning_on_conversion_failure(self):
-        builder = SubstackBuilder()
+        builder = get_builder("substack")
         with pytest.warns(RuntimeWarning, match="Could not convert image"):
             result = builder._to_data_uri("../../../etc/passwd")
         assert result == ""
 
     def test_returns_empty_on_ssrf(self):
-        builder = MediumBuilder()
+        builder = get_builder("medium")
         result = builder._to_data_uri("http://127.0.0.1/secret")
         assert result == ""
 
     def test_returns_empty_on_bad_mime(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         (tmp_path / "evil.html").write_text("<script>x</script>")
-        builder = XArticlesBuilder()
+        builder = get_builder("x")
         result = builder._to_data_uri("evil.html")
         assert result == ""
 
@@ -286,13 +284,13 @@ class TestStrictImageMode:
     """Strict image mode should fail closed for unsafe sources."""
 
     def test_strict_mode_drops_unresolvable_image_sources(self):
-        builder = SubstackBuilder()
+        builder = get_builder("substack")
         html = '<p><img src="../../../etc/passwd" alt="x"></p>'
         out = builder._embed_images_as_data_uris(html)
         assert "<img" not in out
 
     def test_strict_mode_keeps_valid_data_uri_images(self):
-        builder = MediumBuilder()
+        builder = get_builder("medium")
         html = f'<img src="data:image/png;base64,{_TINY_PNG_B64}" alt="ok">'
         out = builder._make_images_copyable(html)
         assert "copy-image-btn" in out

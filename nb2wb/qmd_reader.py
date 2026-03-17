@@ -42,13 +42,26 @@ def read_qmd(path: Path) -> nbformat.NotebookNode:
     ``{output}`` chunks immediately after the corresponding code chunk.
     Quarto cell options (``#|`` lines) are translated to Jupyter-compatible
     cell tags.
+
+    Args:
+        path: Path to the Quarto document on disk.
+
+    Returns:
+        A notebook parsed from the Quarto document.
     """
     text = path.read_text(encoding="utf-8")
     return read_qmd_text(text)
 
 
 def read_qmd_text(text: str) -> nbformat.NotebookNode:
-    """Parse in-memory Quarto Markdown text into an ``nbformat`` notebook."""
+    """Parse in-memory Quarto Markdown text into a notebook.
+
+    Args:
+        text: Raw Quarto document text.
+
+    Returns:
+        A notebook parsed from the Quarto document.
+    """
     front_matter, text = _split_front_matter(text)
     language = _detect_language(front_matter, text)
 
@@ -57,7 +70,15 @@ def read_qmd_text(text: str) -> nbformat.NotebookNode:
 
 
 def _detect_language(fm: dict[str, Any], text: str) -> str:
-    """Detect the default language from front matter or the first code chunk."""
+    """Detect the default language from front matter or the first code chunk.
+
+    Args:
+        fm: Parsed YAML front matter mapping.
+        text: Raw Quarto document body.
+
+    Returns:
+        The inferred default notebook language.
+    """
     # Explicit engine in front matter
     if "engine" in fm:
         return str(fm["engine"])
@@ -79,7 +100,15 @@ def _detect_language(fm: dict[str, Any], text: str) -> str:
 # ---------------------------------------------------------------------------
 
 def _extract_cells(text: str, default_lang: str) -> list[nbformat.NotebookNode]:
-    """Parse the body of a .qmd file into a list of notebook cells."""
+    """Parse the body of a Quarto file into notebook cells.
+
+    Args:
+        text: Raw Quarto document body.
+        default_lang: Default language to use for code chunks.
+
+    Returns:
+        Parsed notebook cells in document order.
+    """
     cells: list[nbformat.NotebookNode] = []
     pos = 0
     last_code_cell: nbformat.NotebookNode | None = None
@@ -140,6 +169,12 @@ def _parse_chunk(body: str) -> tuple[list[str], str]:
     Split a code-chunk body into (tags, source).
 
     ``#|`` option lines are stripped from the source and translated to tags.
+
+    Args:
+        body: Raw chunk body text excluding the outer fences.
+
+    Returns:
+        A tuple of derived cell tags and cleaned source text.
     """
     tags: list[str] = []
     source_lines: list[str] = []
@@ -159,7 +194,15 @@ def _parse_chunk(body: str) -> tuple[list[str], str]:
 
 
 def _apply_option(opt: str, tags: list[str]) -> None:
-    """Translate a single ``#|`` option string into zero or more cell tags."""
+    """Translate a single ``#|`` option string into notebook cell tags.
+
+    Args:
+        opt: Raw option string without the leading ``#|`` marker.
+        tags: Mutable list collecting translated notebook tags.
+
+    Returns:
+        ``None``. Tags are appended to the provided list in place.
+    """
     key, _, value = opt.partition(":")
     key = key.strip()
     value = value.strip().lower()

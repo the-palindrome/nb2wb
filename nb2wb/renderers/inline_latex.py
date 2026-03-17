@@ -58,7 +58,14 @@ _GREEK_SET = set(_GREEK)
 # ---------------------------------------------------------------------------
 
 def convert_inline_math(text: str) -> str:
-    """Replace every $...$ span with its Unicode/HTML equivalent."""
+    """Replace every inline math span with its Unicode or HTML equivalent.
+
+    Args:
+        text: Input text that may contain ``$...$`` math spans.
+
+    Returns:
+        Text with inline math converted to Unicode and lightweight HTML.
+    """
     return _INLINE_RE.sub(lambda m: _to_unicode(m.group(1).strip()), text)
 
 
@@ -67,7 +74,14 @@ def convert_inline_math(text: str) -> str:
 # ---------------------------------------------------------------------------
 
 def _to_unicode(latex: str) -> str:
-    """Convert a single inline LaTeX expression to Unicode/HTML text."""
+    """Convert one inline LaTeX expression to Unicode or HTML text.
+
+    Args:
+        latex: Raw inline LaTeX expression without surrounding dollar signs.
+
+    Returns:
+        Converted inline math text.
+    """
     latex = _expand_frac(latex)
     latex = _normalize_function_commands(latex)
 
@@ -99,7 +113,15 @@ def _to_unicode(latex: str) -> str:
 # ---------------------------------------------------------------------------
 
 def _brace_arg(s: str, pos: int) -> tuple[str, int]:
-    """Return (content, end_pos) of the brace group starting at pos."""
+    """Read one brace-delimited argument starting at a string position.
+
+    Args:
+        s: Source string containing the argument.
+        pos: Index where the brace group or fallback token starts.
+
+    Returns:
+        A tuple of the extracted content and the next unread index.
+    """
     if pos >= len(s) or s[pos] != "{":
         return (s[pos : pos + 1], pos + 1)
     depth = 0
@@ -114,7 +136,14 @@ def _brace_arg(s: str, pos: int) -> tuple[str, int]:
 
 
 def _expand_frac(latex: str) -> str:
-    """Replace \\frac{num}{den} with (num)/(den)."""
+    """Replace ``\\frac{num}{den}`` constructs with plain-text fractions.
+
+    Args:
+        latex: Inline LaTeX expression to normalize.
+
+    Returns:
+        LaTeX text with fractions expanded to ``(num)/(den)`` form.
+    """
     result: list[str] = []
     i = 0
     while i < len(latex):
@@ -138,7 +167,16 @@ def _expand_frac(latex: str) -> str:
 # ---------------------------------------------------------------------------
 
 def _script_html(inner: str, table: dict, tag: str) -> str:
-    """Map inner to Unicode script chars; fall back to an HTML tag."""
+    """Map script text to Unicode, falling back to an HTML tag.
+
+    Args:
+        inner: Script text extracted from a superscript or subscript group.
+        table: Translation table mapping characters to Unicode script forms.
+        tag: HTML tag name to use when Unicode conversion is incomplete.
+
+    Returns:
+        Unicode script text or an HTML ``<sup>/<sub>`` fallback.
+    """
     mapped = inner.translate(str.maketrans(table))
     if mapped != inner and all(
         mapped[j] != inner[j] for j in range(len(inner)) if inner[j].strip()
@@ -148,7 +186,14 @@ def _script_html(inner: str, table: dict, tag: str) -> str:
 
 
 def _expand_scripts(text: str) -> str:
-    """Convert remaining ^{...} and _{...} to Unicode or <sup>/<sub>."""
+    """Convert script markers to Unicode or ``<sup>/<sub>`` markup.
+
+    Args:
+        text: Text that may contain superscript or subscript syntax.
+
+    Returns:
+        Text with script markers expanded.
+    """
     text = re.sub(
         r"\^\{([^}]*)\}",
         lambda m: _script_html(m.group(1), _SUPERSCRIPT, "sup"),
@@ -196,24 +241,52 @@ _FUNCTION_COMMAND_RE = re.compile(
 
 
 def _normalize_function_commands(latex: str) -> str:
-    """Strip the LaTeX command slash from known math functions/operators."""
+    """Strip command slashes from known math functions and operators.
+
+    Args:
+        latex: Inline LaTeX expression to normalize.
+
+    Returns:
+        LaTeX text with known function command names simplified.
+    """
     return _FUNCTION_COMMAND_RE.sub(lambda m: m.group(1), latex)
 
 
 def _is_latin_word(token: str) -> bool:
-    """Return True if token contains only ASCII Latin letters."""
+    """Check whether a token contains only ASCII Latin letters.
+
+    Args:
+        token: Token to inspect.
+
+    Returns:
+        ``True`` when the token is composed only of ASCII letters.
+    """
     return bool(token) and all(("A" <= ch <= "Z") or ("a" <= ch <= "z") for ch in token)
 
 
 def _italicize_latin_token(token: str) -> str:
-    """Italicize a Latin token, wrapping each character when needed."""
+    """Italicize a Latin token using lightweight HTML markup.
+
+    Args:
+        token: Latin-letter token to italicize.
+
+    Returns:
+        Token wrapped in ``<em>`` markup.
+    """
     if len(token) == 1:
         return f"<em>{token}</em>"
     return "".join(f"<em>{ch}</em>" for ch in token)
 
 
 def _italicize_part(part: str) -> str:
-    """Italicize one non-tag text segment."""
+    """Italicize one plain-text segment outside existing HTML tags.
+
+    Args:
+        part: Plain-text fragment to post-process.
+
+    Returns:
+        The fragment with math variables italicized where appropriate.
+    """
     out: list[str] = []
     i = 0
     n = len(part)
@@ -253,7 +326,14 @@ def _italicize_part(part: str) -> str:
 
 
 def _italicize(text: str) -> str:
-    """Wrap variable letters and Greek letters in <em>."""
+    """Italicize variables while preserving existing HTML tags.
+
+    Args:
+        text: Converted inline-math text that may contain HTML tags.
+
+    Returns:
+        Text with variable letters and Greek letters wrapped in ``<em>``.
+    """
     parts = _HTML_TAG_RE.split(text)
     tags = _HTML_TAG_RE.findall(text)
     processed: list[str] = []

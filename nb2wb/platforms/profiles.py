@@ -30,7 +30,14 @@ class TargetProfile:
 
 
 def get_target_profile(key: str) -> TargetProfile:
-    """Return profile for *key* or raise ValueError with supported keys."""
+    """Look up the target profile for a publishing key.
+
+    Args:
+        key: Publishing target key to resolve.
+
+    Returns:
+        The matching ``TargetProfile`` instance.
+    """
     profile = TARGET_PROFILES.get(key)
     if profile is None:
         raise ValueError(
@@ -40,7 +47,14 @@ def get_target_profile(key: str) -> TargetProfile:
 
 
 def list_target_keys() -> list[str]:
-    """Return canonical target keys in stable order."""
+    """Return the canonical target keys in stable order.
+
+    Args:
+        None.
+
+    Returns:
+        A list of supported publishing target keys.
+    """
     return list(TARGET_PROFILES.keys())
 
 

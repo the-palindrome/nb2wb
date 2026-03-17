@@ -74,6 +74,14 @@ class _StrikethroughExtension(Extension):
     """Enable GitHub-style ~~strikethrough~~ spans in Python-Markdown."""
 
     def extendMarkdown(self, md) -> None:
+        """Register the custom inline processor with Markdown.
+
+        Args:
+            md: Active Python-Markdown instance being configured.
+
+        Returns:
+            ``None``. The processor is registered in the parser.
+        """
         md.inlinePatterns.register(
             SimpleTagInlineProcessor(_STRIKETHROUGH_PATTERN, "del"),
             "strikethrough",
@@ -82,7 +90,14 @@ class _StrikethroughExtension(Extension):
 
 
 def _markdown_extensions() -> list[str | Extension]:
-    """Return markdown extensions used for cell conversion."""
+    """Return the Markdown extensions used for notebook cell conversion.
+
+    Args:
+        None.
+
+    Returns:
+        A list of extension names and extension instances.
+    """
     return [*_MD_BASE_EXTENSIONS, _StrikethroughExtension()]
 
 _RICH_OUTPUT_MIMES = frozenset({"image/png", "image/svg+xml", "text/html"})
@@ -98,12 +113,30 @@ class Converter:
         execute: bool = False,
         warnings_mode: bool = False,
     ) -> None:
+        """Store conversion settings for notebook-to-HTML rendering.
+
+        Args:
+            config: Resolved nb2wb configuration object.
+            execute: Whether code cells should be executed before rendering.
+            warnings_mode: Whether ``stderr`` stream output should be shown.
+
+        Returns:
+            ``None``. The converter stores the provided settings.
+        """
         self.config = config
         self.execute = execute
         self.warnings_mode = warnings_mode
 
     def convert_notebook(self, notebook, *, cwd: Path | None = None) -> str:
-        """Convert an in-memory notebook object (NotebookNode) to HTML."""
+        """Convert an in-memory notebook object into HTML fragments.
+
+        Args:
+            notebook: Notebook model to convert.
+            cwd: Optional working directory used when executing code cells.
+
+        Returns:
+            Combined HTML for all rendered notebook cells.
+        """
         _enforce_serialized_notebook_size(notebook, self.config.safety)
         nb = _execute_cells(notebook, cwd or Path.cwd()) if self.execute else notebook
         _enforce_notebook_limits(nb, self.config.safety)
@@ -133,11 +166,26 @@ class Converter:
     # ------------------------------------------------------------------
 
     def _markdown_cell(self, cell) -> str:
-        """Render a markdown cell to HTML, processing LaTeX and equation references."""
+        """Render a markdown cell to HTML with math-aware preprocessing.
+
+        Args:
+            cell: Notebook markdown cell to render.
+
+        Returns:
+            HTML fragment for the rendered markdown cell.
+        """
         src, stash = _protect_markdown_code_spans(cell.source)
 
         # 0. Substitute \eqref{label} → (N) throughout
         def _eqref_sub(m: re.Match) -> str:
+            """Replace a LaTeX equation reference with its numeric label.
+
+            Args:
+                m: Regex match for an ``\\eqref{...}`` occurrence.
+
+            Returns:
+                The rendered equation number or the original match text.
+            """
             n = self._eq_labels.get(m.group(1))
             return f"({n})" if n is not None else m.group(0)
         src = _EQREF_RE.sub(_eqref_sub, src)
@@ -188,7 +236,15 @@ class Converter:
         return f'<div class="md-cell">{html}</div>\n'
 
     def _code_cell(self, cell, tags: frozenset[str] = frozenset()) -> str:
-        """Render a code cell (source + outputs) to an HTML ``<div>``."""
+        """Render a code cell and its outputs to an HTML fragment.
+
+        Args:
+            cell: Notebook code cell to render.
+            tags: Cell tags controlling visibility and rendering behavior.
+
+        Returns:
+            HTML fragment for the rendered code cell, or an empty string.
+        """
         # text-snippet: render as copyable HTML text instead of a PNG image
         if "text-snippet" in tags and cell.source.strip() and "hide-input" not in tags:
             escaped = html_mod.escape(cell.source)
@@ -240,7 +296,14 @@ class Converter:
         return '<div class="code-cell">\n' + "".join(parts) + "</div>\n"
 
     def _output_as_png(self, output) -> bytes | None:
-        """Render text-based outputs to PNG for merging; return None for rich outputs."""
+        """Render text-based outputs to PNG for later stacking.
+
+        Args:
+            output: Notebook output object to inspect and render.
+
+        Returns:
+            PNG bytes for text-like outputs, or ``None`` for rich outputs.
+        """
         otype = output.get("output_type", "")
 
         if otype == "stream":
@@ -262,14 +325,28 @@ class Converter:
         return self._text_output_to_png(_join_text(data.get("text/plain")))
 
     def _text_output_to_png(self, text: str) -> bytes | None:
-        """Render non-empty text output as PNG bytes."""
+        """Render non-empty text output as PNG bytes.
+
+        Args:
+            text: Output text to render.
+
+        Returns:
+            PNG bytes for the text, or ``None`` when the text is empty.
+        """
         if text.strip():
             return render_output_text(text, self.config.code, apply_padding=False)
 
         return None
 
     def _render_output(self, output) -> str:
-        """Return HTML fragment for rich outputs (notebook PNG, SVG, HTML)."""
+        """Render rich notebook outputs as embeddable HTML fragments.
+
+        Args:
+            output: Notebook output object to inspect and render.
+
+        Returns:
+            HTML fragment for the rich output, or an empty string.
+        """
         data = _rich_output_data(output)
         if data is None:
             return ""
@@ -295,19 +372,41 @@ class Converter:
 # ---------------------------------------------------------------------------
 
 def _png_uri(png_bytes: bytes) -> str:
-    """Encode raw PNG bytes as a ``data:image/png;base64,...`` URI."""
+    """Encode raw PNG bytes as a data URI.
+
+    Args:
+        png_bytes: PNG image bytes to encode.
+
+    Returns:
+        A ``data:image/png`` URI containing the image bytes.
+    """
     return "data:image/png;base64," + base64.b64encode(png_bytes).decode("ascii")
 
 
 def _svg_data_uri(svg: str) -> str:
-    """Encode sanitized SVG markup as a data URI for safe embedding via <img>."""
+    """Encode sanitized SVG markup as a data URI.
+
+    Args:
+        svg: Raw SVG markup to sanitize and encode.
+
+    Returns:
+        A ``data:image/svg+xml`` URI containing the sanitized SVG.
+    """
     sanitized = _sanitize_html_fragment(svg, profile="svg")
     encoded = base64.b64encode(sanitized.encode("utf-8")).decode("ascii")
     return f"data:image/svg+xml;base64,{encoded}"
 
 
 def _sanitize_html_fragment(fragment: str, *, profile: str = "html") -> str:
-    """Sanitize notebook-provided HTML/SVG fragments with strict parser rules."""
+    """Sanitize notebook-provided HTML or SVG fragments.
+
+    Args:
+        fragment: Raw HTML or SVG fragment to sanitize.
+        profile: Sanitizer profile name, either ``html`` or ``svg``.
+
+    Returns:
+        Sanitized fragment text, or an empty string on sanitizer failure.
+    """
     try:
         return sanitize_fragment(fragment, profile=profile)
     except Exception:
@@ -315,10 +414,26 @@ def _sanitize_html_fragment(fragment: str, *, profile: str = "html") -> str:
 
 
 def _apply_eq_tag(latex: str, eq_labels: dict[str, int]) -> tuple[str, int | None]:
-    """Strip \\label{...} from latex; return (clean_latex, tag_number_or_None)."""
+    """Remove LaTeX labels while resolving an optional equation tag number.
+
+    Args:
+        latex: Display-math LaTeX source to normalize.
+        eq_labels: Mapping of equation labels to assigned numbers.
+
+    Returns:
+        A tuple of cleaned LaTeX text and an optional tag number.
+    """
     tag_num = None
 
     def _sub(m: re.Match) -> str:
+        """Remove a LaTeX label command while capturing its tag number.
+
+        Args:
+            m: Regex match for a ``\\label{...}`` command.
+
+        Returns:
+            An empty string so the label command is removed from the formula.
+        """
         nonlocal tag_num
         n = eq_labels.get(m.group(1))
         if n is not None:
@@ -330,7 +445,15 @@ def _apply_eq_tag(latex: str, eq_labels: dict[str, int]) -> tuple[str, int | Non
 
 
 def _join_text(value: Any, *, sep: str = "") -> str:
-    """Join rich-output text payloads that can be str or list[str]."""
+    """Normalize notebook text payloads that may be strings or string lists.
+
+    Args:
+        value: Notebook payload value to normalize.
+        sep: Separator inserted between list items when joining.
+
+    Returns:
+        A normalized text string.
+    """
     if isinstance(value, str):
         return value
     if isinstance(value, list):
@@ -339,7 +462,14 @@ def _join_text(value: Any, *, sep: str = "") -> str:
 
 
 def _rich_output_data(output: dict[str, Any]) -> dict[str, Any] | None:
-    """Return ``output["data"]`` for rich outputs, otherwise ``None``."""
+    """Return the rich-output data payload for display outputs.
+
+    Args:
+        output: Notebook output mapping to inspect.
+
+    Returns:
+        The ``data`` mapping for rich outputs, or ``None`` otherwise.
+    """
     if output.get("output_type", "") not in ("execute_result", "display_data"):
         return None
     data = output.get("data", {})
@@ -347,10 +477,25 @@ def _rich_output_data(output: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def _protect_markdown_code_spans(src: str) -> tuple[str, list[str]]:
-    """Protect fenced and inline code spans from LaTeX transformations."""
+    """Protect fenced and inline code spans from LaTeX transformations.
+
+    Args:
+        src: Markdown source that may contain code spans.
+
+    Returns:
+        A tuple of protected source text and stashed original spans.
+    """
     stash: list[str] = []
 
     def _protect(match: re.Match) -> str:
+        """Replace a code span with a protected placeholder token.
+
+        Args:
+            match: Regex match for a fenced or inline code span.
+
+        Returns:
+            Placeholder text that can be restored after LaTeX processing.
+        """
         stash.append(match.group(0))
         return _PROTECTED_TOKEN.format(len(stash) - 1)
 
@@ -360,14 +505,29 @@ def _protect_markdown_code_spans(src: str) -> tuple[str, list[str]]:
 
 
 def _restore_protected_spans(src: str, stash: list[str]) -> str:
-    """Restore code spans previously stashed by ``_protect_markdown_code_spans``."""
+    """Restore code spans previously replaced with placeholder tokens.
+
+    Args:
+        src: Protected source text containing placeholder tokens.
+        stash: Original code spans indexed by placeholder position.
+
+    Returns:
+        Source text with original code spans restored.
+    """
     for i, block in enumerate(stash):
         src = src.replace(_PROTECTED_TOKEN.format(i), block)
     return src
 
 
 def _normalize_cuddled_lists(src: str) -> str:
-    """Insert a blank line before top-level list items that follow paragraph text."""
+    """Insert blank lines before top-level lists cuddled against prose.
+
+    Args:
+        src: Markdown source to normalize.
+
+    Returns:
+        Markdown source with list spacing normalized.
+    """
     if not src:
         return src
 
@@ -390,7 +550,14 @@ def _normalize_cuddled_lists(src: str) -> str:
 
 
 def _cell_tags(cell) -> frozenset[str]:
-    """Return the set of tags on a cell (from cell.metadata.tags)."""
+    """Return the normalized set of tags attached to a notebook cell.
+
+    Args:
+        cell: Notebook cell whose metadata should be inspected.
+
+    Returns:
+        A frozenset of tag strings.
+    """
     try:
         return frozenset(cell.metadata.get("tags", []))
     except (AttributeError, TypeError):
@@ -398,12 +565,26 @@ def _cell_tags(cell) -> frozenset[str]:
 
 
 def _skip_cell(tags: frozenset[str]) -> bool:
-    """Return True when a cell should be excluded from final rendering."""
+    """Check whether a cell should be omitted from rendered output.
+
+    Args:
+        tags: Cell tag set to inspect.
+
+    Returns:
+        ``True`` when the cell should be skipped.
+    """
     return "hide-cell" in tags or "latex-preamble" in tags
 
 
 def _collect_latex_preamble(cells) -> str:
-    """Collect LaTeX preamble snippets from ``latex-preamble`` tagged cells."""
+    """Collect LaTeX preamble snippets from tagged markdown cells.
+
+    Args:
+        cells: Notebook cells to scan for preamble fragments.
+
+    Returns:
+        Combined LaTeX preamble text.
+    """
     preamble_parts: list[str] = []
     for cell in cells:
         if "latex-preamble" in _cell_tags(cell):
@@ -414,7 +595,14 @@ def _collect_latex_preamble(cells) -> str:
 
 
 def _collect_equation_labels(cells) -> dict[str, int]:
-    """Collect document-level equation labels in source order."""
+    """Collect document-level equation labels in source order.
+
+    Args:
+        cells: Notebook cells to scan for labeled display equations.
+
+    Returns:
+        Mapping of equation labels to assigned display numbers.
+    """
     labels: dict[str, int] = {}
     counter = 1
     for cell in cells:
@@ -433,7 +621,15 @@ def _collect_equation_labels(cells) -> dict[str, int]:
 
 
 def _enforce_serialized_notebook_size(nb, safety: SafetyConfig) -> None:
-    """Reject oversized in-memory notebooks using serialized JSON byte size."""
+    """Reject oversized notebooks using serialized JSON byte size.
+
+    Args:
+        nb: Notebook payload to size-check.
+        safety: Safety limits controlling maximum accepted input size.
+
+    Returns:
+        ``None``. Raises when the payload exceeds the configured limit.
+    """
     try:
         serialized = nbformat.writes(nb)
     except Exception as exc:
@@ -446,7 +642,15 @@ def _enforce_serialized_notebook_size(nb, safety: SafetyConfig) -> None:
 
 
 def _enforce_notebook_limits(nb, safety: SafetyConfig) -> None:
-    """Apply server-safe notebook limits for resource usage and payload size."""
+    """Apply notebook safety limits for size, cells, math, and outputs.
+
+    Args:
+        nb: Notebook payload to validate.
+        safety: Safety limits controlling notebook resource usage.
+
+    Returns:
+        ``None``. Raises when a configured limit is exceeded.
+    """
     cells = getattr(nb, "cells", [])
     if len(cells) > safety.max_cells:
         raise ValueError(
@@ -489,7 +693,14 @@ def _enforce_notebook_limits(nb, safety: SafetyConfig) -> None:
 
 
 def _estimate_payload_size(value: Any) -> int:
-    """Best-effort size estimate for nested notebook output payloads."""
+    """Estimate the byte footprint of a nested notebook output payload.
+
+    Args:
+        value: Arbitrary payload value to size recursively.
+
+    Returns:
+        Estimated payload size in bytes.
+    """
     if value is None:
         return 0
     if isinstance(value, bytes):
@@ -506,7 +717,14 @@ def _estimate_payload_size(value: Any) -> int:
 
 
 def _notebook_language(nb) -> str:
-    """Detect the programming language of a notebook from its metadata, defaulting to Python."""
+    """Detect the notebook language from metadata with a Python fallback.
+
+    Args:
+        nb: Notebook payload whose metadata should be inspected.
+
+    Returns:
+        The detected notebook language name.
+    """
     try:
         meta = nb.metadata
         lang = meta.get("kernelspec", {}).get("language", "")
@@ -518,7 +736,15 @@ def _notebook_language(nb) -> str:
 
 
 def _execute_cells(nb, cwd: Path):
-    """Execute all code cells in *nb* via a Jupyter kernel and return the notebook."""
+    """Execute notebook code cells through a Jupyter kernel.
+
+    Args:
+        nb: Notebook payload to execute in place.
+        cwd: Working directory for notebook execution.
+
+    Returns:
+        The executed notebook payload.
+    """
     try:
         from nbconvert.preprocessors import ExecutePreprocessor
     except ImportError:

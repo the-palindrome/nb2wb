@@ -15,14 +15,29 @@ def get_builder(
     *,
     target_options: Mapping[str, object] | TargetPageOptions | None = None,
 ) -> PlatformBuilder:
-    """Get the appropriate HTML builder for the specified platform."""
+    """Construct the HTML builder for a publishing target.
+
+    Args:
+        platform: Publishing target key to build for.
+        target_options: Optional per-target rendering overrides.
+
+    Returns:
+        A platform builder configured for the requested target.
+    """
     profile = get_target_profile(platform)
     options = normalize_page_options(target_options)
     return ProfiledBuilder(profile, options=options)
 
 
 def list_platforms() -> list[str]:
-    """Return list of supported platform names."""
+    """Return the canonical list of supported platform names.
+
+    Args:
+        None.
+
+    Returns:
+        Supported publishing target keys in stable order.
+    """
     return list_target_keys()
 
 

@@ -1,125 +1,51 @@
 ---
-title: "From Quarto to Web"
-author: "Your Name"
+title: "Publishing a Technical Memo from Quarto"
+author: "nb2wb examples"
 date: today
 format: html
 execute:
-  echo: true    # show code by default (overridable per-chunk with #| echo: false)
-  output: true  # show output by default
+  echo: true
+  output: true
 ---
 
 ```{latex-preamble}
 \usepackage{amsmath}
-\usepackage{amsfonts}
-\usepackage{amssymb}
 \usepackage{xcolor}
-
-\definecolor{ashBlack}{HTML}{111111}
-\definecolor{matrixGreen}{HTML}{03A062}
-\definecolor{matrixBlue}{HTML}{03A0C2}
 \definecolor{maizeCrayola}{HTML}{E8C547}
 \definecolor{blueGray}{HTML}{6290C3}
-\definecolor{ruby}{HTML}{D81E5B}
 ```
 
-# From Quarto to Web
+# Publishing a Technical Memo from Quarto
 
-This document demonstrates the `nb2wb` converter with a Quarto (`.qmd`) source
-file. It covers the three pillars of technical writing: prose, mathematics, and
-code.
-
-Here's a nice image for illustration.
+This example mirrors the Markdown walkthrough, but it uses Quarto-native chunk syntax and options. It demonstrates front matter, `#|` option mapping, arbitrary tags, precomputed `{output}` chunks, and publication-style code blocks.
 
 ![The parallelogram rule](image.png)
 
-## 1  Inline LaTeX → Unicode
+## Inline Math and Display Math
 
-Inline expressions like $\alpha + \beta = \gamma$ or $E = mc^2$ are converted
-to Unicode so they render as plain readable text in Substack's editor.
-
-Other examples: the golden ratio $\phi = \frac{1+\sqrt{5}}{2}$, and Euler's
-identity $e^{i\pi} + 1 = 0$.
-
-## 2  Display Math → Image
-
-Block equations are rendered to crisp PNG images.
-
-The quadratic formula:
+Inline math such as $\alpha + \beta = \gamma$ stays readable in the final article.
 
 ```latex
 x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a} \label{eq:quadratic}
 ```
 
-is rendered to
-
 $$x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a} \label{eq:quadratic}$$
 
-You can render the equation references as `\\eqref{eq:quadratic}`, which renders like this: \eqref{eq:quadratic} gives both roots of $ax^2 + bx + c = 0$ simultaneously.
+Equation \eqref{eq:quadratic} is a good example of why document-wide labels matter.
 
-You can also use colors that are defined in the preamble. Bayes' theorem:
+## Lists and Tables
 
-```latex
-P({\color{maizeCrayola} A} \mid {\color{blueGray} B}) = \frac{P({\color{blueGray} B} \mid {\color{maizeCrayola} A})\, P({\color{maizeCrayola} A})}{P({\color{blueGray} B})} \label{eq:bayes}
-```
+- Quarto prose becomes notebook markdown cells.
+- Chunk options become cell tags.
+- Tables can stay native or render as images.
 
-is rendered to
+| Target | Typical image mode | Good first choice |
+| --- | --- | --- |
+| `substack` | embed | long-form essays |
+| `medium` | copyable | publication workflows |
+| `x` | copyable | short technical posts |
 
-$$P({\color{maizeCrayola} A} \mid {\color{blueGray} B}) = \frac{P({\color{blueGray} B} \mid {\color{maizeCrayola} A})\, P({\color{maizeCrayola} A})}{P({\color{blueGray} B})} \label{eq:bayes}$$
-
-A matrix equation:
-
-```latex
-\mathbf{y} = \mathbf{X}\boldsymbol{\beta} + \boldsymbol{\varepsilon} \label{eq:mtx}
-```
-
-is rendered to
-
-\[
-  \mathbf{y} = \mathbf{X}\boldsymbol{\beta} + \boldsymbol{\varepsilon} \label{eq:mtx}
-\]
-
-The Basel formula:
-
-```latex
-\sum_{n=1}^{\infty} \frac{1}{n^2} = \frac{\pi^2}{6}
-```
-
-is rendered to
-
-$$
-\sum_{n=1}^{\infty} \frac{1}{n^2} = \frac{\pi^2}{6}
-$$
-
-Now, a complex multi-line example. The Gaussian integral, derived by switching to polar coordinates:
-
-```latex
-\begin{align*}
-I   &= \int_{-\infty}^{\infty} e^{-x^2}\,dx \\[4pt]
-I^2 &= \int_{-\infty}^{\infty}\!\int_{-\infty}^{\infty} e^{-(x^2+y^2)}\,dx\,dy \\[4pt]
-    &= \int_0^{2\pi}\!\int_0^{\infty} e^{-r^2}\,r\,dr\,d\theta \\[4pt]
-    &= 2\pi \cdot \Bigl[-\tfrac{1}{2}e^{-r^2}\Bigr]_0^{\infty} \\[4pt]
-    &= \pi \\[4pt]
-\therefore\quad I &= \sqrt{\pi}
-\end{align*}
-```
-
-is rendered to
-
-$$
-\begin{align*}
-I   &= \int_{-\infty}^{\infty} e^{-x^2}\,dx \\[4pt]
-I^2 &= \int_{-\infty}^{\infty}\!\int_{-\infty}^{\infty} e^{-(x^2+y^2)}\,dx\,dy \\[4pt]
-    &= \int_0^{2\pi}\!\int_0^{\infty} e^{-r^2}\,r\,dr\,d\theta \\[4pt]
-    &= 2\pi \cdot \Bigl[-\tfrac{1}{2}e^{-r^2}\Bigr]_0^{\infty} \\[4pt]
-    &= \pi \\[4pt]
-\therefore\quad I &= \sqrt{\pi}
-\end{align*}
-$$
-
-## 3  Code Blocks → Image
-
-Code cells and their outputs are rendered as syntax-highlighted images,
-so formatting and colours are perfectly preserved.
+## Executed Code
 
 ```{python}
 def fibonacci(n):
@@ -129,87 +55,90 @@ def fibonacci(n):
         yield a
         a, b = b, a + b
 
-print("Fibonacci sequence (first 10 terms):")
+
+print("First ten Fibonacci numbers:")
 print(*fibonacci(10))
 ```
 
-```{python}
-# Simple list comprehension
-x = list(range(10))
-[i ** 2 for i in x]
-```
-
-## 4  Mixed: equation in context
-
-The softmax function maps a vector $\mathbf{z} \in \mathbb{R}^K$ to a
-probability distribution:
-
-$$\sigma(\mathbf{z})_j = \frac{e^{z_j}}{\sum_{k=1}^{K} e^{z_k}}$$
-
-Here $j = 1, \ldots, K$ indexes the classes.  Note that $\sum_j \sigma_j = 1$
-by construction.
+## Rich HTML and SVG Outputs
 
 ```{python}
-import math
+from IPython.display import HTML, SVG, display
 
-def softmax(z):
-    """Compute softmax values for a list of numbers."""
-    z_max = max(z)
-    e = [math.exp(x - z_max) for x in z]  # numerical stability
-    e_sum = sum(e)
-    return [x / e_sum for x in e]
+display(HTML(
+    "<div style='padding:0.75rem;border:1px solid #dbe4ee;border-radius:12px;'>"
+    "<strong>Rich HTML output</strong> also makes the trip."
+    "</div>"
+))
 
-z = [1.0, 2.0, 3.0]
-probs = softmax(z)
-print(f"softmax({z}) = [{probs[0]:.4f} {probs[1]:.4f} {probs[2]:.4f}]")
+display(SVG(
+    "<svg xmlns='http://www.w3.org/2000/svg' width='220' height='70'>"
+    "<rect width='220' height='70' rx='12' fill='#e0f2fe' />"
+    "<text x='16' y='43' font-size='24' fill='#0369a1'>SVG output</text>"
+    "</svg>"
+))
 ```
 
-## 5  Figures
+## Quarto Option Mapping
 
-```{python}
-import matplotlib.pyplot as plt
-
-
-with plt.style.context("seaborn-v0_8-white"):
-    x_min = -0.1
-    x_max = 20.1
-    fig = plt.figure(figsize=(19.2/2, 10.8/2))
-
-    # Generate points using list comprehension
-    X = [x / 50.0 - 1 for x in range(101)]  # 101 points from -1 to 1
-    y = [x**2 for x in X]
-    plt.plot(X, y, color="#ff0000")
-
-    plt.tight_layout()
-    plt.show()
-```
-
-## 6  Cell Tags
-
-Quarto cell options (`#|` lines) map to nb2wb cell tags:
-
-| Quarto option | nb2wb tag | Effect |
-|---|---|---|
-| `#\| include: false` | `hide-cell` | Entire cell omitted (input + output) |
-| `#\| echo: false` | `hide-input` | Source code hidden; output shown |
-| `#\| output: false` | `hide-output` | Output hidden; source code shown |
-
-The next cell uses `#| echo: false` — only its output is rendered.
+The next cell uses `#| echo: false`, so the exported article shows only the output.
 
 ```{python}
 #| echo: false
-result = sum(i**2 for i in range(1, 11))
-print(f"Sum of squares 1..10 = {result}")
+result = sum(i ** 2 for i in range(1, 11))
+print(f"Sum of squares from 1 to 10 = {result}")
 ```
 
-The next cell uses `#| output: false` — only its source code is rendered.
+The next cell uses `#| output: false`, so the exported article keeps the source but hides the output.
 
 ```{python}
 #| output: false
 import sys
-print(f"Python {sys.version}")
-print("(This output is hidden in the published post.)")
+print(f"Running on Python {sys.version.split()[0]}")
 ```
 
-The preamble chunk at the top of this document uses the `{latex-preamble}`
-chunk type and is likewise invisible in the output.
+The next cell uses an arbitrary tag. `text-snippet` renders it as copyable HTML text instead of an image.
+
+```{bash}
+#| tags: [text-snippet]
+pip install nb2wb
+nb2wb examples/quarto.qmd -t x
+```
+
+The next cell uses `#| include: false`, so it stays available in the source but disappears from the final article.
+
+```{python}
+#| include: false
+draft_only = "This cell is hidden from published output."
+print(draft_only)
+```
+
+## Precomputed Output Chunks
+
+`{output}` chunks attach stdout to the immediately preceding code chunk. This works even when you do not execute the document during conversion.
+
+```{python}
+steps = ["audit", "refine", "publish"]
+for step in steps:
+    print(step.title())
+```
+```{output}
+Audit
+Refine
+Publish
+```
+
+## Figures in Context
+
+```{python}
+import matplotlib.pyplot as plt
+
+with plt.style.context("seaborn-v0_8-white"):
+    x = [value / 20 for value in range(-20, 21)]
+    y = [value ** 2 for value in x]
+    fig = plt.figure(figsize=(8, 4.5))
+    plt.plot(x, y, color="#0f766e", linewidth=3)
+    plt.title("A simple parabola")
+    plt.tight_layout()
+    plt.show()
+```

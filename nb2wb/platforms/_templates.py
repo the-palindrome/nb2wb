@@ -345,7 +345,21 @@ def build_page(
     extra_css: str = "",
     include_copy_button: bool = True,
 ) -> str:
-    """Build a complete HTML preview page."""
+    """Build a complete HTML preview page.
+
+    Args:
+        content_html: Converted notebook body HTML to embed in the page.
+        title: Document title used in the HTML head.
+        toolbar_message: Toolbar helper text shown in preview mode.
+        script: JavaScript snippet injected in preview mode.
+        raw_mode: Whether preview-only chrome should be omitted.
+        theme_overrides: Optional CSS variable overrides for the page theme.
+        extra_css: Optional extra stylesheet text appended to the page.
+        include_copy_button: Whether the preview toolbar shows a copy button.
+
+    Returns:
+        A complete HTML document string.
+    """
     toolbar_html = ""
     script_html = ""
     head_html = ""

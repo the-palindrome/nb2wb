@@ -33,6 +33,18 @@ Common reasons:
 If you need to keep original image URLs untouched, use API/YAML
 `target_options.image_strategy: preserve`.
 
+## `wb2nb` keeps images as markdown figures
+
+This is the expected fallback when reverse conversion cannot safely or confidently turn an image into notebook content.
+
+Common reasons:
+
+- no `ocr_pipeline` was provided
+- local OCR dependencies are missing
+- the HTML references remote `http/https` images instead of local files or `data:` URIs
+- the OCR pipeline classified the image as `figure`
+- OCR failed and the pipeline fell back to the safe figure result
+
 ## Conversion fails with safety limit errors
 
 Adjust `safety` config values for your workload profile, for example:

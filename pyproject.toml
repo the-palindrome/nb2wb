@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nb2wb"
-version = "0.2.4"
+version = "0.3.0"
 description = "Write in Jupyter Notebooks. Publish anywhere."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -38,6 +38,8 @@ dependencies = [
     # Parsing
     "PyYAML>=6.0",
     "markdown>=3.4",
+    "beautifulsoup4>=4.12",
+    "markdownify>=0.13",
     "unicodeit>=0.7",
 ]
 
@@ -53,9 +55,20 @@ docs = [
     "myst-parser>=2.0",
     "furo>=2024.8.6",
 ]
+ocr = [
+    "pix2text>=1.1.0",
+    "pytesseract>=0.3.10",
+]
+openai = [
+    "openai>=1.68.0",
+]
+gemini = [
+    "google-genai>=1.0.0",
+]
 
 [project.scripts]
 nb2wb = "nb2wb.cli:main"
+wb2nb = "nb2wb.revert_cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
