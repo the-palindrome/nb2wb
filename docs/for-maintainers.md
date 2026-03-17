@@ -1,82 +1,107 @@
 # For Maintainers
 
-This page is a technical overview of the project for maintainers and coding agents.
+This page is the shortest accurate map of the current architecture. Use it when you need to change behavior without drifting away from the package boundaries that the tests enforce.
 
-## Purpose and Scope
+## Project Direction
 
-`nb2wb` converts notebook-style inputs into platform-ready HTML for target profiles (`default`, `substack`, `medium`, `x`, `linkedin`, `devto`, `hashnode`, `ghost`, `wordpress`).
+`nb2wb` keeps three ideas stable:
 
-Current architectural direction:
+1. `convert()` and `revert()` are content-only APIs.
+2. Filesystem loading happens at explicit loader and CLI boundaries.
+3. Safety checks and sanitization stay on in the default conversion path.
 
-- keep `nb2wb.api.convert()` content-only
-- keep filesystem loading explicit via helper functions
-- keep conversion logic centralized in a single in-memory notebook pipeline
-- keep safety checks mandatory in normal execution paths
-
-## Canonical Interfaces (Do Not Drift)
+## Canonical Interfaces
 
 ### Public API
 
-- `nb2wb.convert(notebook, ..., working_dir=None, raw_mode=False)` accepts in-memory payloads only.
-- `nb2wb.load_input_payload(path)` and typed helpers are responsible for filesystem reads.
-- `.md` and `.qmd` loader helpers intentionally return text payload mappings
-  instead of parsed notebooks.
-- `notebook` input forms accepted by `convert`:
-  - notebook dict / `NotebookNode`
-  - markdown or quarto text string
-  - mapping payloads such as `{"format": "md", "content": "..."}`
+- `nb2wb.convert(notebook, ..., working_dir=None, raw_mode=False)`
+- `nb2wb.revert(document, ..., ocr_pipeline=None)`
+- `nb2wb.load_input_payload(path)`
+- `nb2wb.load_html_payload(path)`
+- typed loader helpers for notebook, Markdown, and Quarto sources
+
+Accepted `convert()` payloads:
+
+- notebook mapping or `NotebookNode`
+- Markdown string
+- Quarto string
+- `{"format": "md", "content": "..."}`
+- `{"format": "qmd", "content": "..."}`
+
+Accepted `revert()` payloads:
+
+- HTML string
+- `{"format": "html", "content": "..."}`
+
+### CLI Boundary
+
+Forward CLI flow:
+
+1. sanitize paths
+2. `load_input_payload(path)`
+3. `convert(payload, ...)`
+4. write HTML
+
+Reverse CLI flow:
+
+1. sanitize paths
+2. `load_html_payload(path)`
+3. `revert(payload, ...)`
+4. write notebook
 
 ### Converter Core
 
-- `nb2wb.converter.Converter` converts in-memory notebook models through:
-  - `Converter.convert_notebook(notebook, cwd=...)`
-- Path-based conversion is intentionally not part of `Converter`.
-
-### CLI
-
-- CLI remains path-based at the command boundary.
-- CLI path flow is:
-  1. sanitize input/output/config paths
-  2. `load_input_payload(path)`
-  3. `convert(payload, ...)`
-  4. write resulting HTML
+`nb2wb.converter.Converter.convert_notebook(notebook, cwd=...)` is the in-memory rendering entry point. Path handling does not belong in `Converter`.
 
 ## End-to-End Data Flow
 
-### API path
+### Forward Path
 
 1. `nb2wb.api.convert(...)`
-2. `_resolve_config(...)` + `resolve_target_options(...)` + `apply_target_profile_defaults(...)`
-3. payload normalization (`_coerce_api_payload`)
-4. `Converter.convert_notebook(...)`
-5. platform wrapper `builder.build_page(...)`
+2. config resolution and target-option merge
+3. payload coercion
+4. notebook rendering through `Converter`
+5. wrapper generation through `get_builder(...).build_page(...)`
 
-Notes:
+### Reverse Path
 
-- Passing a `Path` object to `convert()` is a type error by design.
-- Passing a path-like string to `convert()` is still treated as text content.
+1. `nb2wb.api.revert(...)`
+2. HTML payload coercion
+3. `Reverter.revert_html(...)`
+4. optional OCR hook per image block
+5. notebook scaffold assembly
 
-### `.md`/`.qmd` path
+## Module Map
 
-1. loader helper reads file text
-2. API parses text using `read_md_text(...)` / `read_qmd_text(...)`
-3. parsed notebook proceeds through the same converter path as `.ipynb`
+| Module | Responsibility |
+| --- | --- |
+| `nb2wb/api.py` | public API, payload coercion, loader helpers, config resolution |
+| `nb2wb/_notebook_payload.py` | notebook payload normalization and compatibility repair |
+| `nb2wb/_path_utils.py` | shared path validation helpers |
+| `nb2wb/cli.py` | forward CLI argument parsing, file I/O, `--serve` flow |
+| `nb2wb/revert_cli.py` | reverse CLI argument parsing and OCR pipeline wiring |
+| `nb2wb/config.py` | config dataclasses, YAML loading, target-profile defaults |
+| `nb2wb/converter.py` | notebook-to-HTML fragment conversion |
+| `nb2wb/reverter.py` | HTML-to-notebook scaffold conversion |
+| `nb2wb/md_reader.py` | Markdown parsing into notebook cells |
+| `nb2wb/qmd_reader.py` | Quarto parsing into notebook cells |
+| `nb2wb/html_reader.py` | HTML payload loader with `source_dir` support |
+| `nb2wb/_reader_utils.py` | shared front-matter and notebook-construction helpers |
+| `nb2wb/sanitizer.py` | HTML and SVG sanitization |
+| `nb2wb/platforms/base.py` | safe image handling and base wrapper logic |
+| `nb2wb/platforms/builder.py` | profile-driven page builder and target option validation |
+| `nb2wb/platforms/profiles.py` | declarative target profiles |
 
-### Rendering path (inside `Converter`)
+## Rendering Invariants
 
-1. safety limits on serialized notebook + cell/output bounds
-2. optional execution via `nbconvert.ExecutePreprocessor`
-3. markdown cells:
-  - protect code spans
-  - render display math blocks to PNG
-  - convert inline math
-  - optional table-to-image replacement
-  - sanitize resulting HTML
-4. code cells:
-  - render input/output text to images
-  - honor `text-snippet` by emitting escaped `<pre><code>` instead of a PNG
-  - sanitize rich HTML/SVG output fragments
-5. concatenate fragments
+Inside `Converter`:
+
+1. apply safety limits
+2. optionally execute the notebook
+3. render markdown cells
+4. render code and outputs
+5. sanitize rich HTML and SVG fragments
+6. concatenate content fragments
 
 Cells skipped from final output:
 
@@ -84,44 +109,31 @@ Cells skipped from final output:
 - cells tagged `hide-cell`
 - cells tagged `latex-preamble`
 
-## Security and Safety Layers
+## Safety Invariants
 
-- Notebook-level limits: `nb2wb/converter.py` (`_enforce_serialized_notebook_size`, `_enforce_notebook_limits`)
-- HTML/SVG sanitization: `nb2wb/sanitizer.py`
-- Platform image safety for external/local sources:
-  - SSRF and private-host rejection
-  - path traversal rejection
-  - MIME allowlist + byte-size caps
-  - fail-closed image dropping in `embed` and `copyable` modes
-  - implemented in `nb2wb/platforms/base.py`
+Do not bypass these layers in normal flows:
 
-## Module Map
+- notebook size and workload limits
+- HTML and SVG sanitization
+- CSS URL filtering
+- SSRF-safe remote image fetching
+- local path traversal protection
 
-| Module | Responsibility |
-|---|---|
-| `nb2wb/api.py` | Public programmatic interface, payload coercion, config resolution, loader helpers |
-| `nb2wb/cli.py` | CLI argument parsing, path validation, file I/O, optional `--serve` flow |
-| `nb2wb/config.py` | Dataclass config schema, YAML/dict loading, target profile defaults |
-| `nb2wb/converter.py` | Core in-memory notebook-to-fragment conversion |
-| `nb2wb/md_reader.py` | Markdown text/file to notebook model |
-| `nb2wb/qmd_reader.py` | Quarto text/file to notebook model |
-| `nb2wb/_reader_utils.py` | Shared reader utilities (front matter + notebook construction) |
-| `nb2wb/sanitizer.py` | Safe HTML/SVG sanitization profiles |
-| `nb2wb/renderers/code_renderer.py` | Code/output text image rendering |
-| `nb2wb/renderers/latex_renderer.py` | Display-math extraction and image rendering |
-| `nb2wb/renderers/inline_latex.py` | Inline LaTeX to unicode/text conversions |
-| `nb2wb/renderers/table_renderer.py` | HTML table-to-image rendering |
-| `nb2wb/renderers/_image_utils.py` | Shared image post-processing helpers |
-| `nb2wb/platforms/base.py` | Shared platform wrapper helpers + safe image conversion |
-| `nb2wb/platforms/profiles.py` | Declarative target profiles (theme/image/render defaults) |
-| `nb2wb/platforms/builder.py` | Generic profile-driven page builder + target options |
-| `tests/unit/` | Fast unit tests per module and security components |
-| `tests/integration/` | Cross-module conversion behavior tests |
-| `tests/workflow/` | CLI behavior and end-to-end workflow tests |
+If you need a different trust model, build it as an explicit alternative path. Do not silently weaken the default one.
+
+## Current Legacy Surface
+
+Legacy notebook support still exists because it is active product behavior, not dead code. It currently covers:
+
+- older worksheet-style notebook payloads
+- selected legacy code and output field names
+- deterministic cell-id repair
+
+Historical profile-specific builder shims are gone. The canonical wrapper entry point is `nb2wb.platforms.get_builder(...)`.
 
 ## Verification Workflow
 
-Run these checks before you merge behavior changes:
+Run these before you merge behavior changes:
 
 ```bash
 pytest
@@ -131,39 +143,14 @@ MPLCONFIGDIR=/tmp/matplotlib-cache python3 tests/perf/benchmark_runtime.py
 
 Notes:
 
-- The benchmark script is optional and measures runtime regressions outside the default test run.
-- Execution-related tests may emit warnings in restricted environments where kernel subprocesses are blocked. The suite still verifies that conversion degrades gracefully.
-
-## Test Surface
-
-The automated checks are split by intent:
-
-- `tests/unit/`: API coercion, config loading, readers, renderers, sanitizer behavior, and image security helpers.
-- `tests/integration/`: markdown conversion pipeline, execution flag wiring, and safety-limit enforcement.
-- `tests/workflow/`: CLI argument handling, output generation, raw mode, target options, and legacy notebook compatibility.
-- `tests/perf/benchmark_runtime.py`: ad hoc benchmark scenarios for runtime tracking.
-
-The detailed test guide lives in `tests/README.md`.
+- the benchmark script is optional
+- execution-related tests may warn in restricted environments, but the suite still checks graceful degradation
 
 ## Repository Landmarks
 
-Prefer these directories as stable landmarks instead of maintaining an exhaustive file tree:
-
-- `nb2wb/`: public API, CLI, readers, config, converter, sanitizer, and package exports.
-- `nb2wb/renderers/`: code, LaTeX, inline-math, and table rendering backends.
-- `nb2wb/platforms/`: wrapper templates, builder logic, target profiles, and shared image-safety helpers.
-- `docs/`: Sphinx user and maintainer documentation.
-- `examples/`: synchronized sample inputs and config for manual smoke tests.
-- `tests/`: unit, integration, workflow, and benchmark coverage.
-- `.github/workflows/` and `.readthedocs.yaml`: CI/release and docs build configuration.
-
-## Maintainer Checklist for Changes
-
-When changing the codebase, verify these invariants:
-
-1. `nb2wb.api.convert()` remains content-only.
-2. Path input is handled only by loader helpers and CLI path boundary code.
-3. Converter entrypoint remains `convert_notebook(...)` for in-memory models.
-4. Safety checks and sanitization are not bypassed in default flows.
-5. Unit + integration + workflow tests remain green.
-6. `build_page(..., raw_mode=True)` still returns a full HTML shell, just without head, toolbar, or scripts.
+- `nb2wb/`: package code
+- `nb2wb/renderers/`: rendering backends
+- `nb2wb/platforms/`: wrapper profiles and image-safety helpers
+- `docs/`: user and maintainer docs
+- `examples/`: synchronized sample content
+- `tests/`: unit, integration, workflow, and benchmark coverage

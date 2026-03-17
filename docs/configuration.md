@@ -1,14 +1,12 @@
 # Configuration
 
-Pass config through either:
+Configuration controls rendering, safety limits, and wrapper behavior. You can pass it through the CLI with `-c config.yaml`, through the Python API as `config=...`, or keep it entirely in memory as a mapping.
 
-- CLI: `-c config.yaml`
-- API: `config=` as path, dict, or `Config` object
+The repository ships an opinionated example at `examples/config.yaml`. Use it as a starting point when you want a practical publication profile instead of the bare defaults.
 
 ## Full Schema
 
 ```yaml
-# Global defaults
 image_width: 1920
 border_radius: 0
 
@@ -33,11 +31,11 @@ latex:
   image_width: 1920
   try_usetex: true
   preamble: ""
-  cache_size: 256          # max LaTeX render cache entries (0 disables cache)
+  cache_size: 256
   border_radius: 0
 
 table:
-  mode: "native"          # "native" (HTML table) or "image" (render table as PNG)
+  mode: "native"
   font_size: 34
   font: "DejaVu Sans"
   color: "#1f2937"
@@ -70,42 +68,121 @@ safety:
   max_total_latex_chars: 1000000
 
 target_options:
-  image_strategy: null         # "embed" | "copyable" | "preserve"
-  raw_image_strategy: null     # "embed" | "copyable" | "preserve"
-  copy_script_mode: null       # "simple" | "copyable" | "none"
-  article_width_px: null       # positive integer
-  table_mode: null             # "native" | "image"
-  toolbar_message: null        # custom toolbar helper text
-  theme_overrides: {}          # CSS variable map for wrapper theme
+  image_strategy: null
+  raw_image_strategy: null
+  copy_script_mode: null
+  article_width_px: null
+  table_mode: null
+  toolbar_message: null
+  theme_overrides: {}
 ```
 
-`target_options.image_strategy: preserve` is available in YAML and the Python
-API. The CLI `--image-strategy` flag does not expose `preserve` for normal-mode
-output.
+## Three Configuration Layers
+
+`nb2wb` resolves configuration in this order:
+
+1. Base config values
+2. Target-profile render defaults
+3. Runtime `target_options` overrides
+
+That means you can keep a shared config file and still tweak the wrapper at call time without duplicating the whole schema.
 
 ## Inheritance Rules
 
-- `code.image_width`, `latex.image_width`, and `table.image_width` inherit top-level `image_width` unless overridden.
-- `code.border_radius`, `latex.border_radius`, and `table.border_radius` inherit top-level `border_radius` unless overridden.
-- Hex colors are the most portable choice (for example `#ffffff`, `#000000`, `#ff0000`).
-- Many color fields also accept other Pillow or Matplotlib color strings, but sticking to hex keeps behavior easiest to reason about across renderers.
+- `code.image_width`, `latex.image_width`, and `table.image_width` inherit top-level `image_width` unless you override them.
+- `code.border_radius`, `latex.border_radius`, and `table.border_radius` inherit top-level `border_radius` unless you override them.
+- Unknown keys inside config sections are ignored.
+- Invalid `table.mode` values fall back to `"native"`.
 
-## Default Behavior
+Hex colors are the most predictable option across renderers. Other Pillow and Matplotlib color strings may work, but hex keeps behavior easier to reason about.
 
-- If top-level `border_radius` is omitted, it defaults to `0`.
-- Sub-config border radii inherit that value unless explicitly set.
+## Render Controls
+
+Use these when you want to tune output fidelity:
+
+- `code.*` controls code image look and spacing.
+- `latex.*` controls display-math rendering and optional `usetex` behavior.
+- `table.*` controls native-vs-image table rendering and table image styling.
+
+Useful recipes:
+
+```yaml
+table:
+  mode: "image"
+  shadow: false
+```
+
+Use that profile when table-heavy content matters more than card styling performance.
+
+```yaml
+latex:
+  try_usetex: false
+```
+
+Use that when you want predictable mathtext behavior without depending on a system LaTeX installation.
+
+## Safety Controls
+
+The `safety` section protects backend workloads. These limits are always on in the normal conversion path.
+
+The most common knobs are:
+
+- `max_input_bytes`
+- `max_cells`
+- `max_cell_source_chars`
+- `max_total_output_bytes`
+- `max_display_math_blocks`
+- `max_total_latex_chars`
+
+Raise them only when a real workload needs it.
+
+## Target Options
+
+`target_options` changes wrapper behavior after rendering defaults have been applied.
+
+Supported keys:
+
+- `image_strategy`
+- `raw_image_strategy`
+- `copy_script_mode`
+- `article_width_px`
+- `table_mode`
+- `toolbar_message`
+- `theme_overrides`
+
+Normal-mode `image_strategy` values:
+
+- `embed`
+- `copyable`
+- `preserve` via API or YAML only
+
+The CLI intentionally exposes only `embed` and `copyable` for `--image-strategy`. Use the API or YAML when you want to preserve existing image URLs exactly.
+
+Example:
+
+```yaml
+target_options:
+  article_width_px: 820
+  table_mode: "image"
+  toolbar_message: "Paste the article first, then copy any remaining images."
+  theme_overrides:
+    body-background: "#f7f7f7"
+    content-background: "#ffffff"
+    toolbar-background: "#111827"
+```
+
+`theme_overrides` merges with the selected profile theme. You only need to provide the keys you want to change.
 
 ## Platform Defaults
 
-Target profiles apply render defaults automatically after config loading.
-These defaults affect rendering and preview wrapping even when you do not set explicit overrides.
+Target profiles automatically apply render defaults on top of your base config.
 
-Current profile groups:
+High-level families:
 
-- `default`: no render overrides; uses the base config values.
-- `substack`: keeps the base article width and switches tables to image mode with card-style table defaults.
-- `medium`, `x`, `linkedin`: use narrower article widths, copyable images in normal mode, and reduced code/LaTeX/table dimensions for tighter layouts.
-- `devto`, `hashnode`, `ghost`, `wordpress`: use wider article widths and table image defaults tuned for broader editor layouts.
+- `default`: no render overrides
+- `substack`: image tables with roomy article layout
+- `medium`, `x`, `linkedin`: narrower layouts with `copyable` image defaults
+- `devto`, `hashnode`, `ghost`, `wordpress`: wider embed-first layouts
 
 Built-in article widths:
 
@@ -117,65 +194,7 @@ Built-in article widths:
 - `ghost`: `900`
 - `wordpress`: `920`
 
-Shared narrow-layout render defaults for `medium`, `x`, and `linkedin`:
-
-- `code.font_size: 42`
-- `code.image_width: 1200`
-- `code.padding_x: 30`
-- `code.padding_y: 30`
-- `latex.font_size: 35`
-- `latex.padding: 50`
-- `table.mode: "image"`
-
-Table image defaults by profile family:
-
-- `substack`: image tables with rounded card styling
-- `medium`, `x`, `linkedin`: image tables with narrower spacing and reduced shadow
-- `devto`, `hashnode`, `ghost`, `wordpress`: image tables with medium-width card styling
-
-## Wrapper Overrides via `target_options`
-
-`target_options` controls wrapper behavior after render defaults are applied.
-You can set it in YAML, pass it to `nb2wb.convert(..., target_options=...)`, or mix both and let runtime values win.
-
-Common overrides:
-
-- `image_strategy`
-- `raw_image_strategy`
-- `copy_script_mode`
-- `article_width_px`
-- `table_mode`
-- `toolbar_message`
-- `theme_overrides`
-
-Example:
-
-```yaml
-target_options:
-  article_width_px: 820
-  toolbar_message: "Paste into your editor, then review images."
-  theme_overrides:
-    body-background: "#f7f7f7"
-    content-background: "#ffffff"
-    toolbar-background: "#111827"
-```
-
-`article_width_px` writes the wrapper's `body-max-width`.
-`theme_overrides` merges on top of the selected target profile theme instead of replacing it wholesale.
-
-## Fast Table Rendering (Opt-In)
-
-If runtime is more important than drop-shadow styling, disable table shadows:
-
-```yaml
-table:
-  mode: "image"
-  shadow: false
-```
-
-This keeps table images enabled while reducing render cost on table-heavy documents.
-
-## API Dict Example
+## Python API Example
 
 ```python
 config = {
@@ -191,6 +210,10 @@ config = {
     "safety": {
         "max_cells": 1500,
         "max_total_output_bytes": 20 * 1024 * 1024,
+    },
+    "target_options": {
+        "article_width_px": 760,
+        "table_mode": "image",
     },
 }
 ```

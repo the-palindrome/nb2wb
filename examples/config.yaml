@@ -1,53 +1,52 @@
 # nb2wb example configuration
-# All fields are optional; values below are an opinionated publication profile,
-# not the canonical defaults. See docs/configuration.md for default values.
+#
+# This file is intentionally opinionated. It is not a copy of the package
+# defaults. Use it when you want a readable publication profile that also shows
+# how wrapper options and safety settings fit into the same config file.
 
-image_width: 1920       # canvas width in pixels for all rendered images
-border_radius: 20       # corner radius in pixels for all rendered images (0 = square)
+image_width: 1760
+border_radius: 16
 
 code:
-  font_size: 48           # font size for code images
-  theme: "monokai"        # any Pygments style name (monokai, dracula, vs, solarized-dark, …)
-  line_numbers: true      # show line numbers in code images
-  font: "DejaVu Sans Mono"  # hint for font lookup (system fonts searched automatically)
-  padding_x: 100            # outer horizontal padding in pixels around code images
-  padding_y: 100          # outer vertical padding in pixels around code images
-  separator: 100            # gap in pixels between merged input/output blocks
-  # background: "#271828"          # outer padding background colour; empty = use theme background
+  font_size: 42
+  theme: "monokai"
+  line_numbers: true
+  font: "DejaVu Sans Mono"
+  padding_x: 72
+  padding_y: 56
+  separator: 28
 
 latex:
-  font_size: 48           # font size for rendered LaTeX
-  dpi: 150                # resolution of LaTeX images
-  color: "#ffffff"          # LaTeX text colour
-  background: "#111111"     # LaTeX image background
-  padding: 68             # vertical padding in pixels above and below each expression
-  # image_width: 1920     # override the top-level image_width for LaTeX images only
-  try_usetex: true        # use a full LaTeX install when available; falls back to mathtext
-  # preamble: |           # extra LaTeX preamble added to every formula (usetex only)
-  #   \usepackage{xcolor}
-  #   \definecolor{accent}{HTML}{E8C547}
+  font_size: 42
+  dpi: 150
+  color: "#111827"
+  background: "#ffffff"
+  padding: 52
+  try_usetex: true
+  preamble: |
+    \usepackage{amsmath}
+    \usepackage{xcolor}
+    \definecolor{accent}{HTML}{1D4ED8}
 
 table:
-  mode: "image"           # "native" keeps HTML tables; "image" renders tables as PNG
-  font_size: 34           # table text size
-  font: "DejaVu Sans"     # font hint/path for table rendering
-  color: "#1f2937"        # body text color
-  header_color: "#0f172a" # header text color
-  background: "#ffffff"     # body cell background color
-  header_background: "#eef2ff"  # header cell background color
-  stripe_background: "#f8fafc"  # alternating row background
-  border_color: "#dbe4ee" # grid line color
-  border_width: 1         # grid line width in pixels
-  cell_padding_x: 24      # horizontal cell padding in pixels
-  cell_padding_y: 14      # vertical cell padding in pixels
-  outer_padding: 20       # padding around the rendered table card
-  canvas_background: "#ffffff"  # image background ("transparent" also supported)
-  zebra_striping: true    # alternate body-row backgrounds
-  shadow: true            # subtle card shadow
-  shadow_color: "#0f172a" # shadow color
-  shadow_alpha: 24        # shadow opacity (0-255)
-  shadow_offset_x: 0      # horizontal shadow offset in pixels
-  shadow_offset_y: 8      # vertical shadow offset in pixels
-  shadow_blur: 18         # Gaussian shadow blur radius
-  # image_width: 1920     # override top-level image width for tables only
-  # border_radius: 20     # override top-level corner radius for table images only
+  mode: "image"
+  font_size: 30
+  header_background: "#e0f2fe"
+  stripe_background: "#f8fafc"
+  border_color: "#cbd5e1"
+  shadow: true
+  shadow_alpha: 18
+
+safety:
+  max_cells: 1500
+  max_total_output_bytes: 20971520
+
+target_options:
+  table_mode: "image"
+  toolbar_message: "Paste the article first, then copy any remaining images from the preview."
+  theme_overrides:
+    body-background: "#f8fafc"
+    content-background: "#ffffff"
+    toolbar-background: "#0f172a"
+    toolbar-button-background: "#38bdf8"
+    toolbar-button-color: "#082f49"

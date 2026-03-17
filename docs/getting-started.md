@@ -1,20 +1,24 @@
 # Getting Started
 
+This page gets you from install to a realistic first conversion as quickly as possible. Use the example files in `examples/` if you want a guided smoke test instead of starting from your own content.
+
 ## Install
+
+Install the base package:
 
 ```bash
 pip install nb2wb
 ```
 
-Optional extras:
+Install extras only when the workflow needs them:
 
 ```bash
-pip install nb2wb[ocr]     # local reverse-conversion OCR (Pix2Text + Tesseract)
-pip install nb2wb[openai]  # OpenAI-backed reverse-conversion OCR
-pip install nb2wb[gemini]  # Google Gemini-backed reverse-conversion OCR
+pip install "nb2wb[ocr]"     # local OCR for reverse conversion
+pip install "nb2wb[openai]"  # OpenAI-backed OCR
+pip install "nb2wb[gemini]"  # Google Gemini-backed OCR
 ```
 
-The local OCR path also needs the `tesseract` binary on `PATH` for code-image OCR.
+The local OCR path also needs the `tesseract` system binary on `PATH` for code-image OCR.
 
 For development:
 
@@ -24,14 +28,17 @@ cd nb2wb
 pip install -e ".[dev]"
 ```
 
-## First Conversion (CLI)
+## First Forward Conversion
+
+Convert a notebook, Markdown article, or Quarto document with the same command shape:
 
 ```bash
 nb2wb notebook.ipynb
+nb2wb examples/markdown.md
+nb2wb examples/quarto.qmd
 ```
 
-This writes `notebook.html` by default.
-The same command shape also works for `.md` and `.qmd` inputs.
+`nb2wb` writes `<input>.html` by default. The default target is a neutral preview wrapper that is useful when you want to inspect output before choosing a publishing destination.
 
 Common variants:
 
@@ -39,95 +46,86 @@ Common variants:
 nb2wb notebook.ipynb -t medium
 nb2wb notebook.ipynb -t x
 nb2wb notebook.ipynb -t linkedin
-nb2wb notebook.ipynb -t devto
-nb2wb notebook.ipynb -o article.html
 nb2wb notebook.ipynb --open
 nb2wb notebook.ipynb --raw -o article_raw.html
-nb2wb notebook.ipynb -t ghost --image-strategy embed --article-width 900
+nb2wb examples/markdown.md --execute --warnings
+nb2wb notebook.ipynb --serve
 ```
+
+Use `--execute` when the source does not already contain outputs. Add `--warnings` when you want `stderr` streams to appear in the rendered article.
 
 ## First Reverse Conversion
 
-Use `wb2nb` when you want to recover a notebook scaffold from an HTML post:
+Use `wb2nb` when the source is an HTML article:
 
 ```bash
 wb2nb article.html
 wb2nb article.html -o recovered.ipynb
+wb2nb examples/reverse_article.html
+```
+
+Reverse conversion keeps images linked by default. Add OCR only when you want screenshots or equations to become notebook cells:
+
+```bash
 wb2nb article.html --ocr-pipeline local
 OPENAI_API_KEY=... wb2nb article.html --ocr-pipeline openai --model your-model-name
 GEMINI_API_KEY=... wb2nb article.html --ocr-pipeline gemini --model gemini-2.0-flash
 ```
 
-Reverse conversion keeps images linked by default.
-Add OCR only when you want image-based equations, tables, or code screenshots turned into notebook cells.
+## First Python API Call
 
-## First Conversion (Python API)
+`nb2wb.convert()` accepts in-memory payloads, not paths. Load files first, then convert:
 
 ```python
 import nb2wb
 
-payload = nb2wb.load_input_payload("notebook.ipynb")
+payload = nb2wb.load_input_payload("examples/notebook.ipynb")
 html = nb2wb.convert(
     payload,
+    target="substack",
+    config={"table": {"mode": "image"}},
 )
 ```
 
-`nb2wb.convert()` accepts in-memory payloads; use loader helpers for path-based sources.
-`nb2wb.convert(Path("notebook.ipynb"))` is rejected on purpose, and a plain
-string such as `"notebook.ipynb"` is parsed as Markdown text rather than loaded
-from disk.
-
-In-memory notebook payload:
+You can keep everything in memory for service integration:
 
 ```python
 import nb2wb
 
-html = nb2wb.convert(notebook_payload_dict)
+html = nb2wb.convert(
+    {
+        "format": "md",
+        "content": "# Shipping Notes\n\nThis article never touches the filesystem.",
+    },
+    raw_mode=True,
+)
 ```
 
-Raw mode from API:
+Reverse conversion follows the same pattern:
 
 ```python
 import nb2wb
 
-html = nb2wb.convert(notebook_payload_dict, target="medium", raw_mode=True)
-```
-
-In raw mode, output omits `<head>`, toolbar/header controls, and JavaScript.
-
-## Reverse Conversion from Python
-
-```python
-import nb2wb
-
-payload = nb2wb.load_html_payload("article.html")
+payload = nb2wb.load_html_payload("examples/reverse_article.html")
 notebook = nb2wb.revert(payload)
 ```
 
-Use `load_html_payload()` for filesystem HTML so relative image paths resolve from the HTML file's directory.
-The built-in OCR pipelines work best with local file paths and `data:` images rather than remote image URLs.
+## Try the Example Set
 
-## Local Serve Mode (for copyable-image workflows)
+The example directory is meant to be read and executed, not just skimmed.
 
-```bash
-nb2wb notebook.ipynb --serve
-```
+Suggested order:
 
-This extracts image data URIs into an `images/` directory next to the output
-HTML, rewrites the page to use those relative files, starts a local HTTP
-server, and exposes the served page through ngrok.
+1. `nb2wb examples/markdown.md --execute --warnings`
+2. `nb2wb examples/quarto.qmd`
+3. `python3 examples/convert_notebook_api.py`
+4. `wb2nb examples/reverse_article.html`
+5. `python3 examples/revert_html_api.py`
 
-If you pass both `--serve` and `--open`, the serve flow wins and opens the
-tunneled page.
+## What to Read Next
 
-Requirements:
-
-- `ngrok` installed
-- `ngrok config add-authtoken <TOKEN>` completed
-
-## Next Steps
-
+- [Feature Tour](feature-tour.md)
 - [CLI Reference](cli-reference.md)
 - [Python API](python-api.md)
 - [Reverse Conversion](reverse-conversion.md)
-- [Server Integration](server-integration.md)
+- The `examples/` directory in the repository

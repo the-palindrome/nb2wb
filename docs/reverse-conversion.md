@@ -1,20 +1,60 @@
 # Reverse Conversion
 
-`wb2nb` and `nb2wb.revert()` convert HTML posts back into scaffolded Jupyter notebooks.
-This workflow is best for recovering article structure, prose, code blocks, and image-derived content.
-It does not recreate the original executed notebook state byte-for-byte.
+`wb2nb` and `nb2wb.revert()` recover notebook structure from published HTML. This path is intentionally conservative: it gives you a scaffold that is easy to edit, not a byte-for-byte recreation of the original executed notebook.
 
-## What Reverse Conversion Produces
+## What Reverse Conversion Recovers Well
 
-The reverse pipeline walks the HTML document and rebuilds notebook cells with conservative rules:
+- article prose
+- headings, lists, links, and basic inline formatting
+- supported code blocks
+- image references
+- image-derived code, tables, or equations when OCR is enabled
 
-- prose HTML becomes markdown cells
-- recognized code blocks become notebook code cells
-- unsupported or unknown code languages stay fenced in markdown
-- images stay linked as markdown images unless you opt into OCR
-- OCR can turn image content into markdown or code cells for `latex`, `table`, and `code` results
+## What It Leaves as a Scaffold
 
-The built-in language scaffold currently recognizes:
+- unsupported code languages stay fenced in markdown
+- ordinary figures stay linked images
+- executed notebook outputs are not reconstructed from generic prose HTML
+- OCR results may still need human cleanup
+
+## Quick Start
+
+Use the CLI when the source is an HTML file:
+
+```bash
+wb2nb article.html
+wb2nb article.html -o recovered.ipynb
+wb2nb examples/reverse_article.html
+```
+
+Use the Python API when the HTML is already in memory:
+
+```python
+import nb2wb
+
+payload = nb2wb.load_html_payload("examples/reverse_article.html")
+notebook = nb2wb.revert(payload)
+```
+
+## How the Reverse Path Decides What to Do
+
+The reverse pipeline walks the document in order and classifies blocks:
+
+- prose containers become markdown
+- recognized `<pre><code>` blocks become code cells
+- unsupported code blocks become fenced markdown
+- images become markdown figures unless OCR says otherwise
+
+The content root is chosen in this order:
+
+1. `<article>`
+2. `<main>`
+3. `<body>`
+4. the document root as a fallback
+
+## Supported Code Languages
+
+The built-in scaffold recognizes these languages as notebook code cells:
 
 - `python`
 - `r`
@@ -24,78 +64,41 @@ The built-in language scaffold currently recognizes:
 - `typescript`
 - `sql`
 
-## Quick Start
-
-Use the CLI when your source is an HTML file:
-
-```bash
-wb2nb article.html
-wb2nb article.html -o recovered.ipynb
-wb2nb article.html --ocr-pipeline local
-OPENAI_API_KEY=... wb2nb article.html --ocr-pipeline openai --model your-model-name
-GEMINI_API_KEY=... wb2nb article.html --ocr-pipeline gemini --model gemini-2.0-flash
-```
-
-Use the Python API when the HTML already lives in memory:
-
-```python
-import nb2wb
-from nb2wb.ocr.openai import OpenAIOCRPipeline
-from nb2wb.ocr.gemini import GeminiOCRPipeline
-
-payload = nb2wb.load_html_payload("article.html")
-notebook = nb2wb.revert(payload)
-
-# With OpenAI OCR
-ocr_notebook = nb2wb.revert(
-    payload,
-    ocr_pipeline=OpenAIOCRPipeline(model="your-model-name", api_key="..."),
-)
-
-# With Gemini OCR
-gemini_notebook = nb2wb.revert(
-    payload,
-    ocr_pipeline=GeminiOCRPipeline(model="gemini-2.0-flash", api_key="..."),
-)
-```
-
-`nb2wb.revert()` is content-only.
-Use `nb2wb.load_html_payload()` for filesystem HTML so relative image paths resolve through `source_dir`.
+Unknown or unsupported languages are preserved as fenced markdown so the content does not disappear.
 
 ## OCR Is Optional
 
-Reverse conversion skips OCR by default.
-When you do not pass an OCR pipeline, the reverse path keeps images as linked markdown figures.
+Reverse conversion skips OCR by default. That keeps the path fast, deterministic, and dependency-light when you only need prose plus code blocks.
 
-This default is deliberate.
-It keeps reverse conversion fast and avoids model dependencies when you only need prose and preserved code blocks.
+Turn OCR on when your article contains:
+
+- equation screenshots
+- table screenshots
+- code screenshots
+
+Keep OCR off when the article mostly contains HTML prose and ordinary code blocks.
 
 ## Built-In OCR Pipelines
 
 ### Local OCR
 
-Install the local OCR extra:
+Install:
 
 ```bash
-pip install nb2wb[ocr]
+pip install "nb2wb[ocr]"
 ```
 
-The local pipeline combines:
-
-- Pix2Text for page classification, tables, and LaTeX
-- `pytesseract` plus the `tesseract` system binary for code screenshots
-
-If these dependencies are missing, or if classification/OCR fails, the reverse path falls back to the safe `figure` result and keeps the image linked in markdown.
+The local stack uses Pix2Text for classification, tables, and LaTeX. It uses `pytesseract` plus the `tesseract` system binary for code screenshots.
 
 ### OpenAI OCR
 
-Install the OpenAI extra:
+Install:
 
 ```bash
-pip install nb2wb[openai]
+pip install "nb2wb[openai]"
 ```
 
-Then provide `OPENAI_API_KEY` and a model name:
+Use:
 
 ```python
 from nb2wb.ocr.openai import OpenAIOCRPipeline
@@ -103,17 +106,15 @@ from nb2wb.ocr.openai import OpenAIOCRPipeline
 pipeline = OpenAIOCRPipeline(model="your-model-name")
 ```
 
-The OpenAI pipeline sends the image plus surrounding HTML context to the Responses API and expects structured JSON back.
-
 ### Google Gemini OCR
 
-Install the Gemini extra:
+Install:
 
 ```bash
-pip install nb2wb[gemini]
+pip install "nb2wb[gemini]"
 ```
 
-Then provide `GEMINI_API_KEY` (or `GOOGLE_API_KEY`) and a model name:
+Use:
 
 ```python
 from nb2wb.ocr.gemini import GeminiOCRPipeline
@@ -121,51 +122,40 @@ from nb2wb.ocr.gemini import GeminiOCRPipeline
 pipeline = GeminiOCRPipeline(model="gemini-2.0-flash")
 ```
 
-The Gemini pipeline works the same way as the OpenAI pipeline: it sends the image and its surrounding HTML context to the Gemini API and returns structured classification results. You can pass an explicit `api_key` argument, or let the pipeline pick up the key from the `GEMINI_API_KEY` or `GOOGLE_API_KEY` environment variables.
-
-## Important Image-Source Limitation
+## Image Source Limits
 
 The built-in OCR pipelines only read:
 
-- local file paths
+- local paths
 - relative paths resolved from `source_dir`
-- image `data:` URIs
+- `data:` image URIs
 
-They do not download remote `http://` or `https://` image URLs for OCR.
-If your HTML references remote images, the built-in OCR pipelines fall back to `figure`, and the reverse notebook keeps those images as linked markdown figures.
+They do not download remote `http://` or `https://` images. When the source is remote, the safe fallback is a linked figure in markdown.
 
-If you need remote-image OCR, provide a custom `ocr_pipeline` that fetches or resolves those images in your own environment.
+## Custom OCR Contract
 
-## Custom OCR Pipeline Contract
+Custom OCR keeps the reverse pipeline flexible without changing its core rules.
 
-A custom OCR pipeline receives one `OCRRequest` object with context fields such as:
+Input:
 
-- `src`
-- `alt`
-- `title`
-- `classes`
-- `caption`
-- `nearby_text`
-- `source_dir`
+- one `OCRRequest` object with image context
 
-It must return a mapping shaped like:
+Output:
 
 ```python
 {"type": "latex" | "code" | "table" | "figure", "payload": "..."}
 ```
 
-Rules:
+Interpretation:
 
-- `type="figure"` must use an empty string payload
-- `type="latex"` becomes a markdown math cell
-- `type="table"` becomes a markdown cell
-- `type="code"` becomes a code cell
+- `figure`: keep the image linked
+- `latex`: create a markdown math cell
+- `table`: create a markdown cell
+- `code`: create a code cell
 
-This keeps the reverse pipeline deterministic even when OCR behavior varies by backend.
+## Reverse Metadata
 
-## Notebook Metadata Added by the Reverse Path
-
-The reverse scaffold marks the output notebook with:
+The reverse path marks the notebook with:
 
 ```python
 notebook.metadata["wb2nb"] = {
@@ -174,29 +164,27 @@ notebook.metadata["wb2nb"] = {
 }
 ```
 
-When OCR turns an image into a notebook cell, that cell also gets `metadata["wb2nb"]` describing the image source and classification:
+OCR-derived cells also receive `metadata["wb2nb"]` with source and classification details. That metadata is useful when you want to review OCR results in a later cleanup pass.
 
-- `source_kind`
-- `classification`
-- `src`
-- `alt`
-- `ocr_type`
+## Example Workflow
 
-This metadata is useful when you want to review or post-process OCR-derived cells.
+Try the bundled example:
 
-## What the Reverse Path Does Not Reconstruct
+```bash
+wb2nb examples/reverse_article.html -o examples/reverse_article.ipynb
+python3 examples/revert_html_api.py
+```
 
-Reverse conversion intentionally produces a scaffold, not a perfect reconstruction.
-Plan for manual cleanup in these cases:
+The example HTML includes:
 
-- executed outputs are not reconstructed from ordinary prose HTML
-- unsupported code languages remain fenced markdown instead of code cells
-- OCR results are best-effort and may need editing
-- figure images stay images unless OCR classifies them as notebook content
+- prose sections
+- a recognized Python code block
+- an unsupported Mermaid block that stays fenced in markdown
+- a local image that stays linked unless OCR is enabled
 
 ## Related Pages
 
 - [Input Formats](input-formats.md)
-- [CLI Reference](cli-reference.md)
 - [Python API](python-api.md)
+- [CLI Reference](cli-reference.md)
 - [Troubleshooting](troubleshooting.md)

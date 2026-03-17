@@ -1,59 +1,84 @@
 # Platforms
 
-`nb2wb` generates target-profiled HTML wrappers.
+`nb2wb` ships target profiles for common publishing destinations. A profile controls wrapper styling, default image strategy, copy affordances, and a small set of render defaults.
 
 ## Supported Targets
 
+| Target | Default image strategy | Article width | Typical use |
+| --- | --- | ---: | --- |
+| `default` | `embed` | base config | neutral preview |
+| `substack` | `embed` | base config | copy into Substack with image tables |
+| `medium` | `copyable` | `700px` | copy into Medium with per-image helpers |
+| `x` | `copyable` | `680px` | X Articles workflow |
+| `linkedin` | `copyable` | `760px` | LinkedIn article workflow |
+| `devto` | `embed` | `860px` | embed-first dev blog workflow |
+| `hashnode` | `embed` | `840px` | embed-first dev blog workflow |
+| `ghost` | `embed` | `900px` | wider editorial layout |
+| `wordpress` | `embed` | `920px` | wider editorial layout |
+
+All built-in targets use `embed` in raw mode unless you override `raw_image_strategy`.
+
+## Image Strategy Defaults
+
+Normal mode profile defaults:
+
+- `copyable`: `medium`, `x`, `linkedin`
+- `embed`: `default`, `substack`, `devto`, `hashnode`, `ghost`, `wordpress`
+
+Available override values:
+
+- `embed`
+- `copyable`
+- `preserve`
+
+Use `preserve` through the Python API or YAML when you want to keep existing image sources untouched.
+
+## Raw Mode Across Targets
+
+Use `--raw` or `raw_mode=True` when you want article HTML without preview chrome.
+
+Raw mode removes:
+
+- `<head>`
+- toolbar/header UI
+- JavaScript
+
+The HTML shell still includes `<!DOCTYPE html>`, `<html>`, `<body>`, and `#content`.
+
+## Target Profile Families
+
+### Neutral and Embed-First
+
 - `default`
 - `substack`
-- `medium`
-- `x`
-- `linkedin`
 - `devto`
 - `hashnode`
 - `ghost`
 - `wordpress`
 
-## Default Image Strategies
+These are good choices when embedded images are acceptable and you want a clean, low-friction preview page.
 
-- `copyable`: `medium`, `x`, `linkedin`
-- `embed`: `default`, `substack`, `devto`, `hashnode`, `ghost`, `wordpress`
-- `preserve`: available only as an API/YAML override, not as a built-in target default
+### Copyable-Image Workflows
 
-You can override these defaults via:
+- `medium`
+- `x`
+- `linkedin`
 
-- CLI: `--image-strategy`, `--raw-image-strategy`, `--copy-script`
-- API: `target_options={...}`
-- YAML: `target_options: ...`
+These profiles assume the destination editor may need individual image copy actions in normal mode.
 
-The normal-mode CLI flag `--image-strategy` exposes `embed` and `copyable`.
-Use API/YAML `image_strategy: preserve` when you need to keep existing image
-URLs or relative paths untouched.
+## Wrapper Overrides
 
-## Raw Mode Across Targets
+Keep the target profile when it is close to what you want, then adjust the wrapper through `target_options`.
 
-Use `--raw` (CLI) or `raw_mode=True` (Python API) to remove preview chrome from output:
+Common keys:
 
-- no `<head>` section
-- no toolbar/header copy controls
-- no JavaScript blocks
-- image behavior still follows each target profile's `raw_image_strategy`
-- output still remains a complete HTML document with `<!DOCTYPE html>`,
-  `<html>`, `<body>`, and `#content`
-
-## Target Notes
-
-- `default`: neutral preview mode (generic title/message, no platform-specific render defaults).
-- `substack`: embed-first workflow with simple copy toolbar.
-- `medium`: copyable image wrappers in normal mode.
-- `x`: copyable image wrappers in normal mode, narrow article layout defaults.
-- `linkedin`: copyable image wrappers in normal mode.
-- `devto`, `hashnode`, `ghost`, `wordpress`: embed-first defaults and direct paste flow.
-
-## Wrapper Customization
-
-Use `target_options` when you want to keep a target profile but tune the wrapper around it.
-This is the main place to override toolbar copy behavior, article width, helper text, and preview theme variables.
+- `article_width_px`
+- `toolbar_message`
+- `copy_script_mode`
+- `image_strategy`
+- `raw_image_strategy`
+- `table_mode`
+- `theme_overrides`
 
 Example:
 
@@ -65,7 +90,7 @@ html = nb2wb.convert(
     target="medium",
     target_options={
         "article_width_px": 760,
-        "toolbar_message": "Paste into Medium, then copy any missing images from the preview.",
+        "toolbar_message": "Paste the article first, then copy any remaining images from the preview.",
         "theme_overrides": {
             "body-background": "#faf7f2",
             "content-background": "#ffffff",
@@ -75,54 +100,17 @@ html = nb2wb.convert(
 )
 ```
 
-Useful override keys include:
+`theme_overrides` merges with the selected profile theme. You do not need to replace the whole theme to make one small adjustment.
 
-- `article_width_px`
-- `toolbar_message`
-- `copy_script_mode`
-- `image_strategy`
-- `raw_image_strategy`
-- `table_mode`
-- `theme_overrides`
+## `--serve` for Copyable Workflows
 
-Common `theme_overrides` keys include:
+`--serve` is not a target profile, but it is often used with `medium`, `x`, and `linkedin`.
 
-- `body-background`
-- `body-max-width`
-- `content-background`
-- `content-padding`
-- `toolbar-background`
-- `toolbar-button-background`
-- `link-color`
+The flow:
 
-Profile theme overrides merge with the selected target theme.
-You only need to provide the keys you want to change.
+1. convert the article
+2. extract supported `data:` images into files
+3. rewrite the HTML to use those files
+4. serve the page locally and through ngrok
 
-## `--serve` Mode
-
-`--serve` converts embedded image data URIs into extracted image files and then
-serves the output directory through localhost and ngrok.
-
-Flow:
-
-1. extract images from generated HTML
-2. write files to `images/`
-3. rewrite image sources to relative `images/...` paths
-4. expose the page via local server + ngrok tunnel
-
-Requirements:
-
-- `ngrok` installed
-- authenticated ngrok configuration
-
-If both `--serve` and `--open` are passed, the serve flow opens the tunneled
-page and `--open` is effectively ignored.
-
-## Choosing a Target Programmatically
-
-```python
-import nb2wb
-
-for target in nb2wb.supported_targets():
-    html = nb2wb.convert(notebook_payload, target=target)
-```
+Use it when the destination editor strips embedded images and you still want a paste-oriented preview.

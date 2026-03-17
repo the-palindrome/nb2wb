@@ -1,133 +1,136 @@
 # Input Formats
 
+This page maps each supported input shape to the features that matter during conversion.
+
 ## `.ipynb`
 
-Behavior:
+Notebook files are the most direct path through the converter. `nb2wb` reads existing cells and outputs, respects cell tags, and derives the notebook language from notebook metadata.
 
-- reads notebook cells and outputs directly
-- respects cell tags from `cell.metadata.tags`
-- detects language from notebook metadata (`kernelspec` / `language_info`)
+Key behaviors:
 
-Execution:
-
-- default: no execution
-- with execute enabled: runs via Jupyter kernel before rendering
+- reads existing markdown, code, and outputs directly
+- respects `cell.metadata.tags`
+- reads language from `kernelspec` or `language_info`
+- executes only when you opt into `--execute` or `execute=True`
 
 ## `.md`
 
-Supported features:
+Markdown files are parsed into a notebook model first. This path is useful when you want notebook-style publishing without storing article content in `.ipynb`.
+
+Markdown-specific features:
 
 - optional YAML front matter
-- fenced code blocks (backticks or tildes)
-- fence-line tags (for example: ```` ```python hide-input ````)
-- directives via HTML comments:
-  - `<!-- nb2wb: hide-input -->`
-  - `<!-- nb2wb: hide-output -->`
-  - `<!-- nb2wb: hide-cell -->`
-  - `<!-- nb2wb: text-snippet -->`
-- special fence language: `latex-preamble`
-- directive comments apply to the next fenced code block, and trailing
-  directives with no following block are discarded
+- fenced code blocks with backticks or tildes
+- fence-line tags such as ```` ```python hide-output ````
+- HTML comment directives such as `<!-- nb2wb: hide-input -->`
+- special fence language `latex-preamble`
 
-Execution:
+Supported directives:
 
-- default: no execution
-- with execute enabled: converted to notebook model, then executed
+- `hide-input`
+- `hide-output`
+- `hide-cell`
+- arbitrary tags, including `text-snippet`
+
+Directive comments apply to the next fenced block. Trailing directives with no following block are ignored on purpose.
 
 ## `.qmd`
 
-Supported features:
+Quarto documents are also parsed into a notebook model first, but with Quarto-specific chunk rules.
 
-- optional YAML front matter
-- Quarto fenced chunks (` ```{python} `)
-- `#|` options mapped to tags:
-  - `echo: false` -> `hide-input`
-  - `output: false` -> `hide-output`
-  - `include: false` / `eval: false` -> `hide-cell`
-  - `tags: [...]` -> tag list
-- special chunk languages:
-  - `latex-preamble`
-  - `output` (attaches stdout to immediately preceding code cell)
-- `{output}` chunks only attach when they appear immediately after a code chunk;
-  intervening prose breaks the association
+Quarto-specific features:
 
-Execution:
+- YAML front matter
+- chunk syntax such as ```` ```{python} ````
+- `#|` cell options at the top of a chunk
+- special chunk types `latex-preamble` and `output`
 
-- default: no execution
-- with execute enabled: converted notebook model is executed
+Option mapping:
+
+| Quarto option | Resulting tag |
+| --- | --- |
+| `#| echo: false` | `hide-input` |
+| `#| output: false` | `hide-output` |
+| `#| include: false` | `hide-cell` |
+| `#| eval: false` | `hide-cell` |
+| `#| tags: [...]` | arbitrary tags |
+
+`{output}` chunks attach precomputed stdout to the immediately preceding code chunk. If prose appears between them, the attachment is intentionally broken.
 
 ## In-Memory Notebook Payloads
 
-Python API accepts parsed notebook objects directly:
+The Python API accepts notebook payloads directly as:
 
-- `dict` payload
+- `dict`
 - `nbformat.NotebookNode`
 
-These payloads are normalized and validated before conversion.
+These inputs are normalized to internal `nbformat=4`, `nbformat_minor=5` before rendering. Conservative compatibility repairs cover older worksheet notebooks, duplicate or missing cell ids, and a small set of legacy code/output field names.
 
-## In-Memory `.md` / `.qmd` Payloads
+## In-Memory Text Payloads
 
-Python API also accepts in-memory text documents:
+The Python API also accepts text directly:
 
-- raw `str` payload (auto-detected as Markdown or Quarto)
-- mapping payloads:
-  - `{"format": "md", "content": "<markdown text>"}`
-  - `{"format": "qmd", "content": "<quarto text>"}`
+- raw `str` payloads
+- `{"format": "md", "content": "..."}`
+- `{"format": "qmd", "content": "..."}`
 
-Notes:
+Format aliases:
 
-- mapping `format` aliases: `markdown`, `quarto`
-- mapping `source` or `text` may be used instead of `content`
-- plain strings that look like file paths are still treated as document text
-- when auto-detection is ambiguous, prefer explicit mapping payloads
-- file paths are loaded via `nb2wb.load_input_payload()` (or typed loader helpers), then passed to `nb2wb.convert()`
+- `markdown` -> `md`
+- `quarto` -> `qmd`
+
+Content aliases:
+
+- `content`
+- `source`
+- `text`
+
+Plain strings that look like paths are still treated as document text. Use loader helpers when the source is actually a file on disk.
 
 ## `.html` / `.htm`
 
-Supported for reverse conversion via `wb2nb` and `nb2wb.revert()`.
+HTML input is supported for reverse conversion through `wb2nb` and `nb2wb.revert()`.
 
-Behavior:
+Reverse-conversion behavior:
 
-- parses the HTML document body (`<article>`, `<main>`, then `<body>`)
-- converts prose HTML into markdown cells
-- converts recognized code blocks into notebook code cells when the language is scaffold-supported
-- preserves unsupported/unknown code blocks as fenced markdown
-- keeps ordinary images as markdown images
-- skips image transcription unless an OCR pipeline is explicitly supplied
-- when an OCR pipeline is supplied, routes image content through it and then converts typed OCR results into cells or linked figures
+- chooses `<article>`, then `<main>`, then `<body>` as the content root
+- turns prose HTML into markdown cells
+- turns supported code blocks into code cells
+- preserves unsupported code blocks as fenced markdown
+- keeps images linked unless OCR is enabled
 
-Current scaffold-supported code languages:
+Supported scaffold languages:
 
-- `python`, `py`
+- `python`
 - `r`
-- `julia`, `jl`
-- `bash`, `sh`, `shell`, `zsh`
-- `javascript`, `js`
-- `typescript`, `ts`
+- `julia`
+- `bash`
+- `javascript`
+- `typescript`
 - `sql`
 
-Notes:
+## Loader Helpers
 
-- by default, reverse conversion does not OCR images
-- the explicit local OCR pipeline lives at `nb2wb.ocr.local`
-- the OCR pipeline itself decides whether an image is treated as `figure`, `table`, `code`, or `latex`
-- the built-in OCR pipelines only read local file paths, relative paths resolved from `source_dir`, and `data:` URIs
-- remote `http/https` image URLs are not downloaded for OCR by the built-in pipelines and therefore keep the figure fallback
-- code OCR in the built-in pipeline uses `Tesseract` via `pytesseract` when installed and the `tesseract` binary is available on PATH; otherwise code-like images keep the linked-figure fallback
-- LaTeX OCR and table OCR in the built-in pipeline use `Pix2Text` when installed; otherwise the reverse path keeps the image linked as a figure
-- an OpenAI-backed OCR pipeline is available via `nb2wb.ocr.openai.OpenAIOCRPipeline`
-- the reverse path accepts in-memory HTML strings or `{"format": "html", "content": ...}` payloads
-- file paths are loaded via `nb2wb.load_html_payload()`
-- a custom OCR pipeline can be supplied via `nb2wb.revert(..., ocr_pipeline=...)`
+Use loader helpers when the source is a path:
 
-See [Reverse Conversion](reverse-conversion.md) for the full HTML-to-notebook workflow.
+| Helper | Input | Output |
+| --- | --- | --- |
+| `load_input_payload()` | `.ipynb`, `.md`, `.qmd` | notebook payload or text payload |
+| `load_notebook_payload()` | `.ipynb` | validated `NotebookNode` |
+| `load_markdown_payload()` | `.md` | Markdown payload mapping |
+| `load_quarto_payload()` | `.qmd` | Quarto payload mapping |
+| `load_html_payload()` | `.html`, `.htm` | HTML payload mapping with `source_dir` |
+
+`load_html_payload()` includes `source_dir` so reverse conversion can resolve relative image paths.
 
 ## Cell Tags
 
-| Tag | Behavior |
-|---|---|
-| `hide-cell` | Hide entire cell |
-| `hide-input` | Hide code source |
-| `hide-output` | Hide outputs |
-| `latex-preamble` | Collect LaTeX preamble from cell/chunk and hide that cell from output |
-| `text-snippet` | Render code as `<pre><code>` instead of PNG |
+These tags affect the forward converter regardless of where they came from:
+
+| Tag | Effect |
+| --- | --- |
+| `hide-cell` | Skip the entire cell |
+| `hide-input` | Hide source code and show outputs only |
+| `hide-output` | Hide outputs and show source only |
+| `latex-preamble` | Extend the LaTeX preamble and hide the cell |
+| `text-snippet` | Render code as escaped HTML text instead of an image |

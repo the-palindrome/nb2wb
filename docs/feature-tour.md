@@ -1,33 +1,66 @@
 # Feature Tour
 
-This page is a practical tour of what happens from input document to publishable HTML.
+This page follows the same path as the converter itself: source content comes in, the notebook model is normalized, cells are rendered, output is wrapped for a target, and the reverse path remains available when you need to go back.
 
-## 1. Supported Inputs
+## 1. Start From the Source You Already Have
 
-`nb2wb` accepts:
+`nb2wb` accepts Jupyter notebooks, Markdown, and Quarto. The package also accepts the same content as in-memory payloads, which is what makes it easy to use inside APIs and worker services.
 
-- Jupyter notebooks (`.ipynb`)
-- Quarto documents (`.qmd`)
-- Markdown documents (`.md`)
+Forward inputs:
 
-All inputs are normalized into a notebook-like model and then rendered by the same pipeline.
+- `.ipynb`
+- `.md`
+- `.qmd`
+- in-memory notebook payloads
+- in-memory Markdown and Quarto payloads
 
-## 2. Rendered Output Types
+Reverse inputs:
 
-| Notebook content | Output behavior |
-|---|---|
-| Inline math (`$...$`) | Unicode-oriented inline rendering |
-| Display math (`$$...$$`, `\[...\]`, `\begin{...}`) | PNG image |
-| Code input | Syntax-highlighted PNG, or `<pre><code>` when tagged `text-snippet` |
-| Stream/error output | PNG image |
-| `image/png` output | Embedded directly |
-| `image/svg+xml` output | Sanitized, then embedded as data URI |
+- `.html`
+- `.htm`
+- in-memory HTML payloads
+
+## 2. Normalize Everything Into One Notebook Model
+
+Markdown and Quarto sources are parsed into notebook cells before rendering. Notebook payloads are validated and normalized first, including conservative compatibility repairs for older payload shapes.
+
+That shared model is what keeps the rendering path consistent across input formats. Once the notebook exists in memory, the converter no longer cares whether it started life as `.ipynb`, `.md`, or `.qmd`.
+
+## 3. Render Markdown, Math, Code, and Outputs
+
+The renderer handles notebook content type by type:
+
+| Content | Rendered form |
+| --- | --- |
+| Inline math | Readable Unicode text |
+| Display math | PNG image |
+| Code input | Syntax-highlighted PNG, or `<pre><code>` with `text-snippet` |
+| Stream and error output | PNG image |
+| `image/png` output | Embedded image |
+| `image/svg+xml` output | Sanitized SVG data URI |
 | `text/html` output | Sanitized HTML fragment |
-| Markdown/HTML tables | Native HTML table or PNG image, depending on config and target |
+| Tables | Native HTML or PNG image |
 
-## 3. Platform Wrapping
+Several notebook-level features carry across the whole document:
 
-After cell conversion, content is wrapped for one of:
+- `\label{...}` and `\eqref{...}` work across markdown cells.
+- `latex-preamble` cells extend the LaTeX preamble without rendering themselves.
+- `hide-cell`, `hide-input`, and `hide-output` control visibility at the cell level.
+
+## 4. Decide How Much Runtime Behavior You Want
+
+Execution is off by default. Turn it on only when the source needs fresh outputs:
+
+- CLI: `--execute`
+- Python API: `execute=True`
+
+When execution is on, `nb2wb` uses a Jupyter kernel before rendering. If execution stops early, conversion still continues with the notebook state that is available at that point.
+
+`stderr` stays hidden by default because many publishing flows treat warnings as noise. Add `--warnings` or `warnings_mode=True` when those streams are part of the story.
+
+## 5. Wrap the Result for a Publishing Target
+
+After rendering, `nb2wb` wraps the article in one of the built-in target profiles:
 
 - `default`
 - `substack`
@@ -39,54 +72,39 @@ After cell conversion, content is wrapped for one of:
 - `ghost`
 - `wordpress`
 
-Each wrapper provides copy/paste-friendly layout and controls unless raw mode
-is enabled. Built-in profiles default to `embed` or `copyable` image
-strategies, and API/config overrides can also use `preserve`.
+Targets mainly differ in wrapper styling, default image strategy, article width, and copy controls. You can keep the profile and still override pieces like `image_strategy`, `table_mode`, or `toolbar_message`.
 
-## 4. Equation Labels and References
+## 6. Switch Between Preview Mode and Raw Mode
 
-Across markdown cells, `nb2wb` tracks equation labels and references:
+Normal mode gives you a full preview page with wrapper CSS, toolbar text, and copy helpers. Raw mode strips that chrome and returns a minimal HTML shell around the converted article body.
 
-- `\label{eq:name}` assigns equation numbers.
-- `\eqref{eq:name}` is replaced with `(N)`.
+Use normal mode when you want a guided copy-and-paste workflow. Use raw mode when you want the article HTML without preview UI.
 
-## 5. Optional Execution
+## 7. Use `--serve` When Editors Reject Embedded Images
 
-Code execution is disabled by default.
+Some editors strip base64 image sources. `--serve` works around that by extracting image data URIs to files, rewriting the HTML to point at those files, and serving the result through localhost plus ngrok.
 
-- CLI: add `--execute`
-- Python API: pass `execute=True`
+This mode is especially useful for `copyable` image workflows on Medium, X, and LinkedIn.
 
-When enabled, notebooks are executed through Jupyter kernels before rendering.
+## 8. Reverse HTML Back Into a Notebook Scaffold
 
-## 6. Server-Safe by Default
+`wb2nb` and `nb2wb.revert()` recover article structure conservatively:
 
-The conversion pipeline always applies safety controls:
+- prose becomes markdown cells
+- supported code blocks become code cells
+- unsupported code blocks stay fenced in markdown
+- ordinary images stay linked as markdown figures
 
-- HTML/SVG sanitization
-- CSS URL sanitization
-- SSRF-guarded image fetching
-- Input and notebook resource limits
-- Fail-closed image handling
+OCR is optional. When you provide a pipeline, images can become notebook cells for `latex`, `table`, or `code` results. When OCR is off or uncertain, the safe fallback is still a linked figure.
 
-For details, see [Security](security.md).
+## 9. Keep the Safe Path On by Default
 
-## 7. Cell-Level Visibility Rules
+The conversion path always applies:
 
-- Cells tagged `hide-cell` are omitted from final output.
-- `latex-preamble` cells are hidden from output but still extend the LaTeX preamble.
-- Raw notebook cells are skipped.
+- HTML and SVG sanitization
+- CSS URL filtering
+- SSRF-safe remote image fetching
+- local path traversal protection
+- notebook size and workload limits
 
-## 8. Reverse Conversion and OCR
-
-`nb2wb` also supports the opposite direction through `wb2nb` and `nb2wb.revert()`.
-This reverse path rebuilds prose and recognized code blocks as notebook cells and keeps ordinary images linked in markdown unless you opt into OCR.
-
-When OCR is enabled:
-
-- image equations can become markdown math cells
-- image tables can become markdown table cells
-- code screenshots can become code cells
-- failed or unsupported OCR falls back to linked figures
-
-For workflow details and OCR limitations, see [Reverse Conversion](reverse-conversion.md).
+That safety posture is part of the default product behavior, not an optional mode.

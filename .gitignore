@@ -85,6 +85,7 @@ target/
 # Quarto render artifacts
 *_files/
 *.html
+!examples/reverse_article.html
 
 # nb2wb --serve extracted images
 images/

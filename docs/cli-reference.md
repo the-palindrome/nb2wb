@@ -1,109 +1,125 @@
 # CLI Reference
 
-## Command
+`nb2wb` handles forward conversion. `wb2nb` handles reverse conversion.
+
+## Forward Command
 
 ```text
 nb2wb <input.{ipynb|qmd|md}> [options]
-wb2nb <input.{html|htm}> [options]
 ```
 
-## Options
+### Options
 
-| Option | Description |
-|---|---|
-| `-t, --target {default,substack,medium,x,linkedin,devto,hashnode,ghost,wordpress}` | Target platform (`default` default mode) |
-| `-c, --config PATH` | Config YAML path |
+| Option | Meaning |
+| --- | --- |
+| `-t, --target {default,substack,medium,x,linkedin,devto,hashnode,ghost,wordpress}` | Publishing target profile |
+| `-c, --config PATH` | YAML config path |
 | `-o, --output PATH` | Output HTML path |
-| `--image-strategy {embed,copyable}` | Override normal-mode image behavior |
-| `--raw-image-strategy {embed,copyable,preserve}` | Override raw-mode image behavior |
-| `--copy-script {simple,copyable,none}` | Override non-raw copy script mode |
-| `--article-width INT` | Override preview wrapper max width (px) |
+| `--image-strategy {embed,copyable}` | Override normal-mode image handling |
+| `--raw-image-strategy {embed,copyable,preserve}` | Override raw-mode image handling |
+| `--copy-script {simple,copyable,none}` | Override normal-mode copy script behavior |
+| `--article-width INT` | Override wrapper max width in pixels |
 | `--table-mode {native,image}` | Override table rendering mode |
-| `--open` | Open generated HTML in browser |
-| `--serve` | Extract image data URIs into `images/` beside the output and serve the page over local HTTP + ngrok |
-| `--execute` | Execute code cells before rendering |
-| `--warnings` | Render `stderr` warning/log outputs from code cells |
-| `--raw` | Emit raw output (no `<head>`, toolbar, or JavaScript) |
+| `--open` | Open the generated HTML after writing |
+| `--serve` | Extract images, rewrite sources, and serve through localhost plus ngrok |
+| `--execute` | Execute notebook code before rendering |
+| `--warnings` | Render `stderr` streams |
+| `--raw` | Remove preview chrome from the output |
 
-Normal-mode `--image-strategy` intentionally exposes only `embed` and
-`copyable`. If you need to preserve existing `<img src="...">` values, use the
-Python API or YAML `target_options.image_strategy: preserve`.
+`--image-strategy` intentionally exposes only `embed` and `copyable`. If you need to preserve original image sources, use API or YAML `target_options.image_strategy: preserve`.
 
-## Examples
+### Common Recipes
 
 ```bash
 nb2wb report.ipynb
 nb2wb report.ipynb -t medium
 nb2wb report.qmd -t x -o post.html
-nb2wb post.ipynb -t linkedin --image-strategy copyable
+nb2wb examples/markdown.md --execute --warnings
 nb2wb post.ipynb -t devto --copy-script none --article-width 780
-nb2wb notes.md --execute
-nb2wb report.ipynb --warnings
-nb2wb report.ipynb --serve
-nb2wb report.ipynb --raw -o post_raw.html
+nb2wb post.ipynb --raw -o post_raw.html
+nb2wb post.ipynb --serve
+```
+
+### Execution and Output Semantics
+
+- Execution is off by default.
+- `--execute` works for `.ipynb`, `.md`, and `.qmd`.
+- `stderr` stays hidden unless you add `--warnings`.
+- If execution stops early, `nb2wb` still renders the notebook state that exists at that point.
+
+### Raw Mode
+
+Raw mode keeps the HTML shell but removes preview UI:
+
+- no `<head>`
+- no toolbar
+- no JavaScript
+- image behavior follows each target profile's `raw_image_strategy`
+
+### Serve Mode
+
+Use `--serve` when the destination editor strips base64 image sources.
+
+The CLI:
+
+1. extracts supported `data:` image URIs into `images/`
+2. rewrites those image sources in the HTML
+3. serves the output directory over localhost
+4. starts an ngrok tunnel and opens the tunneled page
+
+Requirements:
+
+- `ngrok` installed
+- `ngrok config add-authtoken <TOKEN>` completed
+
+If you pass both `--serve` and `--open`, serve mode wins.
+
+## Reverse Command
+
+```text
+wb2nb <input.{html|htm}> [options]
+```
+
+### Options
+
+| Option | Meaning |
+| --- | --- |
+| `-o, --output PATH` | Output notebook path, default `<input>.ipynb` |
+| `--ocr-pipeline {local,openai,gemini}` | Optional OCR pipeline |
+| `--model MODEL` | Required for `openai` and `gemini` pipelines |
+
+### Common Recipes
+
+```bash
 wb2nb article.html
-wb2nb article.htm -o recovered.ipynb
+wb2nb article.html -o recovered.ipynb
+wb2nb examples/reverse_article.html
 wb2nb article.html --ocr-pipeline local
 OPENAI_API_KEY=... wb2nb article.html --ocr-pipeline openai --model your-model-name
 GEMINI_API_KEY=... wb2nb article.html --ocr-pipeline gemini --model gemini-2.0-flash
 ```
 
-## Reverse Conversion
+### OCR Requirements
 
-`wb2nb` converts HTML posts into scaffolded Jupyter notebooks.
+- `local` requires the OCR extra and system dependencies such as `tesseract`.
+- `openai` requires `OPENAI_API_KEY`.
+- `gemini` requires `GEMINI_API_KEY` or `GOOGLE_API_KEY`.
+- `--model` is required for `openai` and `gemini`.
 
-| Option | Description |
-|---|---|
-| `-o, --output PATH` | Output notebook path (default: `<input>.ipynb`) |
-| `--ocr-pipeline {local,openai,gemini}` | Optional OCR pipeline for image-based reverse conversion; if omitted, OCR is skipped |
-| `--model MODEL` | Required when `--ocr-pipeline openai` or `gemini`; selects the model |
+### Reverse-Conversion Behavior
 
-Current reverse-conversion behavior:
-
-- prose HTML is converted into markdown cells
-- recognized HTML code blocks become notebook code cells for scaffold-supported languages
-- unsupported/unknown code languages are preserved as fenced markdown code blocks
-- if `--ocr-pipeline` is omitted, images remain linked markdown figures with no transcription
-- if `--ocr-pipeline` is provided, every image is passed to the selected OCR pipeline with its HTML context
-- the OCR pipeline decides whether each image is treated as a linked figure or converted into code/markdown notebook content
-- `openai` requires `OPENAI_API_KEY` in the environment and fails fast on missing credentials or API errors
-- `gemini` requires `GEMINI_API_KEY` or `GOOGLE_API_KEY` in the environment and fails fast on missing credentials or API errors
-- the built-in OCR pipelines only process local paths and `data:` images; remote `http/https` image URLs keep the figure fallback
-
-For a fuller workflow guide, see [Reverse Conversion](reverse-conversion.md).
-
-## Execution Semantics
-
-- Execution is off by default.
-- `--execute` applies uniformly to `.ipynb`, `.qmd`, and `.md`.
-- `stderr` warning/log streams are hidden by default; use `--warnings` to render them.
-- If execution stops early, conversion continues with the notebook state that is
-  available at that point and emits a warning.
-
-## Raw Mode
-
-- `--raw` strips preview wrapper chrome from output.
-- Raw output omits the entire `<head>` section.
-- Raw output omits all JavaScript (`<script>` blocks).
-- Raw image behavior follows each target profile's `raw_image_strategy`, overrideable via `--raw-image-strategy`.
-- `--raw --serve` is supported: image data URIs are still extracted/relinked for serving, while the served page remains raw (no `<head>`, toolbar, or JavaScript).
-
-## Serve Mode
-
-- `--serve` writes extracted image files to `images/` under the output directory.
-- The CLI rewrites recognized image `data:` URIs to relative `images/...` paths
-  before serving.
-- Unknown image MIME types or malformed data URIs are left unchanged.
-- The CLI serves the output directory on localhost, starts an ngrok tunnel, and opens the tunneled page in your browser.
-- If both `--serve` and `--open` are provided, `--serve` takes precedence.
-- Use this mode when a target editor strips embedded base64 images but you still want a copy/paste-oriented preview.
+- prose becomes markdown cells
+- supported code blocks become code cells
+- unsupported code blocks remain fenced markdown
+- images remain linked unless OCR is enabled
+- built-in OCR pipelines only read local paths and `data:` images
 
 ## Input Validation
 
-The CLI rejects:
+The CLIs reject:
 
-- unsupported input suffixes
-- control characters in input, output, and config paths
-- missing input file paths
+- unsupported file suffixes
+- control characters in paths
+- missing input files
 
-For full safety model details, see [Security](security.md).
+For the full safety model, see [Security](security.md).

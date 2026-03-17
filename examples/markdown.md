@@ -1,4 +1,11 @@
-# From Markdown to Web
+---
+title: "Publishing a Technical Memo from Markdown"
+language: python
+---
+
+# Publishing a Technical Memo from Markdown
+
+This example shows how far the Markdown path can go before you ever touch a notebook file. It covers front matter, figures, tables, math, directive comments, fence tags, and execute-time rich outputs.
 
 ```latex-preamble
 \usepackage{amsmath}
@@ -7,102 +14,57 @@
 \definecolor{blueGray}{HTML}{6290C3}
 ```
 
-This document demonstrates the `nb2wb` converter with a plain Markdown source
-file. It covers the three pillars of technical writing: prose, mathematics, and
-code.
-
-Here's a nice image for illustration.
-
 ![The parallelogram rule](image.png)
 
-## 1  Inline LaTeX → Unicode
+## Inline Math That Stays Readable
 
-Inline expressions like $\alpha + \beta = \gamma$ or $E = mc^2$ are converted
-to Unicode so they render as plain readable text in Substack's editor.
+Inline expressions such as $\alpha + \beta = \gamma$ and $E = mc^2$ are converted to readable Unicode-oriented text. This keeps the final article approachable in editors that do not support MathJax.
 
-Other examples: the golden ratio $\phi = \frac{1+\sqrt{5}}{2}$, and Euler's
-identity $e^{i\pi} + 1 = 0$.
+The golden ratio still reads naturally in prose: $\phi = \frac{1 + \sqrt{5}}{2}$.
 
-## 2  Display Math → Image
+## Display Math With Labels and References
 
-Block equations are rendered to crisp PNG images.
-
-The quadratic formula:
+`nb2wb` keeps equation numbering consistent across the document.
 
 ```latex text-snippet
 x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a} \label{eq:quadratic}
 ```
 
-is rendered to
-
 $$x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a} \label{eq:quadratic}$$
 
-You can render the equation references as `\\eqref{eq:quadratic}`, which renders like this: \eqref{eq:quadratic} gives both roots of $ax^2 + bx + c = 0$ simultaneously.
+Equation \eqref{eq:quadratic} gives both roots of $ax^2 + bx + c = 0$.
 
-You can also use colors that are defined in the preamble. Bayes' theorem:
-
-```latex text-snippet
-P({\color{maizeCrayola} A} \mid {\color{blueGray} B}) = \frac{P({\color{blueGray} B} \mid {\color{maizeCrayola} A})\, P({\color{maizeCrayola} A})}{P({\color{blueGray} B})} \label{eq:bayes}
-```
-
-is rendered to
-
-$$P({\color{maizeCrayola} A} \mid {\color{blueGray} B}) = \frac{P({\color{blueGray} B} \mid {\color{maizeCrayola} A})\, P({\color{maizeCrayola} A})}{P({\color{blueGray} B})} \label{eq:bayes}$$
-
-A matrix equation:
+Color definitions from the preamble also work:
 
 ```latex text-snippet
-\mathbf{y} = \mathbf{X}\boldsymbol{\beta} + \boldsymbol{\varepsilon} \label{eq:mtx}
+P({\color{maizeCrayola} A} \mid {\color{blueGray} B}) =
+\frac{P({\color{blueGray} B} \mid {\color{maizeCrayola} A}) P({\color{maizeCrayola} A})}
+{P({\color{blueGray} B})}
 ```
 
-is rendered to
-
 $$
-  \mathbf{y} = \mathbf{X}\boldsymbol{\beta} + \boldsymbol{\varepsilon} \label{eq:mtx}
-$$
-
-The Basel formula:
-
-```latex text-snippet
-\sum_{n=1}^{\infty} \frac{1}{n^2} = \frac{\pi^2}{6}
-```
-
-is rendered to
-
-$$
-\sum_{n=1}^{\infty} \frac{1}{n^2} = \frac{\pi^2}{6}
+P({\color{maizeCrayola} A} \mid {\color{blueGray} B}) =
+\frac{P({\color{blueGray} B} \mid {\color{maizeCrayola} A}) P({\color{maizeCrayola} A})}
+{P({\color{blueGray} B})}
 $$
 
-Now, a complex multi-line example. The Gaussian integral, derived by switching to polar coordinates:
+## Tables and Lists Survive the Trip
 
-```latex text-snippet
-\begin{align*}
-I   &= \int_{-\infty}^{\infty} e^{-x^2}\,dx \\[4pt]
-I^2 &= \int_{-\infty}^{\infty}\!\int_{-\infty}^{\infty} e^{-(x^2+y^2)}\,dx\,dy \\[4pt]
-    &= \int_0^{2\pi}\!\int_0^{\infty} e^{-r^2}\,r\,dr\,d\theta \\[4pt]
-    &= 2\pi \cdot \Bigl[-\tfrac{1}{2}e^{-r^2}\Bigr]_0^{\infty} \\[4pt]
-    &= \pi \\[4pt]
-\therefore\quad I &= \sqrt{\pi}
-\end{align*}
-```
+The Markdown reader keeps ordinary prose structure, including lists and tables.
 
-is rendered to
+- Draft in plain Markdown.
+- Add math only where it helps.
+- Use code fences when the article needs executable examples.
 
-$$
-\begin{align*}
-I   &= \int_{-\infty}^{\infty} e^{-x^2}\,dx \\[4pt]
-I^2 &= \int_{-\infty}^{\infty}\!\int_{-\infty}^{\infty} e^{-(x^2+y^2)}\,dx\,dy \\[4pt]
-    &= \int_0^{2\pi}\!\int_0^{\infty} e^{-r^2}\,r\,dr\,d\theta \\[4pt]
-    &= 2\pi \cdot \Bigl[-\tfrac{1}{2}e^{-r^2}\Bigr]_0^{\infty} \\[4pt]
-    &= \pi \\[4pt]
-\therefore\quad I &= \sqrt{\pi}
-\end{align*}
-$$
+| Target | Typical image mode | Good first choice |
+| --- | --- | --- |
+| `substack` | embed | long-form essays |
+| `medium` | copyable | publication workflows |
+| `x` | copyable | short technical posts |
 
-## 3  Code Blocks → Image
+## Execute-Time Code and Output
 
-Code cells and their outputs are rendered as syntax-highlighted images,
-so formatting and colours are perfectly preserved.
+Run this file with `--execute` when you want fresh code outputs to appear in the final HTML.
 
 ```python
 def fibonacci(n):
@@ -112,57 +74,71 @@ def fibonacci(n):
         yield a
         a, b = b, a + b
 
-print("Fibonacci sequence (first 10 terms):")
+
+print("First ten Fibonacci numbers:")
 print(*fibonacci(10))
 ```
 
 ```python
-# Simple list comprehension
-x = list(range(10))
-[i ** 2 for i in x]
+from IPython.display import HTML, SVG, display
+
+display(HTML(
+    "<div style='padding:0.75rem;border:1px solid #dbe4ee;border-radius:12px;'>"
+    "<strong>Rich HTML output</strong> also makes the trip."
+    "</div>"
+))
+
+display(SVG(
+    "<svg xmlns='http://www.w3.org/2000/svg' width='220' height='70'>"
+    "<rect width='220' height='70' rx='12' fill='#e0f2fe' />"
+    "<text x='16' y='43' font-size='24' fill='#0369a1'>SVG output</text>"
+    "</svg>"
+))
 ```
-
-## 4  Mixed: equation in context
-
-The softmax function maps a vector $\mathbf{z} \in \mathbb{R}^K$ to a
-probability distribution:
-
-$$\sigma(\mathbf{z})_j = \frac{e^{z_j}}{\sum_{k=1}^{K} e^{z_k}}$$
-
-Here $j = 1, \ldots, K$ indexes the classes.  Note that $\sum_j \sigma_j = 1$
-by construction.
 
 ```python
-import math
+import sys
 
-def softmax(z):
-    """Compute softmax values for a list of numbers."""
-    z_max = max(z)
-    e = [math.exp(x - z_max) for x in z]  # numerical stability
-    e_sum = sum(e)
-    return [x / e_sum for x in e]
-
-z = [1.0, 2.0, 3.0]
-probs = softmax(z)
-print(f"softmax({z}) = [{probs[0]:.4f} {probs[1]:.4f} {probs[2]:.4f}]")
+print("Use --warnings to render this stderr message.", file=sys.stderr)
 ```
 
-## 5  Figures
+## Visibility Controls
+
+Markdown directives apply to the next fenced code block. This makes it easy to keep the article narrative close to the example it controls.
+
+<!-- nb2wb: hide-input -->
+```python
+print("Only the output should be visible when you add --execute.")
+```
+
+```python hide-output
+print("The source is visible, but this output is intentionally hidden.")
+```
+
+<!-- nb2wb: hide-cell -->
+```python
+print("This block is a drafting aid and does not belong in the final article.")
+```
+
+<!-- nb2wb: text-snippet -->
+```bash
+pip install nb2wb
+nb2wb examples/markdown.md --execute --warnings -t medium
+```
+
+## Figures in Context
+
+You can mix explanatory prose, equations, and plotting code in one article-sized source file.
 
 ```python
 import matplotlib.pyplot as plt
 
-
 with plt.style.context("seaborn-v0_8-white"):
-    x_min = -0.1
-    x_max = 20.1
-    fig = plt.figure(figsize=(19.2/2, 10.8/2))
-
-    # Generate points using list comprehension
-    X = [x / 50.0 - 1 for x in range(101)]  # 101 points from -1 to 1
-    y = [x**2 for x in X]
-    plt.plot(X, y, color="#ff0000")
-
+    x = [value / 20 for value in range(-20, 21)]
+    y = [value ** 2 for value in x]
+    fig = plt.figure(figsize=(8, 4.5))
+    plt.plot(x, y, color="#ef4444", linewidth=3)
+    plt.title("A simple parabola")
     plt.tight_layout()
     plt.show()
 ```
