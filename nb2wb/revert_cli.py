@@ -58,16 +58,10 @@ def main() -> None:
         help="Enable verbose package debug logging to stderr.",
     )
     parser.add_argument(
-        "--allow-remote-image-urls",
-        dest="allow_remote_image_urls",
-        action="store_true",
-        default=True,
-        help="Allow OpenAI or Gemini OCR to fetch public remote image URLs (default).",
-    )
-    parser.add_argument(
         "--disallow-remote-image-urls",
         dest="allow_remote_image_urls",
         action="store_false",
+        default=True,
         help="Block OpenAI or Gemini OCR from fetching public remote image URLs.",
     )
     args = parser.parse_args()

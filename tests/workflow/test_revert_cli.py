@@ -374,6 +374,36 @@ class TestRevertCli:
 
         assert seen["allow_remote_image_urls"] is False
 
+    def test_wb2nb_rejects_unreleased_allow_remote_image_urls_flag(
+        self,
+        tmp_path: Path,
+        monkeypatch,
+        capsys,
+    ):
+        html_path = tmp_path / "post.html"
+        html_path.write_text("<html><body><p>Hello</p></body></html>", encoding="utf-8")
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+
+        try:
+            _invoke_cli(
+                [
+                    "wb2nb",
+                    str(html_path),
+                    "--ocr-pipeline",
+                    "openai",
+                    "--model",
+                    "gpt-4.1-mini",
+                    "--allow-remote-image-urls",
+                ]
+            )
+        except SystemExit as exc:
+            assert exc.code == 2
+        else:  # pragma: no cover
+            raise AssertionError("expected parser error for unreleased flag")
+
+        captured = capsys.readouterr()
+        assert "unrecognized arguments: --allow-remote-image-urls" in captured.err
+
     def test_wb2nb_gemini_disallow_remote_image_urls_overrides_default(
         self,
         tmp_path: Path,

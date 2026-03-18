@@ -89,7 +89,6 @@ wb2nb <input.{html|htm}> [options]
 | `-o, --output PATH` | Output notebook path, default `<input>.ipynb` |
 | `--ocr-pipeline {local,openai,gemini}` | Optional OCR pipeline |
 | `--model MODEL` | Required for `openai` and `gemini` pipelines |
-| `--allow-remote-image-urls` | Let `openai` and `gemini` OCR fetch public remote image URLs, enabled by default |
 | `--disallow-remote-image-urls` | Keep `openai` and `gemini` OCR from fetching public remote image URLs |
 | `--verbose` | Emit package debug logs to stderr |
 
@@ -113,7 +112,7 @@ GEMINI_API_KEY=... wb2nb article.html --ocr-pipeline gemini --model gemini-2.5-f
 - `openai` requires `OPENAI_API_KEY`.
 - `gemini` requires `GEMINI_API_KEY` or `GOOGLE_API_KEY`.
 - `--model` is required for `openai` and `gemini`.
-- `--allow-remote-image-urls` and `--disallow-remote-image-urls` only affect `openai` and `gemini`.
+- `--disallow-remote-image-urls` only affects `openai` and `gemini`.
 - `--verbose` prints package debug logs to stderr, including OCR progress and timing when OCR runs.
 
 ### Reverse-Conversion Behavior
