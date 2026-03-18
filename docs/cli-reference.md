@@ -25,6 +25,7 @@ nb2wb <input.{ipynb|qmd|md}> [options]
 | `--execute` | Execute notebook code before rendering |
 | `--warnings` | Render `stderr` streams |
 | `--raw` | Remove preview chrome from the output |
+| `--verbose` | Emit package debug logs to stderr |
 
 `--image-strategy` intentionally exposes only `embed` and `copyable`. If you need to preserve original image sources, use API or YAML `target_options.image_strategy: preserve`.
 
@@ -38,6 +39,7 @@ nb2wb examples/markdown.md --execute --warnings
 nb2wb post.ipynb -t devto --copy-script none --article-width 780
 nb2wb post.ipynb --raw -o post_raw.html
 nb2wb post.ipynb --serve
+nb2wb post.ipynb --verbose
 ```
 
 ### Execution and Output Semantics
@@ -87,6 +89,7 @@ wb2nb <input.{html|htm}> [options]
 | `-o, --output PATH` | Output notebook path, default `<input>.ipynb` |
 | `--ocr-pipeline {local,openai,gemini}` | Optional OCR pipeline |
 | `--model MODEL` | Required for `openai` and `gemini` pipelines |
+| `--verbose` | Emit package debug logs to stderr |
 
 ### Common Recipes
 
@@ -97,6 +100,7 @@ wb2nb examples/reverse_article.html
 wb2nb article.html --ocr-pipeline local
 OPENAI_API_KEY=... wb2nb article.html --ocr-pipeline openai --model your-model-name
 GEMINI_API_KEY=... wb2nb article.html --ocr-pipeline gemini --model gemini-2.0-flash
+GEMINI_API_KEY=... wb2nb article.html --ocr-pipeline gemini --model gemini-2.5-flash --verbose
 ```
 
 ### OCR Requirements
@@ -105,6 +109,7 @@ GEMINI_API_KEY=... wb2nb article.html --ocr-pipeline gemini --model gemini-2.0-f
 - `openai` requires `OPENAI_API_KEY`.
 - `gemini` requires `GEMINI_API_KEY` or `GOOGLE_API_KEY`.
 - `--model` is required for `openai` and `gemini`.
+- `--verbose` prints package debug logs to stderr, including OCR progress and timing when OCR runs.
 
 ### Reverse-Conversion Behavior
 

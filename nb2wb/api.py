@@ -3,11 +3,14 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping
+import logging
 from pathlib import Path
+import time
 from typing import Any, Callable
 
 import nbformat
 
+from ._logging import verbose_logging
 from ._notebook_payload import coerce_notebook_node as _coerce_notebook_node
 from ._path_utils import resolve_directory_path, sanitize_input_file_path
 from .config import (
@@ -37,6 +40,7 @@ _TEXT_PAYLOAD_ALIASES: dict[str, str] = {
 }
 _HTML_PAYLOAD_ALIASES = {"html", "htm"}
 _QMD_CHUNK_RE = re.compile(r"^```\{(\w[\w.-]*)", re.MULTILINE)
+logger = logging.getLogger(__name__)
 
 
 def convert(
@@ -49,31 +53,51 @@ def convert(
     warnings_mode: bool = False,
     working_dir: str | Path | None = None,
     raw_mode: bool = False,
+    verbose: bool = False,
 ) -> str:
     """Convert an input notebook/document into platform-ready HTML."""
-    resolved_config = _resolve_config(config)
-    resolved_target_options = resolve_target_options(
-        resolved_config.target_options,
-        target_options,
-    )
-    resolved_config = apply_target_profile_defaults(
-        resolved_config,
-        target,
-        target_options=resolved_target_options,
-    )
-    builder = get_builder(target, target_options=resolved_target_options)
-    converter = Converter(
-        resolved_config,
-        execute=execute,
-        warnings_mode=warnings_mode,
-    )
+    with verbose_logging(verbose):
+        started = time.monotonic()
+        logger.debug(
+            "Starting convert(target=%s, execute=%s, warnings_mode=%s, raw_mode=%s)",
+            target,
+            execute,
+            warnings_mode,
+            raw_mode,
+        )
+        resolved_config = _resolve_config(config)
+        resolved_target_options = resolve_target_options(
+            resolved_config.target_options,
+            target_options,
+        )
+        resolved_config = apply_target_profile_defaults(
+            resolved_config,
+            target,
+            target_options=resolved_target_options,
+        )
+        builder = get_builder(target, target_options=resolved_target_options)
+        converter = Converter(
+            resolved_config,
+            execute=execute,
+            warnings_mode=warnings_mode,
+        )
 
-    notebook_node = _coerce_api_payload(notebook)
-    content_html = converter.convert_notebook(
-        notebook_node,
-        cwd=_resolve_working_dir(working_dir),
-    )
-    return builder.build_page(content_html, raw_mode=raw_mode)
+        notebook_node = _coerce_api_payload(notebook)
+        logger.debug(
+            "Normalized input payload into NotebookNode with %d cells",
+            len(notebook_node.cells),
+        )
+        content_html = converter.convert_notebook(
+            notebook_node,
+            cwd=_resolve_working_dir(working_dir),
+        )
+        rendered_html = builder.build_page(content_html, raw_mode=raw_mode)
+        logger.debug(
+            "Finished convert() in %.2fs with %d output characters",
+            time.monotonic() - started,
+            len(rendered_html),
+        )
+        return rendered_html
 
 
 def supported_targets() -> list[str]:
@@ -85,42 +109,76 @@ def revert(
     document: str | Mapping[str, Any],
     *,
     ocr_pipeline: Callable[[OCRRequest], dict[str, str]] | None = None,
+    verbose: bool = False,
 ) -> nbformat.NotebookNode:
     """Convert an HTML document into a scaffolded Jupyter notebook."""
-    html_document, source_dir = _coerce_html_payload(document)
-    return Reverter(
-        source_dir=source_dir,
-        ocr_pipeline=ocr_pipeline,
-    ).revert_html(html_document)
+    with verbose_logging(verbose):
+        started = time.monotonic()
+        logger.debug("Starting revert()")
+        html_document, source_dir = _coerce_html_payload(document)
+        notebook = Reverter(
+            source_dir=source_dir,
+            ocr_pipeline=ocr_pipeline,
+        ).revert_html(html_document)
+        logger.debug(
+            "Finished revert() in %.2fs with %d cells",
+            time.monotonic() - started,
+            len(notebook.cells),
+        )
+        return notebook
 
 
-def load_input_payload(path_like: str | Path) -> Mapping[str, Any] | nbformat.NotebookNode:
+def load_input_payload(
+    path_like: str | Path,
+    *,
+    verbose: bool = False,
+) -> Mapping[str, Any] | nbformat.NotebookNode:
     """Load a supported input file into an in-memory conversion payload."""
-    path = _sanitize_input_path(path_like)
-    suffix = path.suffix.lower()
-    if suffix == ".ipynb":
-        return _read_ipynb_payload(path)
-    if suffix == ".md":
-        return _text_payload_from_path(path, fmt="md")
-    return _text_payload_from_path(path, fmt="qmd")
+    with verbose_logging(verbose):
+        path = _sanitize_input_path(path_like)
+        suffix = path.suffix.lower()
+        logger.debug("Loading input payload from %s", path)
+        if suffix == ".ipynb":
+            return _read_ipynb_payload(path)
+        if suffix == ".md":
+            return _text_payload_from_path(path, fmt="md")
+        return _text_payload_from_path(path, fmt="qmd")
 
 
-def load_notebook_payload(path_like: str | Path) -> nbformat.NotebookNode:
+def load_notebook_payload(
+    path_like: str | Path,
+    *,
+    verbose: bool = False,
+) -> nbformat.NotebookNode:
     """Load an ``.ipynb`` file into a validated in-memory notebook payload."""
-    path = _sanitize_input_path(path_like, allowed_suffixes=_IPYNB_SUFFIXES)
-    return _read_ipynb_payload(path)
+    with verbose_logging(verbose):
+        path = _sanitize_input_path(path_like, allowed_suffixes=_IPYNB_SUFFIXES)
+        logger.debug("Loading notebook payload from %s", path)
+        return _read_ipynb_payload(path)
 
 
-def load_markdown_payload(path_like: str | Path) -> Mapping[str, str]:
+def load_markdown_payload(
+    path_like: str | Path,
+    *,
+    verbose: bool = False,
+) -> Mapping[str, str]:
     """Load a Markdown file into a text payload mapping for ``convert``."""
-    path = _sanitize_input_path(path_like, allowed_suffixes=_MD_SUFFIXES)
-    return _text_payload_from_path(path, fmt="md")
+    with verbose_logging(verbose):
+        path = _sanitize_input_path(path_like, allowed_suffixes=_MD_SUFFIXES)
+        logger.debug("Loading markdown payload from %s", path)
+        return _text_payload_from_path(path, fmt="md")
 
 
-def load_quarto_payload(path_like: str | Path) -> Mapping[str, str]:
+def load_quarto_payload(
+    path_like: str | Path,
+    *,
+    verbose: bool = False,
+) -> Mapping[str, str]:
     """Load a Quarto file into a text payload mapping for ``convert``."""
-    path = _sanitize_input_path(path_like, allowed_suffixes=_QMD_SUFFIXES)
-    return _text_payload_from_path(path, fmt="qmd")
+    with verbose_logging(verbose):
+        path = _sanitize_input_path(path_like, allowed_suffixes=_QMD_SUFFIXES)
+        logger.debug("Loading Quarto payload from %s", path)
+        return _text_payload_from_path(path, fmt="qmd")
 
 
 def _resolve_config(

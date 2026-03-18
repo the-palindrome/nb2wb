@@ -122,6 +122,8 @@ from nb2wb.ocr.gemini import GeminiOCRPipeline
 pipeline = GeminiOCRPipeline(model="gemini-2.0-flash")
 ```
 
+For CLI debugging, add `--verbose` to print package debug logs to stderr while `wb2nb` runs, including OCR progress and timing when OCR is enabled.
+
 ## Image Source Limits
 
 The built-in OCR pipelines only read:

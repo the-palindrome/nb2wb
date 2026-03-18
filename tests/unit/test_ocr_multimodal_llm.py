@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import sys
 from types import SimpleNamespace
 
@@ -278,3 +279,22 @@ class TestGeminiOcrPipeline:
             assert "[REDACTED]" in message
         else:  # pragma: no cover
             raise AssertionError("expected client error to raise RuntimeError")
+
+    def test_emits_verbose_logs(self, caplog):
+        caplog.set_level(logging.DEBUG, logger="nb2wb")
+        fake_client = _FakeGeminiClient(
+            result=SimpleNamespace(text='{"type":"figure","payload":""}')
+        )
+        pipeline = GeminiOCRPipeline(
+            model="gemini-2.0-flash",
+            client=fake_client,
+            verbose=True,
+        )
+
+        result = pipeline(OCRRequest(src=_DATA_URL, alt="Chart"))
+
+        assert result == {"type": "figure", "payload": ""}
+        assert "Gemini OCR: starting OCR request" in caplog.text
+        assert "Gemini OCR: reading image bytes" in caplog.text
+        assert "Gemini OCR: calling models.generate_content" in caplog.text
+        assert "Gemini OCR: completed OCR request" in caplog.text

@@ -73,6 +73,7 @@ nb2wb report.ipynb --warnings
 nb2wb report.ipynb --raw -o article_raw.html
 nb2wb report.ipynb -t ghost --image-strategy embed --article-width 900
 nb2wb report.ipynb --serve
+nb2wb report.ipynb --verbose
 ```
 
 Reverse an HTML article back into a notebook scaffold:
@@ -83,6 +84,7 @@ wb2nb article.html -o recovered.ipynb
 wb2nb article.html --ocr-pipeline local
 OPENAI_API_KEY=... wb2nb article.html --ocr-pipeline openai --model your-model-name
 GEMINI_API_KEY=... wb2nb article.html --ocr-pipeline gemini --model gemini-2.0-flash
+GEMINI_API_KEY=... wb2nb article.html --ocr-pipeline gemini --model gemini-2.5-flash --verbose
 ```
 
 ## Python API
@@ -97,7 +99,16 @@ html = nb2wb.convert(
     payload,
     target="substack",
     config={"latex": {"try_usetex": True}},
+    verbose=True,
 )
+```
+
+You can also enable package logging explicitly:
+
+```python
+import nb2wb
+
+nb2wb.configure_logging(verbose=True)
 ```
 
 You can also pass text or notebook payloads directly:

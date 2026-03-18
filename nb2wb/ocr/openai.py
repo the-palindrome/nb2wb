@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import re
+import time
 from typing import Any
 
 from .base import OCRRequest
@@ -22,6 +23,7 @@ class OpenAIOCRPipeline(BaseMultimodalLLMOCRPipeline):
         model: str,
         api_key: str | None = None,
         client: Any | None = None,
+        verbose: bool = False,
     ) -> None:
         """Initialize an OpenAI-backed OCR pipeline.
 
@@ -29,11 +31,12 @@ class OpenAIOCRPipeline(BaseMultimodalLLMOCRPipeline):
             model: Responses API model name to use for OCR.
             api_key: Optional explicit API key for the OpenAI client.
             client: Optional prebuilt client, mainly for tests.
+            verbose: Whether to emit debug logs to stderr during OCR.
 
         Returns:
             ``None``. The pipeline stores the model and client.
         """
-        super().__init__(model=model)
+        super().__init__(model=model, verbose=verbose)
         self._client = client or self._build_client(api_key=api_key)
 
     def _build_client(self, *, api_key: str | None):
@@ -71,9 +74,18 @@ class OpenAIOCRPipeline(BaseMultimodalLLMOCRPipeline):
         Returns:
             The raw Responses API result object.
         """
+        self._debug("encoding image as data URL")
+        encode_started = time.monotonic()
         image_data_url = self.image_data_url(request)
+        self._debug(
+            "prepared image payload "
+            f"in {self._format_duration(time.monotonic() - encode_started)} "
+            f"(chars={len(image_data_url)})"
+        )
+        request_started = time.monotonic()
+        self._debug(f"calling responses.create(model={self.model})")
         try:
-            return self._client.responses.create(
+            response = self._client.responses.create(
                 model=self.model,
                 instructions=self._build_prompt(),
                 input=[
@@ -97,9 +109,19 @@ class OpenAIOCRPipeline(BaseMultimodalLLMOCRPipeline):
                     }
                 },
             )
+            self._debug(
+                "responses.create returned "
+                f"in {self._format_duration(time.monotonic() - request_started)}"
+            )
+            return response
         except Exception as exc:  # pragma: no cover - exercised via stubs/tests.
             message = self._sanitize_error_message(str(exc))
             detail = f": {message}" if message else ""
+            self._debug(
+                "responses.create failed "
+                f"after {self._format_duration(time.monotonic() - request_started)}"
+                f"{detail}"
+            )
             raise RuntimeError(
                 f"OpenAI OCR request failed for model '{self.model}'{detail}"
             ) from exc

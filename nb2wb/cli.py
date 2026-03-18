@@ -3,6 +3,7 @@ import base64
 import binascii
 import functools
 import json
+import logging
 import re
 import socket
 import subprocess
@@ -12,12 +13,14 @@ import webbrowser
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 
+from ._logging import verbose_logging
 from ._path_utils import sanitize_optional_cli_path
 from .api import convert as convert_notebook
 from .api import load_input_payload
 from .platforms import list_platforms, MIME_TO_EXT
 
 _ALLOWED_INPUT_SUFFIXES = frozenset({".ipynb", ".qmd", ".md"})
+logger = logging.getLogger(__name__)
 
 
 def _positive_int(value: str) -> int:
@@ -88,6 +91,7 @@ def _extract_images(html: str, images_dir: Path) -> str:
             return full_tag
 
         rel_path = f"images/{filename}"
+        logger.debug("Extracted embedded image to %s", filepath)
         return full_tag.replace(f'src="{full_uri}"', f'src="{rel_path}"')
 
     return data_uri_re.sub(_replace, html)
@@ -145,6 +149,7 @@ def _serve(serve_dir: Path, html_name: str) -> None:
         ``None``. The function blocks until the server is interrupted.
     """
     port = _find_free_port()
+    logger.debug("Starting serve mode from %s on port %d", serve_dir, port)
     handler = functools.partial(SimpleHTTPRequestHandler, directory=str(serve_dir))
     server = HTTPServer(("127.0.0.1", port), handler)
 
@@ -173,6 +178,7 @@ def _serve(serve_dir: Path, html_name: str) -> None:
         sys.exit(1)
 
     page_url = f"{public_url}/{html_name}"
+    logger.debug("Resolved ngrok tunnel URL: %s", public_url)
     print(f"Serving at {page_url}")
     print("Copy your article, then press Ctrl-C to stop.")
     webbrowser.open(page_url)
@@ -286,68 +292,91 @@ def main() -> None:
         action="store_true",
         help="Emit raw article HTML without the preview toolbar/header.",
     )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Enable verbose package debug logging to stderr.",
+    )
 
     args = parser.parse_args()
+    with verbose_logging(args.verbose):
+        started = time.monotonic()
+        try:
+            notebook_path = _sanitize_cli_path(
+                args.notebook,
+                arg_name="notebook path",
+                must_exist=True,
+                allowed_suffixes=_ALLOWED_INPUT_SUFFIXES,
+            )
+            config_path = _sanitize_cli_path(args.config, arg_name="config path")
+            output_path = _sanitize_cli_path(
+                args.output or notebook_path.with_suffix(".html"),
+                arg_name="output path",
+            )
+        except (FileNotFoundError, ValueError) as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            sys.exit(1)
 
-    try:
-        notebook_path = _sanitize_cli_path(
-            args.notebook,
-            arg_name="notebook path",
-            must_exist=True,
-            allowed_suffixes=_ALLOWED_INPUT_SUFFIXES,
+        logger.debug(
+            "CLI starting (target=%s, execute=%s, warnings=%s, raw=%s, serve=%s)",
+            args.target,
+            args.execute,
+            args.warnings,
+            args.raw,
+            args.serve,
         )
-        config_path = _sanitize_cli_path(args.config, arg_name="config path")
-        output_path = _sanitize_cli_path(
-            args.output or notebook_path.with_suffix(".html"),
-            arg_name="output path",
+        if args.target == "default":
+            print(f"Converting '{notebook_path}' using default mode …")
+        else:
+            print(f"Converting '{notebook_path}' for {args.target} …")
+        try:
+            payload = load_input_payload(notebook_path, verbose=args.verbose)
+            target_options: dict[str, object] = {}
+            if args.image_strategy is not None:
+                target_options["image_strategy"] = args.image_strategy
+            if args.raw_image_strategy is not None:
+                target_options["raw_image_strategy"] = args.raw_image_strategy
+            if args.copy_script is not None:
+                target_options["copy_script_mode"] = args.copy_script
+            if args.article_width is not None:
+                target_options["article_width_px"] = args.article_width
+            if args.table_mode is not None:
+                target_options["table_mode"] = args.table_mode
+            logger.debug("Resolved target options: %s", target_options or None)
+
+            html = convert_notebook(
+                payload,
+                config=config_path,
+                target=args.target,
+                target_options=target_options or None,
+                execute=args.execute,
+                warnings_mode=args.warnings,
+                working_dir=notebook_path.parent,
+                raw_mode=args.raw,
+                verbose=args.verbose,
+            )
+        except Exception as exc:
+            print(f"Conversion failed: {exc}", file=sys.stderr)
+            sys.exit(1)
+
+        if args.serve:
+            images_dir = output_path.parent / "images"
+            logger.debug("Extracting embedded images to %s", images_dir)
+            html = _extract_images(html, images_dir)
+
+        output_path.write_text(html, encoding="utf-8")
+        print(f"Written → {output_path}")
+        logger.debug(
+            "Wrote HTML output to %s in %.2fs",
+            output_path,
+            time.monotonic() - started,
         )
-    except (FileNotFoundError, ValueError) as exc:
-        print(f"Error: {exc}", file=sys.stderr)
-        sys.exit(1)
 
-    if args.target == "default":
-        print(f"Converting '{notebook_path}' using default mode …")
-    else:
-        print(f"Converting '{notebook_path}' for {args.target} …")
-    try:
-        payload = load_input_payload(notebook_path)
-        target_options: dict[str, object] = {}
-        if args.image_strategy is not None:
-            target_options["image_strategy"] = args.image_strategy
-        if args.raw_image_strategy is not None:
-            target_options["raw_image_strategy"] = args.raw_image_strategy
-        if args.copy_script is not None:
-            target_options["copy_script_mode"] = args.copy_script
-        if args.article_width is not None:
-            target_options["article_width_px"] = args.article_width
-        if args.table_mode is not None:
-            target_options["table_mode"] = args.table_mode
-
-        html = convert_notebook(
-            payload,
-            config=config_path,
-            target=args.target,
-            target_options=target_options or None,
-            execute=args.execute,
-            warnings_mode=args.warnings,
-            working_dir=notebook_path.parent,
-            raw_mode=args.raw,
-        )
-    except Exception as exc:
-        print(f"Conversion failed: {exc}", file=sys.stderr)
-        sys.exit(1)
-
-    if args.serve:
-        images_dir = output_path.parent / "images"
-        html = _extract_images(html, images_dir)
-
-    output_path.write_text(html, encoding="utf-8")
-    print(f"Written → {output_path}")
-
-    if args.serve:
-        _serve(output_path.parent, output_path.name)
-    elif args.open:
-        webbrowser.open(output_path.absolute().as_uri())
+        if args.serve:
+            _serve(output_path.parent, output_path.name)
+        elif args.open:
+            logger.debug("Opening output in browser: %s", output_path)
+            webbrowser.open(output_path.absolute().as_uri())
 
 
 def _sanitize_cli_path(

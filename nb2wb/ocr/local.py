@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
+import logging
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
@@ -30,6 +31,7 @@ _DARK_BACKGROUND_THRESHOLD = 0.32
 _LIGHT_BACKGROUND_THRESHOLD = 0.45
 _ACCENT_THRESHOLD = 0.015
 _MIN_ACCENT_MATCHES = 2
+logger = logging.getLogger(__name__)
 
 
 class LocalOCRPipeline(BaseOCRPipeline):
@@ -45,11 +47,17 @@ class LocalOCRPipeline(BaseOCRPipeline):
             A result mapping containing the inferred content type and text.
         """
         classification = self.classify_image(request)
+        logger.debug(
+            "Local OCR classification=%s for source=%s",
+            classification,
+            self._summarize_source(request),
+        )
         if classification == "code":
             try:
                 image = self.load_image(request)
                 result = self._run_code_ocr(image)
-            except Exception:
+            except Exception as exc:
+                logger.debug("Local code OCR failed: %s", exc)
                 return {"type": "figure", "payload": ""}
 
             if not result:
@@ -61,7 +69,8 @@ class LocalOCRPipeline(BaseOCRPipeline):
                 model = self._load_page_ocr_model()
                 with self.input_image_path(request) as image_path:
                     result = self._run_table_ocr(model, image_path)
-            except Exception:
+            except Exception as exc:
+                logger.debug("Local table OCR failed: %s", exc)
                 return {"type": "figure", "payload": ""}
 
             if not result:
@@ -75,12 +84,23 @@ class LocalOCRPipeline(BaseOCRPipeline):
             model = self._load_latex_ocr_model()
             with self.input_image_path(request) as image_path:
                 result = self._run_latex_ocr(model, image_path)
-        except Exception:
+        except Exception as exc:
+            logger.debug("Local LaTeX OCR failed: %s", exc)
             return {"type": "figure", "payload": ""}
 
         if not result:
             return {"type": "figure", "payload": ""}
         return {"type": "latex", "payload": result}
+
+    @staticmethod
+    def _summarize_source(request: OCRRequest) -> str:
+        """Summarize an OCR request source for debug logs."""
+        src = request.src.strip()
+        if src.startswith("data:"):
+            return "data-uri"
+        if len(src) <= 120:
+            return src
+        return f"{src[:117]}..."
 
     def classify_image(self, request: OCRRequest) -> str:
         """Classify an image as code, table, latex, or generic figure.

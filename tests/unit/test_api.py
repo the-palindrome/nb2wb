@@ -1,6 +1,7 @@
 """Unit tests for the public Python API (nb2wb.convert)."""
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import nbformat
@@ -12,6 +13,7 @@ class TestPublicApi:
     def test_top_level_exports_convert(self):
         assert callable(nb2wb.convert)
         assert callable(nb2wb.revert)
+        assert callable(nb2wb.configure_logging)
         assert callable(nb2wb.load_input_payload)
         assert callable(nb2wb.load_html_payload)
         assert callable(nb2wb.load_markdown_payload)
@@ -76,6 +78,28 @@ class TestPublicApi:
         assert seen["document"] == "<p>Hello</p>"
         assert seen["ocr_pipeline"] is pipeline
         assert seen["source_dir"] is None
+
+    def test_convert_verbose_logs_to_stderr(self, caplog):
+        caplog.set_level(logging.DEBUG, logger="nb2wb")
+        html = nb2wb.convert(
+            "# Verbose API",
+            config={"latex": {"try_usetex": False}},
+            verbose=True,
+        )
+
+        assert "Verbose API" in html
+        assert "Starting convert" in caplog.text
+        assert "Converter starting" in caplog.text
+        assert "Finished convert() in " in caplog.text
+
+    def test_revert_verbose_logs_to_stderr(self, caplog):
+        caplog.set_level(logging.DEBUG, logger="nb2wb")
+        notebook = nb2wb.revert("<html><body><p>Hello</p></body></html>", verbose=True)
+
+        assert isinstance(notebook, nbformat.NotebookNode)
+        assert "Starting revert()" in caplog.text
+        assert "Reverter starting HTML parse" in caplog.text
+        assert "Finished revert() in " in caplog.text
 
     def test_revert_defaults_ocr_pipeline_to_none(self, monkeypatch):
         seen: dict[str, object] = {}

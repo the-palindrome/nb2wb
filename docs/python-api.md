@@ -16,6 +16,7 @@ html = nb2wb.convert(
     warnings_mode=False,
     working_dir=None,
     raw_mode=False,
+    verbose=False,
 )
 ```
 
@@ -31,6 +32,7 @@ html = nb2wb.convert(
 | `warnings_mode` | `bool` | Include `stderr` stream output |
 | `working_dir` | `str | Path | None` | Execution working directory |
 | `raw_mode` | `bool` | Remove preview chrome from output |
+| `verbose` | `bool` | Emit package debug logs during this call |
 
 `convert()` always returns one HTML string.
 
@@ -148,6 +150,7 @@ import nb2wb
 notebook = nb2wb.revert(
     document,
     ocr_pipeline=None,
+    verbose=False,
 )
 ```
 
@@ -157,6 +160,7 @@ notebook = nb2wb.revert(
 | --- | --- | --- |
 | `document` | `str | Mapping[str, Any]` | In-memory HTML payload |
 | `ocr_pipeline` | `Callable | None` | Optional OCR callable |
+| `verbose` | `bool` | Emit package debug logs during this call |
 
 `revert()` returns an `nbformat.NotebookNode`.
 
@@ -178,6 +182,27 @@ notebook = nb2wb.revert(payload)
 ```
 
 `source_dir` matters because built-in OCR pipelines can resolve relative image paths from it.
+
+## Logging
+
+`nb2wb` uses Python's standard `logging` module with package loggers under `nb2wb.*`.
+
+Enable verbose logging for one API call:
+
+```python
+import nb2wb
+
+html = nb2wb.convert(payload, verbose=True)
+notebook = nb2wb.revert(document, verbose=True)
+```
+
+Or configure package logging explicitly for a longer-lived process:
+
+```python
+import nb2wb
+
+nb2wb.configure_logging(verbose=True)
+```
 
 ## OCR Pipelines
 
