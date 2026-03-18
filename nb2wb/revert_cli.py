@@ -85,15 +85,15 @@ def main() -> None:
     with verbose_logging(args.verbose):
         started = time.monotonic()
         try:
-            document_path = _sanitize_cli_path(
+            document_path = sanitize_optional_cli_path(
                 args.document,
-                arg_name="document path",
+                label="document path",
                 must_exist=True,
                 allowed_suffixes=_ALLOWED_INPUT_SUFFIXES,
             )
-            output_path = _sanitize_cli_path(
+            output_path = sanitize_optional_cli_path(
                 args.output or document_path.with_suffix(".ipynb"),
-                arg_name="output path",
+                label="output path",
             )
         except (FileNotFoundError, ValueError) as exc:
             print(f"Error: {exc}", file=sys.stderr)
@@ -144,32 +144,6 @@ def main() -> None:
             output_path,
             time.monotonic() - started,
         )
-
-
-def _sanitize_cli_path(
-    path: Path | None,
-    *,
-    arg_name: str,
-    must_exist: bool = False,
-    allowed_suffixes: frozenset[str] | None = None,
-) -> Path | None:
-    """Validate a CLI path argument before using it.
-
-    Args:
-        path: Parsed path value, or ``None`` when the argument is omitted.
-        arg_name: Human-readable argument label for error messages.
-        must_exist: Whether the path must already exist on disk.
-        allowed_suffixes: Optional set of permitted filename suffixes.
-
-    Returns:
-        The validated path, or ``None`` when no path was provided.
-    """
-    return sanitize_optional_cli_path(
-        path,
-        label=arg_name,
-        must_exist=must_exist,
-        allowed_suffixes=allowed_suffixes,
-    )
 
 
 if __name__ == "__main__":

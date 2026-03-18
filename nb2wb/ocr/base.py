@@ -4,29 +4,22 @@ import base64
 import binascii
 from contextlib import contextmanager
 from dataclasses import dataclass
-import ipaddress
 from io import BytesIO
 import mimetypes
 from pathlib import Path
 from pathlib import PurePosixPath
-import socket
 from tempfile import NamedTemporaryFile
 from time import monotonic
 import urllib.request
 from urllib.parse import unquote, urlparse
 
-_MAX_REMOTE_IMAGE_BYTES = 50 * 1024 * 1024
-_REMOTE_IMAGE_TIMEOUT = 30
-_ALLOWED_REMOTE_IMAGE_MIME_TYPES = frozenset(
-    {
-        "image/png",
-        "image/jpeg",
-        "image/gif",
-        "image/svg+xml",
-        "image/webp",
-        "image/bmp",
-        "image/tiff",
-    }
+from .._remote_image import (
+    ALLOWED_IMAGE_MIME_TYPES as _ALLOWED_REMOTE_IMAGE_MIME_TYPES,
+    MAX_REMOTE_IMAGE_BYTES as _MAX_REMOTE_IMAGE_BYTES,
+    REMOTE_IMAGE_TIMEOUT as _REMOTE_IMAGE_TIMEOUT,
+    extract_peer_ip as _extract_peer_ip,
+    is_private_host as _is_private_host,
+    validate_public_http_url as _shared_validate_public_http_url,
 )
 
 
@@ -410,97 +403,21 @@ class BaseOCRPipeline:
         return Image
 
 
+def _validate_public_http_url(url: str, *, context: str = "Image URL") -> str:
+    """Validate that a URL is public HTTP(S) and safe to fetch."""
+    return _shared_validate_public_http_url(
+        url,
+        context=context,
+        is_private_host_fn=_is_private_host,
+    )
+
+
 class _SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
     """Redirect handler that rejects redirects to non-public hosts."""
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):
-        """Validate redirect targets before following them."""
         _validate_public_http_url(newurl, context="Redirect target")
         return super().redirect_request(req, fp, code, msg, headers, newurl)
-
-
-def _validate_public_http_url(url: str, *, context: str = "Image URL") -> str:
-    """Validate that a URL is public HTTP(S) and safe to fetch."""
-    parsed = urlparse(url)
-    if parsed.scheme not in {"http", "https"}:
-        raise ValueError(f"{context} must use http/https: {url}")
-    if parsed.username or parsed.password:
-        raise ValueError(f"{context} must not contain credentials: {url}")
-
-    hostname = parsed.hostname or ""
-    if not hostname:
-        raise ValueError(f"{context} is missing a hostname: {url}")
-
-    if _is_private_host(hostname):
-        raise ValueError(
-            f"Refusing to fetch image from private/loopback host: {hostname}"
-        )
-
-    return hostname
-
-
-def _is_private_host(hostname: str) -> bool:
-    """Check whether a hostname resolves to a non-public address."""
-
-    def _is_non_public(addr: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
-        return (
-            addr.is_private
-            or addr.is_loopback
-            or addr.is_link_local
-            or addr.is_multicast
-            or addr.is_reserved
-            or addr.is_unspecified
-            or not addr.is_global
-        )
-
-    try:
-        addr = ipaddress.ip_address(hostname)
-        return _is_non_public(addr)
-    except ValueError:
-        pass
-
-    try:
-        infos = socket.getaddrinfo(hostname, None, type=socket.SOCK_STREAM)
-        if not infos:
-            return True
-        for _family, _type, _proto, _canonname, sockaddr in infos:
-            addr = ipaddress.ip_address(sockaddr[0])
-            if _is_non_public(addr):
-                return True
-    except OSError:
-        return True
-    return False
-
-
-def _extract_peer_ip(response) -> str | None:
-    """Extract the peer IP address from a urllib response when possible."""
-    fp = getattr(response, "fp", None)
-    if fp is None:
-        return None
-
-    sockets = []
-    raw = getattr(fp, "raw", None)
-    if raw is not None:
-        sock = getattr(raw, "_sock", None)
-        if sock is not None:
-            sockets.append(sock)
-        conn = getattr(raw, "_connection", None)
-        if conn is not None:
-            conn_sock = getattr(conn, "sock", None)
-            if conn_sock is not None:
-                sockets.append(conn_sock)
-    fp_sock = getattr(fp, "_sock", None)
-    if fp_sock is not None:
-        sockets.append(fp_sock)
-
-    for sock in sockets:
-        try:
-            peer = sock.getpeername()
-        except OSError:
-            continue
-        if isinstance(peer, tuple) and peer:
-            return str(peer[0])
-    return None
 
 
 __all__ = [
