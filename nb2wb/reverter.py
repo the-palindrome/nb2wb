@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import html
+import logging
 from pathlib import Path
 import re
 from typing import Callable, Iterable
@@ -48,6 +49,7 @@ _CONTAINER_TAGS = {
 _INLINE_IMAGE_WRAPPERS = {"p", "div", "a"}
 _CODE_ATTR_KEYS = ("data-language", "data-lang", "language", "lang")
 _LANG_CLASS_RE = re.compile(r"^(?:language|lang)-([a-z0-9+-]+)$", re.IGNORECASE)
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -126,13 +128,29 @@ class Reverter:
         Returns:
             A notebook scaffold containing markdown and code cells.
         """
+        logger.debug("Reverter starting HTML parse")
         soup = BeautifulSoup(document, "html.parser")
         root = self._content_root(soup)
         blocks = self._extract_blocks(root)
+        prose_count = sum(isinstance(block, ProseBlock) for block in blocks)
+        code_count = sum(isinstance(block, CodeBlock) for block in blocks)
+        image_count = sum(isinstance(block, ImageBlock) for block in blocks)
+        logger.debug(
+            "Extracted %d blocks (prose=%d, code=%d, images=%d)",
+            len(blocks),
+            prose_count,
+            code_count,
+            image_count,
+        )
         notebook_language = self._select_notebook_language(blocks)
         cells = self._assemble_cells(blocks)
         notebook = make_notebook(cells, notebook_language)
         notebook.metadata["wb2nb"] = {"source_format": "html", "reverse_scaffold": 1}
+        logger.debug(
+            "Reverter finished (language=%s, cells=%d)",
+            notebook_language,
+            len(cells),
+        )
         return notebook
 
     def _content_root(self, soup: BeautifulSoup) -> Tag:
@@ -376,9 +394,22 @@ class Reverter:
             source_dir=self._source_dir,
         )
         if self._ocr_pipeline is None:
+            logger.debug(
+                "OCR disabled for image source=%s",
+                _summarize_debug_text(request.src),
+            )
             ocr_result = {"type": "figure", "payload": ""}
         else:
+            logger.debug(
+                "Running OCR for image source=%s",
+                _summarize_debug_text(request.src),
+            )
             ocr_result = _normalize_ocr_result(self._ocr_pipeline(request))
+            logger.debug(
+                "OCR classified image source=%s as %s",
+                _summarize_debug_text(request.src),
+                ocr_result["type"],
+            )
         return ImageBlock(
             src=request.src,
             alt=request.alt,
@@ -475,6 +506,14 @@ def _collect_classes(tag: Tag) -> list[str]:
     if isinstance(classes, str):
         return [classes]
     return [str(cls) for cls in classes]
+
+
+def _summarize_debug_text(value: str, *, limit: int = 120) -> str:
+    """Trim debug strings so log lines stay readable."""
+    normalized = " ".join(value.split())
+    if len(normalized) <= limit:
+        return normalized
+    return f"{normalized[: limit - 3]}..."
 
 
 def _caption_text(tag: Tag) -> str:

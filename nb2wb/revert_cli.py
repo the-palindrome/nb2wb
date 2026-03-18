@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import os
 import sys
 from pathlib import Path
+import time
 
 import nbformat
 
+from ._logging import verbose_logging
 from ._path_utils import sanitize_optional_cli_path
 from .api import load_html_payload, revert
 from .ocr.gemini import GeminiOCRPipeline
@@ -14,6 +17,7 @@ from .ocr.local import local_ocr_pipeline
 from .ocr.openai import OpenAIOCRPipeline
 
 _ALLOWED_INPUT_SUFFIXES = frozenset({".html", ".htm"})
+logger = logging.getLogger(__name__)
 
 
 def main() -> None:
@@ -48,6 +52,11 @@ def main() -> None:
         default=None,
         help="Model to use when --ocr-pipeline openai or gemini is selected.",
     )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Enable verbose package debug logging to stderr.",
+    )
     args = parser.parse_args()
 
     if args.ocr_pipeline in {"openai", "gemini"}:
@@ -68,44 +77,60 @@ def main() -> None:
                 "when --ocr-pipeline gemini is selected"
             )
 
-    try:
-        document_path = _sanitize_cli_path(
-            args.document,
-            arg_name="document path",
-            must_exist=True,
-            allowed_suffixes=_ALLOWED_INPUT_SUFFIXES,
+    with verbose_logging(args.verbose):
+        started = time.monotonic()
+        try:
+            document_path = _sanitize_cli_path(
+                args.document,
+                arg_name="document path",
+                must_exist=True,
+                allowed_suffixes=_ALLOWED_INPUT_SUFFIXES,
+            )
+            output_path = _sanitize_cli_path(
+                args.output or document_path.with_suffix(".ipynb"),
+                arg_name="output path",
+            )
+        except (FileNotFoundError, ValueError) as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            sys.exit(1)
+
+        try:
+            ocr_pipeline = None
+            if args.ocr_pipeline == "local":
+                ocr_pipeline = local_ocr_pipeline
+            elif args.ocr_pipeline == "openai":
+                ocr_pipeline = OpenAIOCRPipeline(model=args.model, verbose=args.verbose)
+            elif args.ocr_pipeline == "gemini":
+                ocr_pipeline = GeminiOCRPipeline(model=args.model, verbose=args.verbose)
+        except (RuntimeError, ValueError) as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            sys.exit(1)
+
+        logger.debug(
+            "Reverse CLI starting (ocr_pipeline=%s, model=%s)",
+            args.ocr_pipeline,
+            args.model,
         )
-        output_path = _sanitize_cli_path(
-            args.output or document_path.with_suffix(".ipynb"),
-            arg_name="output path",
+        print(f"Reverting '{document_path}' into a notebook …")
+        try:
+            payload = load_html_payload(document_path, verbose=args.verbose)
+            notebook = revert(
+                payload,
+                ocr_pipeline=ocr_pipeline,
+                verbose=args.verbose,
+            )
+        except Exception as exc:
+            print(f"Conversion failed: {exc}", file=sys.stderr)
+            sys.exit(1)
+
+        with output_path.open("w", encoding="utf-8") as handle:
+            nbformat.write(notebook, handle)
+        print(f"Written → {output_path}")
+        logger.debug(
+            "Wrote notebook output to %s in %.2fs",
+            output_path,
+            time.monotonic() - started,
         )
-    except (FileNotFoundError, ValueError) as exc:
-        print(f"Error: {exc}", file=sys.stderr)
-        sys.exit(1)
-
-    try:
-        ocr_pipeline = None
-        if args.ocr_pipeline == "local":
-            ocr_pipeline = local_ocr_pipeline
-        elif args.ocr_pipeline == "openai":
-            ocr_pipeline = OpenAIOCRPipeline(model=args.model)
-        elif args.ocr_pipeline == "gemini":
-            ocr_pipeline = GeminiOCRPipeline(model=args.model)
-    except (RuntimeError, ValueError) as exc:
-        print(f"Error: {exc}", file=sys.stderr)
-        sys.exit(1)
-
-    print(f"Reverting '{document_path}' into a notebook …")
-    try:
-        payload = load_html_payload(document_path)
-        notebook = revert(payload, ocr_pipeline=ocr_pipeline)
-    except Exception as exc:
-        print(f"Conversion failed: {exc}", file=sys.stderr)
-        sys.exit(1)
-
-    with output_path.open("w", encoding="utf-8") as handle:
-        nbformat.write(notebook, handle)
-    print(f"Written → {output_path}")
 
 
 def _sanitize_cli_path(

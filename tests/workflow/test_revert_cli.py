@@ -44,9 +44,10 @@ class TestRevertCli:
         html_path.write_text("<html><body><p>Hello</p></body></html>", encoding="utf-8")
         seen: dict[str, object] = {}
 
-        def fake_revert(document, *, ocr_pipeline=None):
+        def fake_revert(document, *, ocr_pipeline=None, verbose=False):
             seen["document"] = document
             seen["ocr_pipeline"] = ocr_pipeline
+            seen["verbose"] = verbose
             return nbformat.v4.new_notebook()
 
         monkeypatch.setattr("nb2wb.revert_cli.revert", fake_revert)
@@ -54,6 +55,7 @@ class TestRevertCli:
         _run_cli(["wb2nb", str(html_path)])
 
         assert seen["ocr_pipeline"] is None
+        assert seen["verbose"] is False
         assert isinstance(seen["document"], dict)
         assert seen["document"]["format"] == "html"
 
@@ -63,7 +65,7 @@ class TestRevertCli:
         seen: dict[str, object] = {}
         sentinel = object()
 
-        def fake_revert(document, *, ocr_pipeline=None):
+        def fake_revert(document, *, ocr_pipeline=None, verbose=False):
             seen["ocr_pipeline"] = ocr_pipeline
             return nbformat.v4.new_notebook()
 
@@ -124,17 +126,19 @@ class TestRevertCli:
         sentinel = object()
 
         class FakePipeline:
-            def __init__(self, *, model, api_key=None, client=None):
+            def __init__(self, *, model, api_key=None, client=None, verbose=False):
                 seen["model"] = model
                 seen["api_key"] = api_key
                 seen["client"] = client
+                seen["verbose"] = verbose
 
             def __call__(self, request):
                 return sentinel
 
-        def fake_revert(document, *, ocr_pipeline=None):
+        def fake_revert(document, *, ocr_pipeline=None, verbose=False):
             seen["document"] = document
             seen["ocr_pipeline"] = ocr_pipeline
+            seen["verbose"] = verbose
             return nbformat.v4.new_notebook()
 
         monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
@@ -154,8 +158,10 @@ class TestRevertCli:
 
         assert seen["model"] == "gpt-4.1-mini"
         assert seen["api_key"] is None
+        assert seen["verbose"] is False
         assert isinstance(seen["document"], dict)
         assert isinstance(seen["ocr_pipeline"], FakePipeline)
+        assert seen["verbose"] is False
 
     def test_wb2nb_gemini_requires_model(self, tmp_path: Path, monkeypatch, capsys):
         html_path = tmp_path / "post.html"
@@ -217,17 +223,19 @@ class TestRevertCli:
         sentinel = object()
 
         class FakePipeline:
-            def __init__(self, *, model, api_key=None, client=None):
+            def __init__(self, *, model, api_key=None, client=None, verbose=False):
                 seen["model"] = model
                 seen["api_key"] = api_key
                 seen["client"] = client
+                seen["verbose"] = verbose
 
             def __call__(self, request):
                 return sentinel
 
-        def fake_revert(document, *, ocr_pipeline=None):
+        def fake_revert(document, *, ocr_pipeline=None, verbose=False):
             seen["document"] = document
             seen["ocr_pipeline"] = ocr_pipeline
+            seen["verbose"] = verbose
             return nbformat.v4.new_notebook()
 
         monkeypatch.setenv("GEMINI_API_KEY", "test-key")
@@ -247,5 +255,61 @@ class TestRevertCli:
 
         assert seen["model"] == "gemini-2.0-flash"
         assert seen["api_key"] is None
+        assert seen["verbose"] is False
         assert isinstance(seen["document"], dict)
         assert isinstance(seen["ocr_pipeline"], FakePipeline)
+        assert seen["verbose"] is False
+
+    def test_wb2nb_gemini_passes_verbose_flag_to_pipeline(
+        self,
+        tmp_path: Path,
+        monkeypatch,
+    ):
+        html_path = tmp_path / "post.html"
+        html_path.write_text("<html><body><p>Hello</p></body></html>", encoding="utf-8")
+        seen: dict[str, object] = {}
+
+        class FakePipeline:
+            def __init__(self, *, model, api_key=None, client=None, verbose=False):
+                seen["model"] = model
+                seen["verbose"] = verbose
+
+            def __call__(self, request):
+                return {"type": "figure", "payload": ""}
+
+        monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+        monkeypatch.setattr("nb2wb.revert_cli.GeminiOCRPipeline", FakePipeline)
+        monkeypatch.setattr(
+            "nb2wb.revert_cli.revert",
+            lambda document, *, ocr_pipeline=None, verbose=False: nbformat.v4.new_notebook(),
+        )
+
+        _run_cli(
+            [
+                "wb2nb",
+                str(html_path),
+                "--ocr-pipeline",
+                "gemini",
+                "--model",
+                "gemini-2.0-flash",
+                "--verbose",
+            ]
+        )
+
+        assert seen["model"] == "gemini-2.0-flash"
+        assert seen["verbose"] is True
+
+    def test_wb2nb_passes_verbose_flag_to_api(self, tmp_path: Path, monkeypatch):
+        html_path = tmp_path / "post.html"
+        html_path.write_text("<html><body><p>Hello</p></body></html>", encoding="utf-8")
+        seen: dict[str, object] = {}
+
+        def fake_revert(document, *, ocr_pipeline=None, verbose=False):
+            seen["verbose"] = verbose
+            return nbformat.v4.new_notebook()
+
+        monkeypatch.setattr("nb2wb.revert_cli.revert", fake_revert)
+
+        _run_cli(["wb2nb", str(html_path), "--verbose"])
+
+        assert seen["verbose"] is True

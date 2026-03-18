@@ -375,6 +375,7 @@ class TestCLIServerSafeMode:
             warnings_mode,
             working_dir,
             raw_mode,
+            verbose,
         ):
             from nb2wb.config import load_config
 
@@ -386,6 +387,7 @@ class TestCLIServerSafeMode:
             seen["working_dir"] = str(working_dir)
             seen["warnings_mode"] = warnings_mode
             seen["raw_mode"] = raw_mode
+            seen["verbose"] = verbose
             seen["has_safety_limits"] = (
                 resolved.safety.max_input_bytes > 0
                 and resolved.safety.max_cells > 0
@@ -404,6 +406,7 @@ class TestCLIServerSafeMode:
         assert seen["working_dir"] == str(notebook_path.parent)
         assert seen["warnings_mode"] is False
         assert seen["raw_mode"] is False
+        assert seen["verbose"] is False
         assert seen["has_safety_limits"] is True
 
     def test_cli_forwards_raw_flag_to_api(self, tmp_path, monkeypatch):
@@ -424,10 +427,12 @@ class TestCLIServerSafeMode:
             warnings_mode,
             working_dir,
             raw_mode,
+            verbose,
         ):
             seen["target_options"] = target_options
             seen["warnings_mode"] = warnings_mode
             seen["raw_mode"] = raw_mode
+            seen["verbose"] = verbose
             return "<html><body><p>ok</p></body></html>"
 
         monkeypatch.setattr("nb2wb.cli.convert_notebook", fake_convert)
@@ -437,6 +442,7 @@ class TestCLIServerSafeMode:
         assert seen["target_options"] is None
         assert seen["warnings_mode"] is False
         assert seen["raw_mode"] is True
+        assert seen["verbose"] is False
 
     def test_cli_forwards_target_options_to_api(self, tmp_path, monkeypatch):
         notebook_path = _write_notebook(
@@ -456,10 +462,12 @@ class TestCLIServerSafeMode:
             warnings_mode,
             working_dir,
             raw_mode,
+            verbose,
         ):
             seen["target"] = target
             seen["target_options"] = target_options
             seen["warnings_mode"] = warnings_mode
+            seen["verbose"] = verbose
             return "<html><body><p>ok</p></body></html>"
 
         monkeypatch.setattr("nb2wb.cli.convert_notebook", fake_convert)
@@ -494,6 +502,37 @@ class TestCLIServerSafeMode:
             "table_mode": "native",
         }
         assert seen["warnings_mode"] is False
+        assert seen["verbose"] is False
+
+    def test_cli_forwards_verbose_flag_to_api(self, tmp_path, monkeypatch):
+        notebook_path = _write_notebook(
+            tmp_path / "verbose.ipynb",
+            [nbformat.v4.new_markdown_cell("# Verbose")],
+        )
+        seen: dict[str, object] = {}
+
+        def fake_convert(
+            notebook,
+            *,
+            config,
+            target,
+            target_options,
+            execute,
+            warnings_mode,
+            working_dir,
+            raw_mode,
+            verbose,
+        ):
+            seen["verbose"] = verbose
+            return "<html><body><p>ok</p></body></html>"
+
+        monkeypatch.setattr("nb2wb.cli.convert_notebook", fake_convert)
+
+        _run_cli(
+            ["nb2wb", str(notebook_path), "--verbose", "-o", str(tmp_path / "out.html")]
+        )
+
+        assert seen["verbose"] is True
 
 
 class TestCLIInputSanitization:

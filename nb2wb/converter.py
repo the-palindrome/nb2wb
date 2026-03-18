@@ -21,6 +21,7 @@ Code cells
 from __future__ import annotations
 
 import base64
+import logging
 import re
 import warnings
 from pathlib import Path
@@ -68,6 +69,7 @@ _NON_PARAGRAPH_LINE_RE = re.compile(
 
 _STRIKETHROUGH_PATTERN = r"(?<!~)(~~)(.+?)(~~)(?!~)"
 _MD_BASE_EXTENSIONS = ("extra", "sane_lists", "nl2br")
+logger = logging.getLogger(__name__)
 
 
 class _StrikethroughExtension(Extension):
@@ -137,6 +139,12 @@ class Converter:
         Returns:
             Combined HTML for all rendered notebook cells.
         """
+        logger.debug(
+            "Converter starting (execute=%s, warnings_mode=%s, cwd=%s)",
+            self.execute,
+            self.warnings_mode,
+            cwd or Path.cwd(),
+        )
         _enforce_serialized_notebook_size(notebook, self.config.safety)
         nb = _execute_cells(notebook, cwd or Path.cwd()) if self.execute else notebook
         _enforce_notebook_limits(nb, self.config.safety)
@@ -147,10 +155,19 @@ class Converter:
         self._table_mode_image = str(self.config.table.mode).lower() == "image"
 
         parts: list[str] = []
-        for cell in nb.cells:
+        skipped_cells = 0
+        for index, cell in enumerate(nb.cells, start=1):
             tags = _cell_tags(cell)
             if _skip_cell(tags):
+                skipped_cells += 1
+                logger.debug(
+                    "Skipping cell %d (type=%s, tags=%s)",
+                    index,
+                    cell.cell_type,
+                    sorted(tags),
+                )
                 continue
+            logger.debug("Rendering cell %d (type=%s)", index, cell.cell_type)
             if cell.cell_type == "markdown":
                 parts.append(self._markdown_cell(cell))
             elif cell.cell_type == "code":
@@ -159,7 +176,15 @@ class Converter:
                     parts.append(html)
             # raw cells are skipped
 
-        return "\n".join(parts)
+        rendered = "\n".join(parts)
+        logger.debug(
+            "Converter finished (cells=%d, skipped=%d, fragments=%d, output_chars=%d)",
+            len(nb.cells),
+            skipped_cells,
+            len(parts),
+            len(rendered),
+        )
+        return rendered
 
     # ------------------------------------------------------------------
     # Cell processors

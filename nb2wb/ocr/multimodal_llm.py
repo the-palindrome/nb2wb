@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import json
+import logging
+import time
 from typing import Any
 
+from .._logging import verbose_logging
 from .base import BaseOCRPipeline, OCRRequest
 
 _ALLOWED_OCR_TYPES = frozenset({"latex", "code", "table", "figure"})
@@ -13,11 +16,12 @@ class BaseMultimodalLLMOCRPipeline(BaseOCRPipeline):
 
     provider_name = "LLM"
 
-    def __init__(self, *, model: str) -> None:
+    def __init__(self, *, model: str, verbose: bool = False) -> None:
         """Store and validate the model name used by the pipeline.
 
         Args:
             model: Provider model name to use for OCR.
+            verbose: Whether to emit debug logs to stderr during OCR.
 
         Returns:
             ``None``. The pipeline stores the normalized model string.
@@ -26,6 +30,8 @@ class BaseMultimodalLLMOCRPipeline(BaseOCRPipeline):
         if not normalized_model:
             raise ValueError(f"model is required for {self.__class__.__name__}")
         self.model = normalized_model
+        self._verbose = verbose
+        self._logger = logging.getLogger(self.__class__.__module__)
 
     def __call__(self, request: OCRRequest) -> dict[str, str]:
         """Run OCR against one image using a multimodal LLM backend.
@@ -36,8 +42,23 @@ class BaseMultimodalLLMOCRPipeline(BaseOCRPipeline):
         Returns:
             A validated ``{"type", "payload"}`` OCR result mapping.
         """
-        response = self._create_response(request)
-        return self._parse_response(response)
+        with verbose_logging(self._verbose):
+            total_started = time.monotonic()
+            self._debug(
+                "starting OCR request "
+                f"(model={self.model}, source={self._describe_request_source(request)})"
+            )
+            response = self._create_response(request)
+            parse_started = time.monotonic()
+            self._debug("parsing structured OCR response")
+            result = self._parse_response(response)
+            self._debug(
+                "completed OCR request "
+                f"in {self._format_duration(time.monotonic() - total_started)} "
+                f"(parse={self._format_duration(time.monotonic() - parse_started)}, "
+                f"type={result['type']}, payload_chars={len(result['payload'])})"
+            )
+            return result
 
     def _create_response(self, request: OCRRequest):
         """Submit an OCR request to the provider backend.
@@ -177,6 +198,65 @@ class BaseMultimodalLLMOCRPipeline(BaseOCRPipeline):
             Sanitized error text safe to include in exceptions.
         """
         return message.strip()
+
+    def _debug(self, message: str) -> None:
+        """Emit a verbose OCR debug line when verbose logging is enabled.
+
+        Args:
+            message: Human-readable debug message to print.
+
+        Returns:
+            ``None``. The message is written to stderr when verbose mode is active.
+        """
+        self._logger.debug("%s OCR: %s", self.provider_name, message)
+
+    def _describe_request_source(self, request: OCRRequest) -> str:
+        """Summarize the OCR input image for debug output.
+
+        Args:
+            request: OCR metadata and image source information.
+
+        Returns:
+            A short source summary suitable for logs.
+        """
+        src = request.src.strip()
+        if not src:
+            return "empty"
+        if src.startswith("data:"):
+            return "data-uri"
+
+        resolved_path = self.resolve_image_path(request)
+        if resolved_path is not None:
+            return str(resolved_path)
+        return self._truncate_debug_value(src)
+
+    @staticmethod
+    def _format_duration(seconds: float) -> str:
+        """Format a duration for human-readable debug output.
+
+        Args:
+            seconds: Elapsed time in seconds.
+
+        Returns:
+            A compact duration string.
+        """
+        return f"{seconds:.2f}s"
+
+    @staticmethod
+    def _truncate_debug_value(value: str, *, limit: int = 120) -> str:
+        """Trim long debug strings so logs stay readable.
+
+        Args:
+            value: Raw debug text.
+            limit: Maximum number of characters to keep.
+
+        Returns:
+            A normalized and truncated string.
+        """
+        normalized = " ".join(value.split())
+        if len(normalized) <= limit:
+            return normalized
+        return f"{normalized[: limit - 3]}..."
 
 
 __all__ = [

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from importlib.metadata import PackageNotFoundError, version
 
+from ._logging import configure_logging
 from .api import (
     convert,
     load_input_payload,
@@ -26,6 +27,7 @@ __all__ = [
     "LatexConfig",
     "TableConfig",
     "SafetyConfig",
+    "configure_logging",
     "convert",
     "revert",
     "load_input_payload",
