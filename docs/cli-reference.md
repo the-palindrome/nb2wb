@@ -89,7 +89,8 @@ wb2nb <input.{html|htm}> [options]
 | `-o, --output PATH` | Output notebook path, default `<input>.ipynb` |
 | `--ocr-pipeline {local,openai,gemini}` | Optional OCR pipeline |
 | `--model MODEL` | Required for `openai` and `gemini` pipelines |
-| `--allow-remote-image-urls` | Let `openai` and `gemini` OCR fetch public remote image URLs |
+| `--allow-remote-image-urls` | Let `openai` and `gemini` OCR fetch public remote image URLs, enabled by default |
+| `--disallow-remote-image-urls` | Keep `openai` and `gemini` OCR from fetching public remote image URLs |
 | `--verbose` | Emit package debug logs to stderr |
 
 ### Common Recipes
@@ -100,9 +101,9 @@ wb2nb article.html -o recovered.ipynb
 wb2nb examples/reverse_article.html
 wb2nb article.html --ocr-pipeline local
 OPENAI_API_KEY=... wb2nb article.html --ocr-pipeline openai --model your-model-name
-OPENAI_API_KEY=... wb2nb article.html --ocr-pipeline openai --model your-model-name --allow-remote-image-urls
+OPENAI_API_KEY=... wb2nb article.html --ocr-pipeline openai --model your-model-name --disallow-remote-image-urls
 GEMINI_API_KEY=... wb2nb article.html --ocr-pipeline gemini --model gemini-2.0-flash
-GEMINI_API_KEY=... wb2nb article.html --ocr-pipeline gemini --model gemini-2.0-flash --allow-remote-image-urls
+GEMINI_API_KEY=... wb2nb article.html --ocr-pipeline gemini --model gemini-2.0-flash --disallow-remote-image-urls
 GEMINI_API_KEY=... wb2nb article.html --ocr-pipeline gemini --model gemini-2.5-flash --verbose
 ```
 
@@ -112,7 +113,7 @@ GEMINI_API_KEY=... wb2nb article.html --ocr-pipeline gemini --model gemini-2.5-f
 - `openai` requires `OPENAI_API_KEY`.
 - `gemini` requires `GEMINI_API_KEY` or `GOOGLE_API_KEY`.
 - `--model` is required for `openai` and `gemini`.
-- `--allow-remote-image-urls` only affects `openai` and `gemini`. Without it, those pipelines log a warning and reject remote image URLs.
+- `--allow-remote-image-urls` and `--disallow-remote-image-urls` only affect `openai` and `gemini`.
 - `--verbose` prints package debug logs to stderr, including OCR progress and timing when OCR runs.
 
 ### Reverse-Conversion Behavior
@@ -122,7 +123,8 @@ GEMINI_API_KEY=... wb2nb article.html --ocr-pipeline gemini --model gemini-2.5-f
 - unsupported code blocks remain fenced markdown
 - images remain linked unless OCR is enabled
 - `local` OCR reads local paths, `data:` images, and public `http/https` image URLs
-- `openai` and `gemini` read local paths and `data:` images by default, and only fetch remote image URLs when `--allow-remote-image-urls` is set
+- `openai` and `gemini` read local paths, `data:` images, and public remote image URLs by default
+- `--disallow-remote-image-urls` forces `openai` and `gemini` back to the linked-figure fallback for remote URLs
 
 ## Input Validation
 

@@ -133,7 +133,7 @@ class TestRevertCli:
                 api_key=None,
                 client=None,
                 verbose=False,
-                allow_remote_image_urls=False,
+                allow_remote_image_urls=True,
             ):
                 seen["model"] = model
                 seen["api_key"] = api_key
@@ -168,7 +168,7 @@ class TestRevertCli:
         assert seen["model"] == "gpt-4.1-mini"
         assert seen["api_key"] is None
         assert seen["verbose"] is False
-        assert seen["allow_remote_image_urls"] is False
+        assert seen["allow_remote_image_urls"] is True
         assert isinstance(seen["document"], dict)
         assert isinstance(seen["ocr_pipeline"], FakePipeline)
         assert seen["verbose"] is False
@@ -240,7 +240,7 @@ class TestRevertCli:
                 api_key=None,
                 client=None,
                 verbose=False,
-                allow_remote_image_urls=False,
+                allow_remote_image_urls=True,
             ):
                 seen["model"] = model
                 seen["api_key"] = api_key
@@ -275,7 +275,7 @@ class TestRevertCli:
         assert seen["model"] == "gemini-2.0-flash"
         assert seen["api_key"] is None
         assert seen["verbose"] is False
-        assert seen["allow_remote_image_urls"] is False
+        assert seen["allow_remote_image_urls"] is True
         assert isinstance(seen["document"], dict)
         assert isinstance(seen["ocr_pipeline"], FakePipeline)
         assert seen["verbose"] is False
@@ -297,7 +297,7 @@ class TestRevertCli:
                 api_key=None,
                 client=None,
                 verbose=False,
-                allow_remote_image_urls=False,
+                allow_remote_image_urls=True,
             ):
                 seen["model"] = model
                 seen["verbose"] = verbose
@@ -327,9 +327,9 @@ class TestRevertCli:
 
         assert seen["model"] == "gemini-2.0-flash"
         assert seen["verbose"] is True
-        assert seen["allow_remote_image_urls"] is False
+        assert seen["allow_remote_image_urls"] is True
 
-    def test_wb2nb_openai_passes_allow_remote_image_urls_to_pipeline(
+    def test_wb2nb_openai_disallow_remote_image_urls_overrides_default(
         self,
         tmp_path: Path,
         monkeypatch,
@@ -346,7 +346,7 @@ class TestRevertCli:
                 api_key=None,
                 client=None,
                 verbose=False,
-                allow_remote_image_urls=False,
+                allow_remote_image_urls=True,
             ):
                 seen["allow_remote_image_urls"] = allow_remote_image_urls
 
@@ -368,13 +368,13 @@ class TestRevertCli:
                 "openai",
                 "--model",
                 "gpt-4.1-mini",
-                "--allow-remote-image-urls",
+                "--disallow-remote-image-urls",
             ]
         )
 
-        assert seen["allow_remote_image_urls"] is True
+        assert seen["allow_remote_image_urls"] is False
 
-    def test_wb2nb_gemini_passes_allow_remote_image_urls_to_pipeline(
+    def test_wb2nb_gemini_disallow_remote_image_urls_overrides_default(
         self,
         tmp_path: Path,
         monkeypatch,
@@ -391,7 +391,7 @@ class TestRevertCli:
                 api_key=None,
                 client=None,
                 verbose=False,
-                allow_remote_image_urls=False,
+                allow_remote_image_urls=True,
             ):
                 seen["allow_remote_image_urls"] = allow_remote_image_urls
 
@@ -413,11 +413,11 @@ class TestRevertCli:
                 "gemini",
                 "--model",
                 "gemini-2.0-flash",
-                "--allow-remote-image-urls",
+                "--disallow-remote-image-urls",
             ]
         )
 
-        assert seen["allow_remote_image_urls"] is True
+        assert seen["allow_remote_image_urls"] is False
 
     def test_wb2nb_passes_verbose_flag_to_api(self, tmp_path: Path, monkeypatch):
         html_path = tmp_path / "post.html"

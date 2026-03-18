@@ -188,11 +188,7 @@ class TestOpenAIOcrPipeline:
         fake_client = _FakeClient(
             result=SimpleNamespace(output_text='{"type":"figure","payload":""}')
         )
-        pipeline = OpenAIOCRPipeline(
-            model="gpt-4.1-mini",
-            client=fake_client,
-            allow_remote_image_urls=True,
-        )
+        pipeline = OpenAIOCRPipeline(model="gpt-4.1-mini", client=fake_client)
         opener = _patch_remote_fetch(monkeypatch)
 
         result = pipeline(OCRRequest(src=_REMOTE_URL, alt="Remote chart"))
@@ -265,12 +261,16 @@ class TestOpenAIOcrPipeline:
         else:  # pragma: no cover
             raise AssertionError("expected invalid schema to raise RuntimeError")
 
-    def test_rejects_remote_image_urls_without_opt_in(self, caplog):
+    def test_rejects_remote_image_urls_when_explicitly_disabled(self, caplog):
         caplog.set_level(logging.WARNING, logger="nb2wb")
         fake_client = _FakeClient()
-        pipeline = OpenAIOCRPipeline(model="gpt-4.1-mini", client=fake_client)
+        pipeline = OpenAIOCRPipeline(
+            model="gpt-4.1-mini",
+            client=fake_client,
+            allow_remote_image_urls=False,
+        )
 
-        with pytest.raises(ValueError, match="disabled by default"):
+        with pytest.raises(ValueError, match="Remote HTTP\\(S\\) image URLs are disabled"):
             pipeline(OCRRequest(src=_REMOTE_URL))
 
         assert "blocked remote image URL" in caplog.text
@@ -339,11 +339,7 @@ class TestGeminiOcrPipeline:
         fake_client = _FakeGeminiClient(
             result=SimpleNamespace(text='{"type":"figure","payload":""}')
         )
-        pipeline = GeminiOCRPipeline(
-            model="gemini-2.0-flash",
-            client=fake_client,
-            allow_remote_image_urls=True,
-        )
+        pipeline = GeminiOCRPipeline(model="gemini-2.0-flash", client=fake_client)
         opener = _patch_remote_fetch(monkeypatch)
 
         result = pipeline(OCRRequest(src=_REMOTE_URL, alt="Remote chart"))
@@ -414,12 +410,16 @@ class TestGeminiOcrPipeline:
         else:  # pragma: no cover
             raise AssertionError("expected invalid schema to raise RuntimeError")
 
-    def test_rejects_remote_image_urls_without_opt_in(self, caplog):
+    def test_rejects_remote_image_urls_when_explicitly_disabled(self, caplog):
         caplog.set_level(logging.WARNING, logger="nb2wb")
         fake_client = _FakeGeminiClient()
-        pipeline = GeminiOCRPipeline(model="gemini-2.0-flash", client=fake_client)
+        pipeline = GeminiOCRPipeline(
+            model="gemini-2.0-flash",
+            client=fake_client,
+            allow_remote_image_urls=False,
+        )
 
-        with pytest.raises(ValueError, match="disabled by default"):
+        with pytest.raises(ValueError, match="Remote HTTP\\(S\\) image URLs are disabled"):
             pipeline(OCRRequest(src=_REMOTE_URL))
 
         assert "blocked remote image URL" in caplog.text

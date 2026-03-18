@@ -21,7 +21,7 @@ class BaseMultimodalLLMOCRPipeline(BaseOCRPipeline):
         *,
         model: str,
         verbose: bool = False,
-        allow_remote_image_urls: bool = False,
+        allow_remote_image_urls: bool = True,
     ) -> None:
         """Store and validate the model name used by the pipeline.
 
@@ -186,9 +186,9 @@ class BaseMultimodalLLMOCRPipeline(BaseOCRPipeline):
                 self._describe_request_source(request),
             )
             raise ValueError(
-                f"Remote HTTP(S) image URLs are disabled by default for "
+                f"Remote HTTP(S) image URLs are disabled for "
                 f"{self.provider_name} OCR; pass allow_remote_image_urls=True "
-                f"(or use --allow-remote-image-urls in the CLI) to opt in."
+                f"(or omit --disallow-remote-image-urls in the CLI) to enable them."
             )
 
     def _response_schema(self) -> dict[str, Any]:

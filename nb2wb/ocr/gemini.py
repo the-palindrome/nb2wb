@@ -37,7 +37,7 @@ class GeminiOCRPipeline(BaseMultimodalLLMOCRPipeline):
         api_key: str | None = None,
         client: Any | None = None,
         verbose: bool = False,
-        allow_remote_image_urls: bool = False,
+        allow_remote_image_urls: bool = True,
     ) -> None:
         """Initialize a Gemini-backed OCR pipeline.
 
