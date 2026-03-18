@@ -57,6 +57,11 @@ def main() -> None:
         action="store_true",
         help="Enable verbose package debug logging to stderr.",
     )
+    parser.add_argument(
+        "--allow-remote-image-urls",
+        action="store_true",
+        help="Allow OpenAI or Gemini OCR to fetch public remote image URLs.",
+    )
     args = parser.parse_args()
 
     if args.ocr_pipeline in {"openai", "gemini"}:
@@ -99,9 +104,17 @@ def main() -> None:
             if args.ocr_pipeline == "local":
                 ocr_pipeline = local_ocr_pipeline
             elif args.ocr_pipeline == "openai":
-                ocr_pipeline = OpenAIOCRPipeline(model=args.model, verbose=args.verbose)
+                ocr_pipeline = OpenAIOCRPipeline(
+                    model=args.model,
+                    verbose=args.verbose,
+                    allow_remote_image_urls=args.allow_remote_image_urls,
+                )
             elif args.ocr_pipeline == "gemini":
-                ocr_pipeline = GeminiOCRPipeline(model=args.model, verbose=args.verbose)
+                ocr_pipeline = GeminiOCRPipeline(
+                    model=args.model,
+                    verbose=args.verbose,
+                    allow_remote_image_urls=args.allow_remote_image_urls,
+                )
         except (RuntimeError, ValueError) as exc:
             print(f"Error: {exc}", file=sys.stderr)
             sys.exit(1)

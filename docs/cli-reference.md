@@ -89,6 +89,7 @@ wb2nb <input.{html|htm}> [options]
 | `-o, --output PATH` | Output notebook path, default `<input>.ipynb` |
 | `--ocr-pipeline {local,openai,gemini}` | Optional OCR pipeline |
 | `--model MODEL` | Required for `openai` and `gemini` pipelines |
+| `--allow-remote-image-urls` | Let `openai` and `gemini` OCR fetch public remote image URLs |
 | `--verbose` | Emit package debug logs to stderr |
 
 ### Common Recipes
@@ -99,7 +100,9 @@ wb2nb article.html -o recovered.ipynb
 wb2nb examples/reverse_article.html
 wb2nb article.html --ocr-pipeline local
 OPENAI_API_KEY=... wb2nb article.html --ocr-pipeline openai --model your-model-name
+OPENAI_API_KEY=... wb2nb article.html --ocr-pipeline openai --model your-model-name --allow-remote-image-urls
 GEMINI_API_KEY=... wb2nb article.html --ocr-pipeline gemini --model gemini-2.0-flash
+GEMINI_API_KEY=... wb2nb article.html --ocr-pipeline gemini --model gemini-2.0-flash --allow-remote-image-urls
 GEMINI_API_KEY=... wb2nb article.html --ocr-pipeline gemini --model gemini-2.5-flash --verbose
 ```
 
@@ -109,6 +112,7 @@ GEMINI_API_KEY=... wb2nb article.html --ocr-pipeline gemini --model gemini-2.5-f
 - `openai` requires `OPENAI_API_KEY`.
 - `gemini` requires `GEMINI_API_KEY` or `GOOGLE_API_KEY`.
 - `--model` is required for `openai` and `gemini`.
+- `--allow-remote-image-urls` only affects `openai` and `gemini`. Without it, those pipelines log a warning and reject remote image URLs.
 - `--verbose` prints package debug logs to stderr, including OCR progress and timing when OCR runs.
 
 ### Reverse-Conversion Behavior
@@ -117,7 +121,8 @@ GEMINI_API_KEY=... wb2nb article.html --ocr-pipeline gemini --model gemini-2.5-f
 - supported code blocks become code cells
 - unsupported code blocks remain fenced markdown
 - images remain linked unless OCR is enabled
-- built-in OCR pipelines read local paths, `data:` images, and public `http/https` image URLs
+- `local` OCR reads local paths, `data:` images, and public `http/https` image URLs
+- `openai` and `gemini` read local paths and `data:` images by default, and only fetch remote image URLs when `--allow-remote-image-urls` is set
 
 ## Input Validation
 

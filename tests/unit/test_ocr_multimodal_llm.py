@@ -6,6 +6,8 @@ import logging
 import sys
 from types import SimpleNamespace
 
+import pytest
+
 from nb2wb.ocr import base as ocr_base
 from nb2wb.ocr.base import OCRRequest
 from nb2wb.ocr.gemini import GeminiOCRPipeline
@@ -16,9 +18,9 @@ _DATA_URL = "data:image/png;base64,QUJD"
 _REMOTE_URL = "https://example.com/img.png"
 _TINY_PNG = (
     b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01"
-    b"\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89"
-    b"\x00\x00\x00\nIDATx\x9cc\xf8\xcf\xc0\x00\x00\x00\x03"
-    b"\x00\x01\x8e\xea\xfe\x0e\x00\x00\x00\x00IEND\xaeB`\x82"
+    b"\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde"
+    b"\x00\x00\x00\x0cIDATx\x9cc\xf8\xff\xff?\x00\x05\xfe\x02\xfe\r\xefF\xb8"
+    b"\x00\x00\x00\x00IEND\xaeB`\x82"
 )
 
 
@@ -186,18 +188,18 @@ class TestOpenAIOcrPipeline:
         fake_client = _FakeClient(
             result=SimpleNamespace(output_text='{"type":"figure","payload":""}')
         )
-        pipeline = OpenAIOCRPipeline(model="gpt-4.1-mini", client=fake_client)
+        pipeline = OpenAIOCRPipeline(
+            model="gpt-4.1-mini",
+            client=fake_client,
+            allow_remote_image_urls=True,
+        )
         opener = _patch_remote_fetch(monkeypatch)
 
         result = pipeline(OCRRequest(src=_REMOTE_URL, alt="Remote chart"))
 
         assert result == {"type": "figure", "payload": ""}
-        assert opener.calls == [
-            {
-                "url": _REMOTE_URL,
-                "timeout": ocr_base._REMOTE_IMAGE_TIMEOUT,
-            }
-        ]
+        assert opener.calls[0]["url"] == _REMOTE_URL
+        assert 0 < opener.calls[0]["timeout"] <= ocr_base._REMOTE_IMAGE_TIMEOUT
         call = fake_client.responses.calls[0]
         content = call["input"][0]["content"][0]
         assert content["type"] == "input_image"
@@ -263,6 +265,17 @@ class TestOpenAIOcrPipeline:
         else:  # pragma: no cover
             raise AssertionError("expected invalid schema to raise RuntimeError")
 
+    def test_rejects_remote_image_urls_without_opt_in(self, caplog):
+        caplog.set_level(logging.WARNING, logger="nb2wb")
+        fake_client = _FakeClient()
+        pipeline = OpenAIOCRPipeline(model="gpt-4.1-mini", client=fake_client)
+
+        with pytest.raises(ValueError, match="disabled by default"):
+            pipeline(OCRRequest(src=_REMOTE_URL))
+
+        assert "blocked remote image URL" in caplog.text
+        assert not fake_client.responses.calls
+
     def test_sanitizes_api_key_from_client_error_message(self):
         fake_client = _FakeClient(error=RuntimeError("bad key sk-secret-value"))
         pipeline = OpenAIOCRPipeline(model="gpt-4.1-mini", client=fake_client)
@@ -326,18 +339,18 @@ class TestGeminiOcrPipeline:
         fake_client = _FakeGeminiClient(
             result=SimpleNamespace(text='{"type":"figure","payload":""}')
         )
-        pipeline = GeminiOCRPipeline(model="gemini-2.0-flash", client=fake_client)
+        pipeline = GeminiOCRPipeline(
+            model="gemini-2.0-flash",
+            client=fake_client,
+            allow_remote_image_urls=True,
+        )
         opener = _patch_remote_fetch(monkeypatch)
 
         result = pipeline(OCRRequest(src=_REMOTE_URL, alt="Remote chart"))
 
         assert result == {"type": "figure", "payload": ""}
-        assert opener.calls == [
-            {
-                "url": _REMOTE_URL,
-                "timeout": ocr_base._REMOTE_IMAGE_TIMEOUT,
-            }
-        ]
+        assert opener.calls[0]["url"] == _REMOTE_URL
+        assert 0 < opener.calls[0]["timeout"] <= ocr_base._REMOTE_IMAGE_TIMEOUT
         call = fake_client.models.calls[0]
         inline_data = call["contents"][0]["parts"][1]["inline_data"]
         assert inline_data["mime_type"] == "image/png"
@@ -400,6 +413,17 @@ class TestGeminiOcrPipeline:
             assert "must be one of" in str(exc)
         else:  # pragma: no cover
             raise AssertionError("expected invalid schema to raise RuntimeError")
+
+    def test_rejects_remote_image_urls_without_opt_in(self, caplog):
+        caplog.set_level(logging.WARNING, logger="nb2wb")
+        fake_client = _FakeGeminiClient()
+        pipeline = GeminiOCRPipeline(model="gemini-2.0-flash", client=fake_client)
+
+        with pytest.raises(ValueError, match="disabled by default"):
+            pipeline(OCRRequest(src=_REMOTE_URL))
+
+        assert "blocked remote image URL" in caplog.text
+        assert not fake_client.models.calls
 
     def test_sanitizes_api_key_from_client_error_message(self):
         fake_client = _FakeGeminiClient(

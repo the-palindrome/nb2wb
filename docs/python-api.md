@@ -214,14 +214,17 @@ Built-in options:
 - `nb2wb.ocr.openai.OpenAIOCRPipeline`
 - `nb2wb.ocr.gemini.GeminiOCRPipeline`
 
-The built-in OCR pipelines read:
+The built-in OCR pipelines always read:
 
 - local file paths
 - relative paths resolved from `source_dir`
 - `data:` image URIs
-- public `http://` and `https://` image URLs
 
-Remote URL fetching is SSRF-safe by default: private/loopback hosts are rejected, redirects are revalidated, payload size is capped, and image payloads are MIME-checked.
+The local OCR pipeline also reads public `http://` and `https://` image URLs.
+
+The OpenAI and Gemini OCR pipelines block remote image URLs by default. Pass `allow_remote_image_urls=True` when you want those providers to fetch public remote images. Blocked attempts log a warning before the pipeline raises.
+
+Remote URL fetching remains SSRF-safe by default: private/loopback hosts are rejected, redirects are revalidated, payload size is capped, and the full transfer must finish within the timeout budget.
 
 ### Custom OCR Contract
 

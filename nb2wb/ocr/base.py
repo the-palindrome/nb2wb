@@ -11,6 +11,7 @@ from pathlib import Path
 from pathlib import PurePosixPath
 import socket
 from tempfile import NamedTemporaryFile
+from time import monotonic
 import urllib.request
 from urllib.parse import unquote, urlparse
 
@@ -205,9 +206,10 @@ class BaseOCRPipeline:
         """
         _validate_public_http_url(src)
 
+        deadline = monotonic() + _REMOTE_IMAGE_TIMEOUT
         opener = urllib.request.build_opener(_SafeRedirectHandler())
         request = urllib.request.Request(src)
-        with opener.open(request, timeout=_REMOTE_IMAGE_TIMEOUT) as response:
+        with opener.open(request, timeout=max(0.0, deadline - monotonic())) as response:
             final_url = response.geturl()
             _validate_public_http_url(final_url, context="Final response URL")
             peer_ip = _extract_peer_ip(response)
@@ -233,6 +235,15 @@ class BaseOCRPipeline:
             chunks: list[bytes] = []
             total = 0
             while True:
+                remaining = deadline - monotonic()
+                if remaining <= 0:
+                    raise TimeoutError(f"Timed out fetching image from {src}")
+                raw = getattr(getattr(response, "fp", None), "raw", None)
+                sock = getattr(raw, "_sock", None) if raw is not None else None
+                if sock is None:
+                    sock = getattr(getattr(response, "fp", None), "_sock", None)
+                if sock is not None:
+                    sock.settimeout(remaining)
                 chunk = response.read(64 * 1024)
                 if not chunk:
                     break

@@ -83,9 +83,13 @@ wb2nb article.html
 wb2nb article.html -o recovered.ipynb
 wb2nb article.html --ocr-pipeline local
 OPENAI_API_KEY=... wb2nb article.html --ocr-pipeline openai --model your-model-name
+OPENAI_API_KEY=... wb2nb article.html --ocr-pipeline openai --model your-model-name --allow-remote-image-urls
 GEMINI_API_KEY=... wb2nb article.html --ocr-pipeline gemini --model gemini-2.0-flash
+GEMINI_API_KEY=... wb2nb article.html --ocr-pipeline gemini --model gemini-2.0-flash --allow-remote-image-urls
 GEMINI_API_KEY=... wb2nb article.html --ocr-pipeline gemini --model gemini-2.5-flash --verbose
 ```
+
+`OpenAIOCRPipeline` and `GeminiOCRPipeline` keep remote `http/https` image fetching off by default. Turn it on only when the source HTML contains public remote image URLs that you want those providers to fetch and upload.
 
 ## Python API
 

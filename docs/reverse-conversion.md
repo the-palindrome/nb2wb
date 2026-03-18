@@ -106,6 +106,8 @@ from nb2wb.ocr.openai import OpenAIOCRPipeline
 pipeline = OpenAIOCRPipeline(model="your-model-name")
 ```
 
+Add `allow_remote_image_urls=True` only when the source HTML contains public remote image URLs that you want the OpenAI-backed pipeline to fetch and upload.
+
 ### Google Gemini OCR
 
 Install:
@@ -122,18 +124,23 @@ from nb2wb.ocr.gemini import GeminiOCRPipeline
 pipeline = GeminiOCRPipeline(model="gemini-2.0-flash")
 ```
 
+Add `allow_remote_image_urls=True` only when the source HTML contains public remote image URLs that you want the Gemini-backed pipeline to fetch and upload.
+
 For CLI debugging, add `--verbose` to print package debug logs to stderr while `wb2nb` runs, including OCR progress and timing when OCR is enabled.
 
 ## Image Source Limits
 
-The built-in OCR pipelines read:
+The built-in OCR pipelines always read:
 
 - local paths
 - relative paths resolved from `source_dir`
 - `data:` image URIs
-- public `http://` and `https://` image URLs
 
-Remote URL fetching is SSRF-safe by default: private/loopback hosts are blocked, redirects are revalidated, payload size is capped, and the response must decode as an image.
+The `local` OCR pipeline also reads public `http://` and `https://` image URLs.
+
+The `openai` and `gemini` pipelines block remote image URLs by default. Set `allow_remote_image_urls=True` in Python or `wb2nb --allow-remote-image-urls` in the CLI when you want those providers to fetch public remote images. Blocked attempts log a warning and leave the image on the safe linked-figure path.
+
+Remote URL fetching remains SSRF-safe by default: private/loopback hosts are blocked, redirects are revalidated, payload size is capped, and the full transfer must finish within the timeout budget.
 
 ## Custom OCR Contract
 

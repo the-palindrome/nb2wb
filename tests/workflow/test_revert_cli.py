@@ -126,11 +126,20 @@ class TestRevertCli:
         sentinel = object()
 
         class FakePipeline:
-            def __init__(self, *, model, api_key=None, client=None, verbose=False):
+            def __init__(
+                self,
+                *,
+                model,
+                api_key=None,
+                client=None,
+                verbose=False,
+                allow_remote_image_urls=False,
+            ):
                 seen["model"] = model
                 seen["api_key"] = api_key
                 seen["client"] = client
                 seen["verbose"] = verbose
+                seen["allow_remote_image_urls"] = allow_remote_image_urls
 
             def __call__(self, request):
                 return sentinel
@@ -159,6 +168,7 @@ class TestRevertCli:
         assert seen["model"] == "gpt-4.1-mini"
         assert seen["api_key"] is None
         assert seen["verbose"] is False
+        assert seen["allow_remote_image_urls"] is False
         assert isinstance(seen["document"], dict)
         assert isinstance(seen["ocr_pipeline"], FakePipeline)
         assert seen["verbose"] is False
@@ -223,11 +233,20 @@ class TestRevertCli:
         sentinel = object()
 
         class FakePipeline:
-            def __init__(self, *, model, api_key=None, client=None, verbose=False):
+            def __init__(
+                self,
+                *,
+                model,
+                api_key=None,
+                client=None,
+                verbose=False,
+                allow_remote_image_urls=False,
+            ):
                 seen["model"] = model
                 seen["api_key"] = api_key
                 seen["client"] = client
                 seen["verbose"] = verbose
+                seen["allow_remote_image_urls"] = allow_remote_image_urls
 
             def __call__(self, request):
                 return sentinel
@@ -256,6 +275,7 @@ class TestRevertCli:
         assert seen["model"] == "gemini-2.0-flash"
         assert seen["api_key"] is None
         assert seen["verbose"] is False
+        assert seen["allow_remote_image_urls"] is False
         assert isinstance(seen["document"], dict)
         assert isinstance(seen["ocr_pipeline"], FakePipeline)
         assert seen["verbose"] is False
@@ -270,9 +290,18 @@ class TestRevertCli:
         seen: dict[str, object] = {}
 
         class FakePipeline:
-            def __init__(self, *, model, api_key=None, client=None, verbose=False):
+            def __init__(
+                self,
+                *,
+                model,
+                api_key=None,
+                client=None,
+                verbose=False,
+                allow_remote_image_urls=False,
+            ):
                 seen["model"] = model
                 seen["verbose"] = verbose
+                seen["allow_remote_image_urls"] = allow_remote_image_urls
 
             def __call__(self, request):
                 return {"type": "figure", "payload": ""}
@@ -298,6 +327,97 @@ class TestRevertCli:
 
         assert seen["model"] == "gemini-2.0-flash"
         assert seen["verbose"] is True
+        assert seen["allow_remote_image_urls"] is False
+
+    def test_wb2nb_openai_passes_allow_remote_image_urls_to_pipeline(
+        self,
+        tmp_path: Path,
+        monkeypatch,
+    ):
+        html_path = tmp_path / "post.html"
+        html_path.write_text("<html><body><p>Hello</p></body></html>", encoding="utf-8")
+        seen: dict[str, object] = {}
+
+        class FakePipeline:
+            def __init__(
+                self,
+                *,
+                model,
+                api_key=None,
+                client=None,
+                verbose=False,
+                allow_remote_image_urls=False,
+            ):
+                seen["allow_remote_image_urls"] = allow_remote_image_urls
+
+            def __call__(self, request):
+                return {"type": "figure", "payload": ""}
+
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+        monkeypatch.setattr("nb2wb.revert_cli.OpenAIOCRPipeline", FakePipeline)
+        monkeypatch.setattr(
+            "nb2wb.revert_cli.revert",
+            lambda document, *, ocr_pipeline=None, verbose=False: nbformat.v4.new_notebook(),
+        )
+
+        _run_cli(
+            [
+                "wb2nb",
+                str(html_path),
+                "--ocr-pipeline",
+                "openai",
+                "--model",
+                "gpt-4.1-mini",
+                "--allow-remote-image-urls",
+            ]
+        )
+
+        assert seen["allow_remote_image_urls"] is True
+
+    def test_wb2nb_gemini_passes_allow_remote_image_urls_to_pipeline(
+        self,
+        tmp_path: Path,
+        monkeypatch,
+    ):
+        html_path = tmp_path / "post.html"
+        html_path.write_text("<html><body><p>Hello</p></body></html>", encoding="utf-8")
+        seen: dict[str, object] = {}
+
+        class FakePipeline:
+            def __init__(
+                self,
+                *,
+                model,
+                api_key=None,
+                client=None,
+                verbose=False,
+                allow_remote_image_urls=False,
+            ):
+                seen["allow_remote_image_urls"] = allow_remote_image_urls
+
+            def __call__(self, request):
+                return {"type": "figure", "payload": ""}
+
+        monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+        monkeypatch.setattr("nb2wb.revert_cli.GeminiOCRPipeline", FakePipeline)
+        monkeypatch.setattr(
+            "nb2wb.revert_cli.revert",
+            lambda document, *, ocr_pipeline=None, verbose=False: nbformat.v4.new_notebook(),
+        )
+
+        _run_cli(
+            [
+                "wb2nb",
+                str(html_path),
+                "--ocr-pipeline",
+                "gemini",
+                "--model",
+                "gemini-2.0-flash",
+                "--allow-remote-image-urls",
+            ]
+        )
+
+        assert seen["allow_remote_image_urls"] is True
 
     def test_wb2nb_passes_verbose_flag_to_api(self, tmp_path: Path, monkeypatch):
         html_path = tmp_path / "post.html"

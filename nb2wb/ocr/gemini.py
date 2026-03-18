@@ -37,6 +37,7 @@ class GeminiOCRPipeline(BaseMultimodalLLMOCRPipeline):
         api_key: str | None = None,
         client: Any | None = None,
         verbose: bool = False,
+        allow_remote_image_urls: bool = False,
     ) -> None:
         """Initialize a Gemini-backed OCR pipeline.
 
@@ -45,11 +46,17 @@ class GeminiOCRPipeline(BaseMultimodalLLMOCRPipeline):
             api_key: Optional explicit API key for the Gemini client.
             client: Optional prebuilt client, mainly for tests.
             verbose: Whether to emit debug logs to stderr during OCR.
+            allow_remote_image_urls: Whether to let this pipeline fetch public
+                remote image URLs before uploading them to Gemini.
 
         Returns:
             ``None``. The pipeline stores the model and client.
         """
-        super().__init__(model=model, verbose=verbose)
+        super().__init__(
+            model=model,
+            verbose=verbose,
+            allow_remote_image_urls=allow_remote_image_urls,
+        )
         self._client = client or self._build_client(api_key=api_key)
 
     def _build_client(self, *, api_key: str | None):
@@ -93,6 +100,7 @@ class GeminiOCRPipeline(BaseMultimodalLLMOCRPipeline):
         Returns:
             The raw Gemini API result object.
         """
+        self._ensure_remote_image_urls_allowed(request)
         self._debug("reading image bytes")
         read_started = time.monotonic()
         image_bytes, mime_type = self.read_image_bytes(request)

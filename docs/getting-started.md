@@ -72,6 +72,8 @@ OPENAI_API_KEY=... wb2nb article.html --ocr-pipeline openai --model your-model-n
 GEMINI_API_KEY=... wb2nb article.html --ocr-pipeline gemini --model gemini-2.0-flash
 ```
 
+Add `--allow-remote-image-urls` when `openai` or `gemini` OCR needs to fetch public remote image URLs from the source HTML. The local OCR pipeline already supports those URLs without an extra flag.
+
 ## First Python API Call
 
 `nb2wb.convert()` accepts in-memory payloads, not paths. Load files first, then convert:
