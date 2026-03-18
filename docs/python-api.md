@@ -222,7 +222,7 @@ The built-in OCR pipelines always read:
 
 The local OCR pipeline also reads public `http://` and `https://` image URLs.
 
-The OpenAI and Gemini OCR pipelines fetch public remote image URLs by default. Pass `allow_remote_image_urls=False` when you want those providers to leave remote images on the linked-figure fallback path instead. Blocked attempts log a warning before the pipeline raises.
+The OpenAI and Gemini OCR pipelines fetch public remote `http://` and `https://` image URLs.
 
 Remote URL fetching remains SSRF-safe by default: private/loopback hosts are rejected, redirects are revalidated, payload size is capped, and the full transfer must finish within the timeout budget.
 

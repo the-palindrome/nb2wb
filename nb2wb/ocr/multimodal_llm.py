@@ -21,15 +21,12 @@ class BaseMultimodalLLMOCRPipeline(BaseOCRPipeline):
         *,
         model: str,
         verbose: bool = False,
-        allow_remote_image_urls: bool = True,
     ) -> None:
         """Store and validate the model name used by the pipeline.
 
         Args:
             model: Provider model name to use for OCR.
             verbose: Whether to emit debug logs to stderr during OCR.
-            allow_remote_image_urls: Whether provider OCR may fetch and upload
-                public remote image URLs.
 
         Returns:
             ``None``. The pipeline stores the normalized model string.
@@ -39,7 +36,6 @@ class BaseMultimodalLLMOCRPipeline(BaseOCRPipeline):
             raise ValueError(f"model is required for {self.__class__.__name__}")
         self.model = normalized_model
         self._verbose = verbose
-        self._allow_remote_image_urls = allow_remote_image_urls
         self._logger = logging.getLogger(self.__class__.__module__)
 
     def __call__(self, request: OCRRequest) -> dict[str, str]:
@@ -174,22 +170,6 @@ class BaseMultimodalLLMOCRPipeline(BaseOCRPipeline):
             "Correctly indent code from code snippet screenshots."
             "Tables must follow markdown syntax."
         )
-
-    def _ensure_remote_image_urls_allowed(self, request: OCRRequest) -> None:
-        if not self._allow_remote_image_urls and self._is_remote_http_source(
-            request.src.strip()
-        ):
-            self._logger.warning(
-                "%s OCR blocked remote image URL while allow_remote_image_urls is disabled "
-                "(source=%s)",
-                self.provider_name,
-                self._describe_request_source(request),
-            )
-            raise ValueError(
-                f"Remote HTTP(S) image URLs are disabled for "
-                f"{self.provider_name} OCR; pass allow_remote_image_urls=True "
-                f"(or omit --disallow-remote-image-urls in the CLI) to enable them."
-            )
 
     def _response_schema(self) -> dict[str, Any]:
         """Return the JSON schema enforced for OCR responses.

@@ -42,7 +42,6 @@ Common reasons:
 - no `ocr_pipeline` was provided
 - local OCR dependencies are missing
 - the remote image URL is blocked by SSRF safeguards (private/loopback host) or fetch validation (timeout, size, or MIME checks)
-- the `openai` or `gemini` OCR pipeline encountered a remote image URL after `allow_remote_image_urls` was explicitly turned off
 - the OCR pipeline classified the image as `figure`
 - OCR failed and the pipeline fell back to the safe figure result
 

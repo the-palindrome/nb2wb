@@ -24,7 +24,6 @@ class OpenAIOCRPipeline(BaseMultimodalLLMOCRPipeline):
         api_key: str | None = None,
         client: Any | None = None,
         verbose: bool = False,
-        allow_remote_image_urls: bool = True,
     ) -> None:
         """Initialize an OpenAI-backed OCR pipeline.
 
@@ -33,8 +32,6 @@ class OpenAIOCRPipeline(BaseMultimodalLLMOCRPipeline):
             api_key: Optional explicit API key for the OpenAI client.
             client: Optional prebuilt client, mainly for tests.
             verbose: Whether to emit debug logs to stderr during OCR.
-            allow_remote_image_urls: Whether to let this pipeline fetch public
-                remote image URLs before uploading them to OpenAI.
 
         Returns:
             ``None``. The pipeline stores the model and client.
@@ -42,7 +39,6 @@ class OpenAIOCRPipeline(BaseMultimodalLLMOCRPipeline):
         super().__init__(
             model=model,
             verbose=verbose,
-            allow_remote_image_urls=allow_remote_image_urls,
         )
         self._client = client or self._build_client(api_key=api_key)
 
@@ -81,7 +77,6 @@ class OpenAIOCRPipeline(BaseMultimodalLLMOCRPipeline):
         Returns:
             The raw Responses API result object.
         """
-        self._ensure_remote_image_urls_allowed(request)
         self._debug("encoding image as data URL")
         encode_started = time.monotonic()
         image_data_url = self.image_data_url(request)

@@ -72,7 +72,7 @@ OPENAI_API_KEY=... wb2nb article.html --ocr-pipeline openai --model your-model-n
 GEMINI_API_KEY=... wb2nb article.html --ocr-pipeline gemini --model gemini-2.0-flash
 ```
 
-`openai` and `gemini` OCR fetch public remote image URLs by default. Add `--disallow-remote-image-urls` when you want them to leave those images on the linked-figure fallback path instead. The local OCR pipeline already supports those URLs without an extra flag.
+`openai` and `gemini` OCR fetch public remote `http://` and `https://` image URLs.
 
 ## First Python API Call
 
