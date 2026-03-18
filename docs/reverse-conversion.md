@@ -126,13 +126,17 @@ For CLI debugging, add `--verbose` to print package debug logs to stderr while `
 
 ## Image Source Limits
 
-The built-in OCR pipelines only read:
+The built-in OCR pipelines always read:
 
 - local paths
 - relative paths resolved from `source_dir`
 - `data:` image URIs
 
-They do not download remote `http://` or `https://` images. When the source is remote, the safe fallback is a linked figure in markdown.
+The `local` OCR pipeline also reads public `http://` and `https://` image URLs.
+
+The `openai` and `gemini` pipelines fetch public remote `http://` and `https://` image URLs.
+
+Remote URL fetching remains SSRF-safe by default: private/loopback hosts are blocked, redirects are revalidated, payload size is capped, and the full transfer must finish within the timeout budget.
 
 ## Custom OCR Contract
 

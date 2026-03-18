@@ -12,6 +12,13 @@ from nb2wb.ocr.local import (
     local_ocr_pipeline,
 )
 
+_TINY_PNG = (
+    b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01"
+    b"\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde"
+    b"\x00\x00\x00\x0cIDATx\x9cc\xf8\xff\xff?\x00\x05\xfe\x02\xfe\r\xefF\xb8"
+    b"\x00\x00\x00\x00IEND\xaeB`\x82"
+)
+
 
 class TestLocalOcrPipeline:
     def test_latex_ocr_model_config_prefers_onnx_and_fast_processor(self):
@@ -151,3 +158,23 @@ class TestLocalOcrPipeline:
         )
 
         assert result == {"type": "figure", "payload": ""}
+
+    def test_pipeline_supports_remote_image_sources_for_code_ocr(self, monkeypatch):
+        monkeypatch.setattr(local_ocr_pipeline, "_classify_with_pix2text", lambda request: None)
+        monkeypatch.setattr(local_ocr_pipeline, "_matches_code_histogram", lambda request: True)
+        monkeypatch.setattr(local_ocr_pipeline, "_run_code_ocr", lambda image: "print(42)")
+        monkeypatch.setattr(
+            local_ocr_pipeline,
+            "_fetch_remote_image_bytes",
+            lambda src: (_TINY_PNG, "image/png"),
+        )
+
+        result = local_ocr_pipeline(
+            OCRRequest(
+                src="https://example.com/snippet.png",
+                alt="Python code snippet",
+                classes=("code-snippet",),
+            )
+        )
+
+        assert result == {"type": "code", "payload": "print(42)"}

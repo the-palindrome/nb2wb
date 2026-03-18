@@ -41,7 +41,7 @@ Common reasons:
 
 - no `ocr_pipeline` was provided
 - local OCR dependencies are missing
-- the HTML references remote `http/https` images instead of local files or `data:` URIs
+- the remote image URL is blocked by SSRF safeguards (private/loopback host) or fetch validation (timeout, size, or MIME checks)
 - the OCR pipeline classified the image as `figure`
 - OCR failed and the pipeline fell back to the safe figure result
 

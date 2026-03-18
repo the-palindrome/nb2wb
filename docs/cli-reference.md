@@ -117,7 +117,8 @@ GEMINI_API_KEY=... wb2nb article.html --ocr-pipeline gemini --model gemini-2.5-f
 - supported code blocks become code cells
 - unsupported code blocks remain fenced markdown
 - images remain linked unless OCR is enabled
-- built-in OCR pipelines only read local paths and `data:` images
+- `local` OCR reads local paths, `data:` images, and public `http/https` image URLs
+- `openai` and `gemini` OCR read local paths, `data:` images, and public `http/https` image URLs
 
 ## Input Validation
 

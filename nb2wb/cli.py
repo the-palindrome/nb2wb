@@ -126,14 +126,22 @@ def _get_ngrok_url(max_attempts: int = 10) -> str:
     for _ in range(max_attempts):
         time.sleep(1)
         try:
-            with urllib.request.urlopen("http://127.0.0.1:4040/api/tunnels", timeout=2) as resp:
+            with urllib.request.urlopen(
+                "http://127.0.0.1:4040/api/tunnels", timeout=2
+            ) as resp:
                 data = json.loads(resp.read())
             for tunnel in data.get("tunnels", []):
                 if tunnel.get("proto") == "https":
                     return tunnel["public_url"]
             if data.get("tunnels"):
                 return data["tunnels"][0]["public_url"]
-        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, KeyError, TypeError):
+        except (
+            urllib.error.URLError,
+            TimeoutError,
+            json.JSONDecodeError,
+            KeyError,
+            TypeError,
+        ):
             continue
     raise RuntimeError("Could not get ngrok tunnel URL. Is ngrok running?")
 
@@ -214,7 +222,9 @@ def main() -> None:
         prog="nb2wb",
         description="Convert Jupyter Notebooks, Quarto, or Markdown documents to web-ready HTML",
     )
-    parser.add_argument("notebook", type=Path, help="Path to the .ipynb, .qmd, or .md file")
+    parser.add_argument(
+        "notebook", type=Path, help="Path to the .ipynb, .qmd, or .md file"
+    )
     parser.add_argument(
         "-c", "--config", type=Path, default=None, help="Path to config.yaml (optional)"
     )
@@ -302,16 +312,16 @@ def main() -> None:
     with verbose_logging(args.verbose):
         started = time.monotonic()
         try:
-            notebook_path = _sanitize_cli_path(
+            notebook_path = sanitize_optional_cli_path(
                 args.notebook,
-                arg_name="notebook path",
+                label="notebook path",
                 must_exist=True,
                 allowed_suffixes=_ALLOWED_INPUT_SUFFIXES,
             )
-            config_path = _sanitize_cli_path(args.config, arg_name="config path")
-            output_path = _sanitize_cli_path(
+            config_path = sanitize_optional_cli_path(args.config, label="config path")
+            output_path = sanitize_optional_cli_path(
                 args.output or notebook_path.with_suffix(".html"),
-                arg_name="output path",
+                label="output path",
             )
         except (FileNotFoundError, ValueError) as exc:
             print(f"Error: {exc}", file=sys.stderr)
@@ -377,32 +387,6 @@ def main() -> None:
         elif args.open:
             logger.debug("Opening output in browser: %s", output_path)
             webbrowser.open(output_path.absolute().as_uri())
-
-
-def _sanitize_cli_path(
-    path: Path | None,
-    *,
-    arg_name: str,
-    must_exist: bool = False,
-    allowed_suffixes: frozenset[str] | None = None,
-) -> Path | None:
-    """Validate and sanitize a user-provided filesystem path.
-
-    Args:
-        path: Parsed path value, or ``None`` when the argument is omitted.
-        arg_name: Human-readable argument label for error messages.
-        must_exist: Whether the path must already exist on disk.
-        allowed_suffixes: Optional set of permitted filename suffixes.
-
-    Returns:
-        The validated path, or ``None`` when no path was provided.
-    """
-    return sanitize_optional_cli_path(
-        path,
-        label=arg_name,
-        must_exist=must_exist,
-        allowed_suffixes=allowed_suffixes,
-    )
 
 
 if __name__ == "__main__":

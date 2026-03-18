@@ -126,7 +126,14 @@ class TestRevertCli:
         sentinel = object()
 
         class FakePipeline:
-            def __init__(self, *, model, api_key=None, client=None, verbose=False):
+            def __init__(
+                self,
+                *,
+                model,
+                api_key=None,
+                client=None,
+                verbose=False,
+            ):
                 seen["model"] = model
                 seen["api_key"] = api_key
                 seen["client"] = client
@@ -223,7 +230,14 @@ class TestRevertCli:
         sentinel = object()
 
         class FakePipeline:
-            def __init__(self, *, model, api_key=None, client=None, verbose=False):
+            def __init__(
+                self,
+                *,
+                model,
+                api_key=None,
+                client=None,
+                verbose=False,
+            ):
                 seen["model"] = model
                 seen["api_key"] = api_key
                 seen["client"] = client
@@ -270,7 +284,14 @@ class TestRevertCli:
         seen: dict[str, object] = {}
 
         class FakePipeline:
-            def __init__(self, *, model, api_key=None, client=None, verbose=False):
+            def __init__(
+                self,
+                *,
+                model,
+                api_key=None,
+                client=None,
+                verbose=False,
+            ):
                 seen["model"] = model
                 seen["verbose"] = verbose
 
@@ -313,3 +334,21 @@ class TestRevertCli:
         _run_cli(["wb2nb", str(html_path), "--verbose"])
 
         assert seen["verbose"] is True
+
+    def test_wb2nb_rejects_removed_disallow_remote_image_urls_flag(
+        self,
+        tmp_path: Path,
+        capsys,
+    ):
+        html_path = tmp_path / "post.html"
+        html_path.write_text("<html><body><p>Hello</p></body></html>", encoding="utf-8")
+
+        try:
+            _invoke_cli(["wb2nb", str(html_path), "--disallow-remote-image-urls"])
+        except SystemExit as exc:
+            assert exc.code == 2
+        else:  # pragma: no cover
+            raise AssertionError("expected parser error for removed CLI flag")
+
+        captured = capsys.readouterr()
+        assert "unrecognized arguments: --disallow-remote-image-urls" in captured.err

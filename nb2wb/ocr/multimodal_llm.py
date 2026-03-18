@@ -16,7 +16,12 @@ class BaseMultimodalLLMOCRPipeline(BaseOCRPipeline):
 
     provider_name = "LLM"
 
-    def __init__(self, *, model: str, verbose: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        model: str,
+        verbose: bool = False,
+    ) -> None:
         """Store and validate the model name used by the pipeline.
 
         Args:

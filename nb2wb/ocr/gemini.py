@@ -49,7 +49,10 @@ class GeminiOCRPipeline(BaseMultimodalLLMOCRPipeline):
         Returns:
             ``None``. The pipeline stores the model and client.
         """
-        super().__init__(model=model, verbose=verbose)
+        super().__init__(
+            model=model,
+            verbose=verbose,
+        )
         self._client = client or self._build_client(api_key=api_key)
 
     def _build_client(self, *, api_key: str | None):

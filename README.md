@@ -87,6 +87,8 @@ GEMINI_API_KEY=... wb2nb article.html --ocr-pipeline gemini --model gemini-2.0-f
 GEMINI_API_KEY=... wb2nb article.html --ocr-pipeline gemini --model gemini-2.5-flash --verbose
 ```
 
+`OpenAIOCRPipeline` and `GeminiOCRPipeline` fetch public remote `http/https` image URLs.
+
 ## Python API
 
 `nb2wb.convert()` is content-only. Load files with helpers first, then pass the in-memory payload into the converter.
