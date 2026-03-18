@@ -1,16 +1,25 @@
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import sys
 from types import SimpleNamespace
 
+from nb2wb.ocr import base as ocr_base
 from nb2wb.ocr.base import OCRRequest
 from nb2wb.ocr.gemini import GeminiOCRPipeline
 from nb2wb.ocr.openai import OpenAIOCRPipeline
 
 
 _DATA_URL = "data:image/png;base64,QUJD"
+_REMOTE_URL = "https://example.com/img.png"
+_TINY_PNG = (
+    b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01"
+    b"\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89"
+    b"\x00\x00\x00\nIDATx\x9cc\xf8\xcf\xc0\x00\x00\x00\x03"
+    b"\x00\x01\x8e\xea\xfe\x0e\x00\x00\x00\x00IEND\xaeB`\x82"
+)
 
 
 class _FakeResponses:
@@ -49,6 +58,93 @@ class _FakeGeminiClient:
         self.models = _FakeGeminiModels(result=result, error=error)
 
 
+class _FakeRemoteHeaders:
+    def __init__(self, *, content_type: str, content_length: int | None = None):
+        self._content_type = content_type
+        self._values: dict[str, str] = {}
+        if content_length is not None:
+            self._values["Content-Length"] = str(content_length)
+
+    def get(self, name: str, default: str | None = None) -> str | None:
+        return self._values.get(name, default)
+
+    def get_content_type(self) -> str:
+        return self._content_type
+
+
+class _FakeRemoteResponse:
+    def __init__(
+        self,
+        *,
+        data: bytes,
+        content_type: str,
+        url: str,
+        content_length: int | None = None,
+    ) -> None:
+        self._data = data
+        self._offset = 0
+        self._url = url
+        self.headers = _FakeRemoteHeaders(
+            content_type=content_type,
+            content_length=content_length,
+        )
+        self.fp = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def geturl(self) -> str:
+        return self._url
+
+    def read(self, size: int = -1) -> bytes:
+        if size < 0:
+            chunk = self._data[self._offset :]
+            self._offset = len(self._data)
+            return chunk
+        if self._offset >= len(self._data):
+            return b""
+        end = min(self._offset + size, len(self._data))
+        chunk = self._data[self._offset : end]
+        self._offset = end
+        return chunk
+
+
+class _FakeRemoteOpener:
+    def __init__(self, response: _FakeRemoteResponse):
+        self._response = response
+        self.calls: list[dict[str, object]] = []
+
+    def open(self, request, timeout: int):
+        self.calls.append({"url": request.full_url, "timeout": timeout})
+        return self._response
+
+
+def _patch_remote_fetch(
+    monkeypatch,
+    *,
+    data: bytes = _TINY_PNG,
+    content_type: str = "image/png",
+    url: str = _REMOTE_URL,
+) -> _FakeRemoteOpener:
+    response = _FakeRemoteResponse(
+        data=data,
+        content_type=content_type,
+        url=url,
+        content_length=len(data),
+    )
+    opener = _FakeRemoteOpener(response)
+    monkeypatch.setattr(ocr_base, "_is_private_host", lambda host: False)
+    monkeypatch.setattr(
+        ocr_base.urllib.request,
+        "build_opener",
+        lambda *args: opener,
+    )
+    return opener
+
+
 class TestOpenAIOcrPipeline:
     def test_requires_api_key_without_client(self, monkeypatch):
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
@@ -85,6 +181,27 @@ class TestOpenAIOcrPipeline:
         assert content["type"] == "input_image"
         assert content["image_url"] == _DATA_URL
         assert "structured JSON" in call["instructions"]
+
+    def test_builds_responses_request_with_remote_image_url(self, monkeypatch):
+        fake_client = _FakeClient(
+            result=SimpleNamespace(output_text='{"type":"figure","payload":""}')
+        )
+        pipeline = OpenAIOCRPipeline(model="gpt-4.1-mini", client=fake_client)
+        opener = _patch_remote_fetch(monkeypatch)
+
+        result = pipeline(OCRRequest(src=_REMOTE_URL, alt="Remote chart"))
+
+        assert result == {"type": "figure", "payload": ""}
+        assert opener.calls == [
+            {
+                "url": _REMOTE_URL,
+                "timeout": ocr_base._REMOTE_IMAGE_TIMEOUT,
+            }
+        ]
+        call = fake_client.responses.calls[0]
+        content = call["input"][0]["content"][0]
+        assert content["type"] == "input_image"
+        assert content["image_url"].startswith("data:image/png;base64,")
 
     def test_parses_all_supported_types(self):
         for result_type, payload in (
@@ -204,6 +321,27 @@ class TestGeminiOcrPipeline:
         assert "structured JSON" in parts[0]["text"]
         assert parts[1]["inline_data"]["mime_type"] == "image/png"
         assert parts[1]["inline_data"]["data"] == "QUJD"
+
+    def test_builds_generate_content_request_with_remote_image_url(self, monkeypatch):
+        fake_client = _FakeGeminiClient(
+            result=SimpleNamespace(text='{"type":"figure","payload":""}')
+        )
+        pipeline = GeminiOCRPipeline(model="gemini-2.0-flash", client=fake_client)
+        opener = _patch_remote_fetch(monkeypatch)
+
+        result = pipeline(OCRRequest(src=_REMOTE_URL, alt="Remote chart"))
+
+        assert result == {"type": "figure", "payload": ""}
+        assert opener.calls == [
+            {
+                "url": _REMOTE_URL,
+                "timeout": ocr_base._REMOTE_IMAGE_TIMEOUT,
+            }
+        ]
+        call = fake_client.models.calls[0]
+        inline_data = call["contents"][0]["parts"][1]["inline_data"]
+        assert inline_data["mime_type"] == "image/png"
+        assert inline_data["data"] == base64.b64encode(_TINY_PNG).decode("ascii")
 
     def test_parses_all_supported_types(self):
         for result_type, payload in (

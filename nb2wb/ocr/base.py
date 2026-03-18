@@ -4,12 +4,29 @@ import base64
 import binascii
 from contextlib import contextmanager
 from dataclasses import dataclass
+import ipaddress
 from io import BytesIO
 import mimetypes
 from pathlib import Path
 from pathlib import PurePosixPath
+import socket
 from tempfile import NamedTemporaryFile
+import urllib.request
 from urllib.parse import unquote, urlparse
+
+_MAX_REMOTE_IMAGE_BYTES = 50 * 1024 * 1024
+_REMOTE_IMAGE_TIMEOUT = 30
+_ALLOWED_REMOTE_IMAGE_MIME_TYPES = frozenset(
+    {
+        "image/png",
+        "image/jpeg",
+        "image/gif",
+        "image/svg+xml",
+        "image/webp",
+        "image/bmp",
+        "image/tiff",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -36,7 +53,12 @@ class OCRRequest:
 
 
 class BaseOCRPipeline:
-    """Base class for OCR pipelines that need shared image-loading helpers."""
+    """Base class for OCR pipelines that need shared image-loading helpers.
+
+    Subclasses should prefer ``load_image()``, ``read_image_bytes()``, and
+    ``input_image_path()`` so they automatically support local paths, data URIs,
+    and SSRF-safe public HTTP(S) image URLs.
+    """
 
     def __call__(self, request: OCRRequest) -> dict[str, str]:
         """Run OCR for one image request.
@@ -78,22 +100,23 @@ class BaseOCRPipeline:
         Returns:
             A Pillow image converted to RGB mode.
         """
-        try:
-            from PIL import Image
-        except ImportError as exc:  # pragma: no cover - Pillow is a core dependency.
-            raise RuntimeError("Pillow is required to load images for OCR.") from exc
+        image_module = self._image_module()
 
         src = request.src.strip()
         if not src:
             raise ValueError("image source is empty")
 
         if src.startswith("data:"):
-            return self._load_data_uri_image(src, Image)
+            return self._load_data_uri_image(src, image_module)
+
+        if self._is_remote_http_source(src):
+            image_data, _mime_type = self._fetch_remote_image_bytes(src)
+            return self._load_image_bytes(image_data, image_module)
 
         path = self.resolve_image_path(request)
         if path is None:
-            raise ValueError("remote image URLs are not supported for OCR")
-        return self.open_pil_image(path, Image)
+            raise ValueError("unsupported image source for OCR")
+        return self.open_pil_image(path, image_module)
 
     def resolve_image_path(self, request: OCRRequest) -> Path | None:
         """Resolve a local filesystem path for an image source when possible.
@@ -151,9 +174,12 @@ class BaseOCRPipeline:
         if src.startswith("data:"):
             return self._decode_data_uri(src)
 
+        if self._is_remote_http_source(src):
+            return self._fetch_remote_image_bytes(src)
+
         path = self.resolve_image_path(request)
         if path is None:
-            raise ValueError("remote image URLs are not supported for OCR")
+            raise ValueError("unsupported image source for OCR")
 
         resolved = path.expanduser()
         if not resolved.exists():
@@ -164,6 +190,72 @@ class BaseOCRPipeline:
             return resolved.read_bytes(), mime_type
 
         image = self.load_image(request)
+        buffer = BytesIO()
+        image.save(buffer, format="PNG")
+        return buffer.getvalue(), "image/png"
+
+    def _fetch_remote_image_bytes(self, src: str) -> tuple[bytes, str]:
+        """Fetch a remote HTTP(S) image with SSRF, timeout, and size checks.
+
+        Args:
+            src: Remote image URL to fetch.
+
+        Returns:
+            A ``(bytes, mime_type)`` tuple for the fetched image.
+        """
+        _validate_public_http_url(src)
+
+        opener = urllib.request.build_opener(_SafeRedirectHandler())
+        request = urllib.request.Request(src)
+        with opener.open(request, timeout=_REMOTE_IMAGE_TIMEOUT) as response:
+            final_url = response.geturl()
+            _validate_public_http_url(final_url, context="Final response URL")
+            peer_ip = _extract_peer_ip(response)
+            if peer_ip and _is_private_host(peer_ip):
+                raise ValueError(
+                    f"Refusing response from private/loopback peer IP: {peer_ip}"
+                )
+
+            content_length = response.headers.get("Content-Length")
+            if content_length:
+                try:
+                    declared_size = int(content_length)
+                except ValueError as exc:
+                    raise ValueError(
+                        f"Invalid Content-Length header for {src}: {content_length!r}"
+                    ) from exc
+                if declared_size > _MAX_REMOTE_IMAGE_BYTES:
+                    raise ValueError(
+                        f"Image too large ({declared_size} bytes, "
+                        f"max {_MAX_REMOTE_IMAGE_BYTES})"
+                    )
+
+            chunks: list[bytes] = []
+            total = 0
+            while True:
+                chunk = response.read(64 * 1024)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > _MAX_REMOTE_IMAGE_BYTES:
+                    raise ValueError(
+                        f"Image exceeds {_MAX_REMOTE_IMAGE_BYTES} byte limit"
+                    )
+                chunks.append(chunk)
+            image_data = b"".join(chunks)
+            mime_type = response.headers.get_content_type()
+
+        if mime_type in _ALLOWED_REMOTE_IMAGE_MIME_TYPES:
+            return image_data, mime_type
+
+        # Some servers mislabel images (for example as application/octet-stream).
+        # Fall back to decoding with Pillow and re-encoding to PNG.
+        try:
+            image = self._load_image_bytes(image_data, self._image_module())
+        except Exception as exc:
+            raise ValueError(
+                f"Disallowed MIME type '{mime_type}' for image at {src}"
+            ) from exc
         buffer = BytesIO()
         image.save(buffer, format="PNG")
         return buffer.getvalue(), "image/png"
@@ -240,6 +332,19 @@ class BaseOCRPipeline:
             A Pillow image converted to RGB mode.
         """
         data, _mime_type = BaseOCRPipeline._decode_data_uri(src)
+        return BaseOCRPipeline._load_image_bytes(data, image_module)
+
+    @staticmethod
+    def _load_image_bytes(data: bytes, image_module):
+        """Decode raw image bytes and normalize to RGB mode.
+
+        Args:
+            data: Raw image bytes.
+            image_module: Pillow image module used to open the payload.
+
+        Returns:
+            A Pillow image converted to RGB mode.
+        """
         with image_module.open(BytesIO(data)) as handle:
             return handle.convert("RGB")
 
@@ -277,6 +382,114 @@ class BaseOCRPipeline:
         if mime_type and mime_type.startswith("image/"):
             return mime_type
         return None
+
+    @staticmethod
+    def _is_remote_http_source(src: str) -> bool:
+        """Check whether a source string is an HTTP(S) URL."""
+        parsed = urlparse(src)
+        return parsed.scheme in {"http", "https"}
+
+    @staticmethod
+    def _image_module():
+        """Import and return the Pillow ``Image`` module."""
+        try:
+            from PIL import Image
+        except ImportError as exc:  # pragma: no cover - Pillow is a core dependency.
+            raise RuntimeError("Pillow is required to load images for OCR.") from exc
+        return Image
+
+
+class _SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Redirect handler that rejects redirects to non-public hosts."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        """Validate redirect targets before following them."""
+        _validate_public_http_url(newurl, context="Redirect target")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def _validate_public_http_url(url: str, *, context: str = "Image URL") -> str:
+    """Validate that a URL is public HTTP(S) and safe to fetch."""
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError(f"{context} must use http/https: {url}")
+    if parsed.username or parsed.password:
+        raise ValueError(f"{context} must not contain credentials: {url}")
+
+    hostname = parsed.hostname or ""
+    if not hostname:
+        raise ValueError(f"{context} is missing a hostname: {url}")
+
+    if _is_private_host(hostname):
+        raise ValueError(
+            f"Refusing to fetch image from private/loopback host: {hostname}"
+        )
+
+    return hostname
+
+
+def _is_private_host(hostname: str) -> bool:
+    """Check whether a hostname resolves to a non-public address."""
+
+    def _is_non_public(addr: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+        return (
+            addr.is_private
+            or addr.is_loopback
+            or addr.is_link_local
+            or addr.is_multicast
+            or addr.is_reserved
+            or addr.is_unspecified
+            or not addr.is_global
+        )
+
+    try:
+        addr = ipaddress.ip_address(hostname)
+        return _is_non_public(addr)
+    except ValueError:
+        pass
+
+    try:
+        infos = socket.getaddrinfo(hostname, None, type=socket.SOCK_STREAM)
+        if not infos:
+            return True
+        for _family, _type, _proto, _canonname, sockaddr in infos:
+            addr = ipaddress.ip_address(sockaddr[0])
+            if _is_non_public(addr):
+                return True
+    except OSError:
+        return True
+    return False
+
+
+def _extract_peer_ip(response) -> str | None:
+    """Extract the peer IP address from a urllib response when possible."""
+    fp = getattr(response, "fp", None)
+    if fp is None:
+        return None
+
+    sockets = []
+    raw = getattr(fp, "raw", None)
+    if raw is not None:
+        sock = getattr(raw, "_sock", None)
+        if sock is not None:
+            sockets.append(sock)
+        conn = getattr(raw, "_connection", None)
+        if conn is not None:
+            conn_sock = getattr(conn, "sock", None)
+            if conn_sock is not None:
+                sockets.append(conn_sock)
+    fp_sock = getattr(fp, "_sock", None)
+    if fp_sock is not None:
+        sockets.append(fp_sock)
+
+    for sock in sockets:
+        try:
+            peer = sock.getpeername()
+        except OSError:
+            continue
+        if isinstance(peer, tuple) and peer:
+            return str(peer[0])
+    return None
 
 
 __all__ = [
