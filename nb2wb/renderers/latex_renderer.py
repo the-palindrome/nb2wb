@@ -69,6 +69,21 @@ _MAX_PREAMBLE_CHARS = 20_000
 _MIN_EDGE_PADDING = 12
 _MAX_EDGE_PADDING = 32
 _MIN_AUTO_FONT_SIZE = 12
+_ROW_BREAK_RE = re.compile(r"\\\\(?:\[[^\]]*\])?")
+_MATH_MODE_ONLY_ENVS = frozenset(
+    {
+        "aligned",
+        "alignedat",
+        "gathered",
+        "cases",
+        "split",
+        "matrix",
+        "pmatrix",
+        "bmatrix",
+        "vmatrix",
+        "smallmatrix",
+    }
+)
 
 _LATEX_RENDER_CACHE: OrderedDict[tuple[object, ...], str] = OrderedDict()
 _LATEX_RENDER_CACHE_LOCK = Lock()
@@ -131,6 +146,46 @@ def _strip_tex_comments(text: str) -> str:
         LaTeX text with executable comment content removed.
     """
     return re.sub(r"(?<!\\)%[^\n]*", "", text)
+
+
+def _normalize_multiline_layout(latex: str) -> str:
+    """Wrap bare display-math row breaks in an ``aligned`` environment.
+
+    Args:
+        latex: Display-math source extracted from ``$$...$$`` or similar.
+
+    Returns:
+        A normalized expression suitable for block rendering.
+    """
+    stripped = latex.strip()
+    if not stripped:
+        return stripped
+    if stripped.lstrip().startswith(r"\begin{"):
+        return stripped
+    if _ROW_BREAK_RE.search(stripped) is None:
+        return stripped
+    return "\n".join((r"\begin{aligned}", stripped, r"\end{aligned}"))
+
+
+def _wrap_display_math_for_usetex(latex: str) -> str:
+    """Wrap expressions that require outer display math delimiters.
+
+    Args:
+        latex: Display-math source passed to the usetex backend.
+
+    Returns:
+        A TeX snippet safe to place directly inside ``\\begin{document}``.
+    """
+    stripped = latex.lstrip()
+    if not stripped.startswith(r"\begin{"):
+        return f"\\[{latex}\\]"
+
+    match = re.match(r"\\begin\{([A-Za-z*]+)\}", stripped)
+    env = (match.group(1) if match else "").rstrip("*").lower()
+    if env in _MATH_MODE_ONLY_ENVS:
+        return f"\\[{latex}\\]"
+    return latex
+
 
 def extract_display_math(text: str) -> list[tuple[int, int, str]]:
     """
@@ -278,6 +333,7 @@ def render_latex_block(
     Returns:
         A ``data:image/png`` URI containing the rendered formula.
     """
+    latex = _normalize_multiline_layout(latex)
     combined_preamble = "\n".join(filter(None, [config.preamble, preamble]))
     cache_size = max(int(getattr(config, "cache_size", 0)), 0)
     cache_key: tuple[object, ...] | None = None
@@ -594,7 +650,7 @@ def _render_usetex_png(latex: str, config: LatexConfig, preamble: str = "") -> b
         r"\pagestyle{empty}",
         r"\begin{document}",
         f"\\fontsize{{{size}}}{{{baselineskip}}}\\selectfont",
-        latex if latex.lstrip().startswith(r"\begin{") else f"\\[{latex}\\]",
+        _wrap_display_math_for_usetex(latex),
         r"\end{document}",
     ]))
 
