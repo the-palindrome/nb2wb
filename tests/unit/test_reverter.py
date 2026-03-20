@@ -4,6 +4,14 @@ import nbformat
 
 import nb2wb
 
+_VIDEO_MEDIA_UPLOAD_ID = "35dd1111-2222-3333-4444-555566667777"
+_VIDEO_PLACEHOLDER_FIXTURE = (
+    '<div class="native-video-embed" data-component-name="VideoPlaceholder" '
+    'data-attrs="{&quot;mediaUploadId&quot;:&quot;'
+    f"{_VIDEO_MEDIA_UPLOAD_ID}"
+    '&quot;,&quot;duration&quot;:null}"></div>'
+)
+
 
 class TestReverter:
     def test_revert_prose_only_html_to_markdown_cell(self):
@@ -86,6 +94,81 @@ class TestReverter:
         assert "Intro" in notebook.cells[0].source
         assert "![chart](plain.png)" in notebook.cells[0].source
         assert "Outro" in notebook.cells[0].source
+
+    def test_revert_native_video_placeholder_emits_video_html_and_fallback_link(self):
+        notebook = nb2wb.revert(
+            {
+                "format": "html",
+                "content": f"<html><body>{_VIDEO_PLACEHOLDER_FIXTURE}</body></html>",
+                "source_origin": "example.substack.com/path/ignored",
+            }
+        )
+
+        expected_url = (
+            "https://example.substack.com"
+            f"/api/v1/video/upload/{_VIDEO_MEDIA_UPLOAD_ID}/src?type=mp4"
+        )
+
+        assert len(notebook.cells) == 1
+        assert notebook.cells[0].cell_type == "markdown"
+        assert f'<video controls preload="metadata" playsinline src="{expected_url}"></video>' in notebook.cells[0].source
+        assert f"[Open video]({expected_url})" in notebook.cells[0].source
+
+    def test_revert_preserves_existing_video_and_source_tags_in_markdown_output(self):
+        notebook = nb2wb.revert(
+            """
+            <html><body>
+              <p>Intro</p>
+              <video controls preload="metadata" playsinline>
+                <source src="https://cdn.example.com/video.mp4" type="video/mp4">
+              </video>
+              <p>Outro</p>
+            </body></html>
+            """
+        )
+
+        source = notebook.cells[0].source
+        assert notebook.cells[0].cell_type == "markdown"
+        assert "Intro" in source
+        assert "Outro" in source
+        assert "<video" in source
+        assert 'preload="metadata"' in source
+        assert "<source" in source
+        assert 'src="https://cdn.example.com/video.mp4"' in source
+
+    def test_revert_video_placeholder_without_media_upload_id_does_not_crash(self):
+        notebook = nb2wb.revert(
+            {
+                "format": "html",
+                "content": (
+                    "<html><body>"
+                    '<div class="native-video-embed" data-component-name="VideoPlaceholder" '
+                    'data-attrs="{&quot;duration&quot;:null}"></div>'
+                    "</body></html>"
+                ),
+                "source_origin": "https://example.substack.com",
+            }
+        )
+
+        assert notebook.cells == []
+
+    def test_revert_non_video_imports_are_unchanged_when_source_origin_is_provided(self):
+        html = "<html><body><h1>Title</h1><p>Body text.</p></body></html>"
+
+        baseline = nb2wb.revert(html)
+        with_source_origin = nb2wb.revert(
+            {
+                "format": "html",
+                "content": html,
+                "source_origin": "https://example.substack.com",
+            }
+        )
+
+        assert [cell.cell_type for cell in with_source_origin.cells] == [
+            cell.cell_type for cell in baseline.cells
+        ]
+        assert [cell.source for cell in with_source_origin.cells] == [cell.source for cell in baseline.cells]
+        assert with_source_origin.metadata["kernelspec"]["language"] == baseline.metadata["kernelspec"]["language"]
 
     def test_revert_skips_image_transcription_when_no_pipeline_is_given(self):
         notebook = nb2wb.revert(

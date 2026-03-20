@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import html
+import json
 import logging
 from pathlib import Path
 import re
 from typing import Callable, Iterable
+from urllib.parse import quote, urlsplit
 
 from bs4 import BeautifulSoup, NavigableString, Tag
 import nbformat
@@ -49,6 +51,10 @@ _CONTAINER_TAGS = {
 _INLINE_IMAGE_WRAPPERS = {"p", "div", "a"}
 _CODE_ATTR_KEYS = ("data-language", "data-lang", "language", "lang")
 _LANG_CLASS_RE = re.compile(r"^(?:language|lang)-([a-z0-9+-]+)$", re.IGNORECASE)
+_VIDEO_PLACEHOLDER_CLASS = "native-video-embed"
+_VIDEO_PLACEHOLDER_COMPONENT = "VideoPlaceholder"
+_VIDEO_MARKER_PREFIX = "NB2WBVIDEOBLOCK"
+_MEDIA_UPLOAD_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,255}$")
 logger = logging.getLogger(__name__)
 
 
@@ -105,18 +111,21 @@ class Reverter:
         self,
         *,
         source_dir: Path | None = None,
+        source_origin: str | None = None,
         ocr_pipeline: Callable[[OCRRequest], dict[str, str]] | None = None,
     ) -> None:
         """Configure HTML-to-notebook reversion helpers.
 
         Args:
             source_dir: Base directory for resolving relative image paths.
+            source_origin: Canonical source origin used to rebuild media URLs.
             ocr_pipeline: Optional callable used to transcribe images.
 
         Returns:
             ``None``. The reverter stores the supplied helpers.
         """
         self._source_dir = source_dir
+        self._source_origin = _normalize_source_origin(source_origin)
         self._ocr_pipeline = ocr_pipeline
 
     def revert_html(self, document: str) -> nbformat.NotebookNode:
@@ -131,6 +140,7 @@ class Reverter:
         logger.debug("Reverter starting HTML parse")
         soup = BeautifulSoup(document, "html.parser")
         root = self._content_root(soup)
+        source_origin = self._source_origin or _detect_source_origin(soup)
         blocks = self._extract_blocks(root)
         prose_count = sum(isinstance(block, ProseBlock) for block in blocks)
         code_count = sum(isinstance(block, CodeBlock) for block in blocks)
@@ -143,7 +153,7 @@ class Reverter:
             image_count,
         )
         notebook_language = self._select_notebook_language(blocks)
-        cells = self._assemble_cells(blocks)
+        cells = self._assemble_cells(blocks, source_origin=source_origin)
         notebook = make_notebook(cells, notebook_language)
         notebook.metadata["wb2nb"] = {"source_format": "html", "reverse_scaffold": 1}
         logger.debug(
@@ -204,6 +214,9 @@ class Reverter:
                 continue
             if not isinstance(child, Tag):
                 continue
+            if _is_video_placeholder_tag(child):
+                prose_fragments.append(str(child))
+                continue
             if self._is_code_block(child):
                 flush_prose()
                 blocks.append(self._make_code_block(child))
@@ -244,11 +257,17 @@ class Reverter:
                 return block.language
         return "python"
 
-    def _assemble_cells(self, blocks: list[Block]) -> list[nbformat.NotebookNode]:
+    def _assemble_cells(
+        self,
+        blocks: list[Block],
+        *,
+        source_origin: str | None = None,
+    ) -> list[nbformat.NotebookNode]:
         """Convert extracted blocks into notebook cells.
 
         Args:
             blocks: Ordered prose, code, and image blocks.
+            source_origin: Canonical source origin for rebuilding media URLs.
 
         Returns:
             A list of notebook cells suitable for notebook assembly.
@@ -274,7 +293,10 @@ class Reverter:
 
         for block in blocks:
             if isinstance(block, ProseBlock):
-                markdown_text = _html_to_markdown(block.html).strip()
+                markdown_text = _html_to_markdown(
+                    block.html,
+                    source_origin=source_origin,
+                ).strip()
                 if markdown_text:
                     pending_markdown.append(markdown_text)
                 continue
@@ -508,6 +530,21 @@ def _collect_classes(tag: Tag) -> list[str]:
     return [str(cls) for cls in classes]
 
 
+def _is_video_placeholder_tag(tag: Tag) -> bool:
+    """Return ``True`` when a node matches a native video placeholder."""
+    component_name = tag.get("data-component-name")
+    if isinstance(component_name, str) and component_name.strip() == _VIDEO_PLACEHOLDER_COMPONENT:
+        return True
+    classes = tag.get("class", [])
+    if isinstance(classes, str):
+        class_tokens = [token for token in classes.split() if token]
+    else:
+        class_tokens = []
+        for cls in classes:
+            class_tokens.extend(token for token in str(cls).split() if token)
+    return any(token.lower() == _VIDEO_PLACEHOLDER_CLASS for token in class_tokens)
+
+
 def _summarize_debug_text(value: str, *, limit: int = 120) -> str:
     """Trim debug strings so log lines stay readable."""
     normalized = " ".join(value.split())
@@ -618,18 +655,207 @@ def _latex_markdown(latex: str) -> str:
     return f"$$\n{stripped}\n$$"
 
 
-def _html_to_markdown(fragment: str) -> str:
+def _html_to_markdown(
+    fragment: str,
+    *,
+    source_origin: str | None = None,
+) -> str:
     """Convert HTML into Markdown using the best available backend.
 
     Args:
         fragment: HTML fragment to convert.
+        source_origin: Canonical source origin used to rebuild media links.
 
     Returns:
         Markdown text derived from the fragment.
     """
+    fragment_to_convert = fragment
+    video_replacements: dict[str, str] = {}
+    if _contains_video_markup(fragment):
+        fragment_to_convert, video_replacements = _prepare_video_fragments(
+            fragment,
+            source_origin=source_origin,
+        )
+
     if _markdownify is not None:
-        return _markdownify(fragment, heading_style="ATX").strip()
-    return _fallback_html_to_markdown(fragment).strip()
+        markdown = _markdownify(fragment_to_convert, heading_style="ATX").strip()
+    else:
+        markdown = _fallback_html_to_markdown(fragment_to_convert).strip()
+
+    return _restore_video_markers(markdown, video_replacements).strip()
+
+
+def _contains_video_markup(fragment: str) -> bool:
+    """Check whether an HTML fragment may contain video content."""
+    lowered = fragment.lower()
+    return (
+        "<video" in lowered
+        or "<source" in lowered
+        or _VIDEO_PLACEHOLDER_CLASS in lowered
+        or _VIDEO_PLACEHOLDER_COMPONENT.lower() in lowered
+    )
+
+
+def _prepare_video_fragments(
+    fragment: str,
+    *,
+    source_origin: str | None,
+) -> tuple[str, dict[str, str]]:
+    """Replace video-related nodes with markers before Markdown conversion."""
+    soup = BeautifulSoup(fragment, "html.parser")
+    replacements: dict[str, str] = {}
+    marker_index = 0
+
+    for placeholder in [tag for tag in soup.find_all(True) if _is_video_placeholder_tag(tag)]:
+        replacement = _video_placeholder_markdown(
+            placeholder,
+            source_origin=source_origin,
+        )
+        if not replacement:
+            placeholder.decompose()
+            continue
+        marker = f"{_VIDEO_MARKER_PREFIX}{marker_index}"
+        marker_index += 1
+        replacements[marker] = replacement
+        placeholder.replace_with(NavigableString(marker))
+
+    for video in soup.find_all("video"):
+        marker = f"{_VIDEO_MARKER_PREFIX}{marker_index}"
+        marker_index += 1
+        replacements[marker] = str(video)
+        video.replace_with(NavigableString(marker))
+
+    for source in soup.find_all("source"):
+        if source.find_parent("video") is not None:
+            continue
+        marker = f"{_VIDEO_MARKER_PREFIX}{marker_index}"
+        marker_index += 1
+        replacements[marker] = str(source)
+        source.replace_with(NavigableString(marker))
+
+    return str(soup), replacements
+
+
+def _restore_video_markers(markdown: str, replacements: dict[str, str]) -> str:
+    """Restore captured video snippets after Markdown conversion."""
+    if not replacements:
+        return markdown
+    rendered = markdown
+    for marker, replacement in replacements.items():
+        rendered = rendered.replace(marker, replacement)
+    return rendered
+
+
+def _video_placeholder_markdown(
+    tag: Tag,
+    *,
+    source_origin: str | None,
+) -> str:
+    """Render a native video placeholder node into Markdown-safe output."""
+    media_upload_id = _extract_media_upload_id_from_placeholder(tag)
+    if media_upload_id is None:
+        return ""
+
+    if not source_origin:
+        return f"Video upload ID: `{media_upload_id}`"
+
+    video_url = _video_mp4_url(source_origin, media_upload_id)
+    escaped_video_url = html.escape(video_url, quote=True)
+    return (
+        f'<video controls preload="metadata" playsinline src="{escaped_video_url}"></video>\n\n'
+        f"[Open video]({video_url})"
+    )
+
+
+def _extract_media_upload_id_from_placeholder(tag: Tag) -> str | None:
+    """Decode and parse placeholder attrs to extract ``mediaUploadId``."""
+    raw_data_attrs = tag.get("data-attrs")
+    if not isinstance(raw_data_attrs, str):
+        return None
+
+    attrs = _decode_data_attrs(raw_data_attrs)
+    if attrs is None:
+        return None
+
+    media_upload_id = attrs.get("mediaUploadId")
+    if not isinstance(media_upload_id, str):
+        return None
+    media_upload_id = media_upload_id.strip()
+    if not media_upload_id or not _is_valid_media_upload_id(media_upload_id):
+        return None
+    return media_upload_id
+
+
+def _decode_data_attrs(raw_data_attrs: str) -> dict[str, object] | None:
+    """Decode HTML-escaped placeholder attrs and parse them as JSON."""
+    decoded = html.unescape(raw_data_attrs).strip()
+    if not decoded:
+        return None
+    try:
+        parsed = json.loads(decoded)
+    except json.JSONDecodeError:
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def _is_valid_media_upload_id(media_upload_id: str) -> bool:
+    """Return ``True`` when a media upload id is shape-valid."""
+    return bool(_MEDIA_UPLOAD_ID_RE.fullmatch(media_upload_id))
+
+
+def _video_mp4_url(source_origin: str, media_upload_id: str) -> str:
+    """Build a direct MP4 URL for a media upload id."""
+    encoded_id = quote(media_upload_id, safe="")
+    return f"{source_origin}/api/v1/video/upload/{encoded_id}/src?type=mp4"
+
+
+def _normalize_source_origin(source_origin: str | None) -> str | None:
+    """Normalize an origin value to ``<scheme>://<host[:port]>``."""
+    if not isinstance(source_origin, str):
+        return None
+    candidate = source_origin.strip()
+    if not candidate:
+        return None
+    if "://" not in candidate:
+        candidate = f"https://{candidate}"
+    parsed = urlsplit(candidate)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return None
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
+def _detect_source_origin(soup: BeautifulSoup) -> str | None:
+    """Try to infer a canonical source origin from document metadata."""
+    candidates: list[str] = []
+
+    canonical_links = soup.find_all("link")
+    for link in canonical_links:
+        rel = link.get("rel", [])
+        rel_tokens: list[str]
+        if isinstance(rel, str):
+            rel_tokens = [token for token in rel.split() if token]
+        else:
+            rel_tokens = [str(token) for token in rel]
+        if not any(token.lower() == "canonical" for token in rel_tokens):
+            continue
+        href = link.get("href")
+        if isinstance(href, str):
+            candidates.append(href)
+
+    for meta in soup.find_all("meta"):
+        property_name = meta.get("property")
+        name = meta.get("name")
+        if property_name not in {"og:url"} and name not in {"twitter:url"}:
+            continue
+        content = meta.get("content")
+        if isinstance(content, str):
+            candidates.append(content)
+
+    for candidate in candidates:
+        normalized = _normalize_source_origin(candidate)
+        if normalized is not None:
+            return normalized
+    return None
 
 
 def _fallback_html_to_markdown(fragment: str) -> str:
