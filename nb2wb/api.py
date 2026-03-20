@@ -115,9 +115,10 @@ def revert(
     with verbose_logging(verbose):
         started = time.monotonic()
         logger.debug("Starting revert()")
-        html_document, source_dir = _coerce_html_payload(document)
+        html_document, source_dir, source_origin = _coerce_html_payload(document)
         notebook = Reverter(
             source_dir=source_dir,
+            source_origin=source_origin,
             ocr_pipeline=ocr_pipeline,
         ).revert_html(html_document)
         logger.debug(
@@ -230,7 +231,9 @@ def _coerce_api_payload(
     return _coerce_notebook_node(notebook)
 
 
-def _coerce_html_payload(document: str | Mapping[str, Any]) -> tuple[str, Path | None]:
+def _coerce_html_payload(
+    document: str | Mapping[str, Any],
+) -> tuple[str, Path | None, str | None]:
     """Normalize an HTML revert payload and optional source directory."""
     if isinstance(document, Path):
         raise TypeError(
@@ -238,7 +241,7 @@ def _coerce_html_payload(document: str | Mapping[str, Any]) -> tuple[str, Path |
             "Use load_html_payload(path) to read files first."
         )
     if isinstance(document, str):
-        return document, None
+        return document, None, None
     if not isinstance(document, Mapping):
         raise TypeError(
             "document must be an in-memory HTML payload: raw HTML string or "
@@ -260,7 +263,15 @@ def _coerce_html_payload(document: str | Mapping[str, Any]) -> tuple[str, Path |
         if not isinstance(source_dir_raw, (str, Path)):
             raise TypeError("In-memory HTML payload field 'source_dir' must be path-like.")
         source_dir = _resolve_working_dir(source_dir_raw)
-    return content, source_dir
+
+    source_origin_raw = document.get("source_origin")
+    source_origin: str | None = None
+    if source_origin_raw is not None:
+        if not isinstance(source_origin_raw, str):
+            raise TypeError("In-memory HTML payload field 'source_origin' must be a string.")
+        source_origin = source_origin_raw
+
+    return content, source_dir, source_origin
 
 
 def _coerce_text_string_payload(text: str) -> nbformat.NotebookNode:

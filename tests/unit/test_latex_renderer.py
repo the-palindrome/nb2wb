@@ -333,6 +333,67 @@ class TestRenderLatexBlock:
         result = render_latex_block(latex, minimal_config.latex)
         assert result.startswith("data:image/png;base64,")
 
+    def test_render_wraps_plain_multiline_rows_with_aligned(
+        self,
+        minimal_config,
+        monkeypatch,
+    ):
+        """Bare ``\\`` rows should be wrapped in ``aligned`` before rendering."""
+        seen: dict[str, str] = {}
+        minimal_config.latex.try_usetex = True
+        minimal_config.latex.cache_size = 0
+
+        def fake_validate(latex: str, preamble: str) -> None:
+            return None
+
+        def fake_render_usetex(
+            latex: str,
+            config: LatexConfig,
+            preamble: str = "",
+            tag: int | None = None,
+        ) -> str:
+            seen["latex"] = latex
+            return "data:image/png;base64," + base64.b64encode(b"ok").decode("ascii")
+
+        monkeypatch.setattr(lr, "_validate_usetex_inputs", fake_validate)
+        monkeypatch.setattr(lr, "_render_usetex", fake_render_usetex)
+
+        result = render_latex_block(r"x = 1 \\ y = 2", minimal_config.latex)
+        assert result.startswith("data:image/png;base64,")
+        assert seen["latex"] == "\n".join(
+            (r"\begin{aligned}", r"x = 1 \\ y = 2", r"\end{aligned}")
+        )
+
+    def test_render_keeps_existing_environment_unwrapped(
+        self,
+        minimal_config,
+        monkeypatch,
+    ):
+        """Existing ``\\begin{...}`` blocks should not be wrapped again."""
+        seen: dict[str, str] = {}
+        minimal_config.latex.try_usetex = True
+        minimal_config.latex.cache_size = 0
+
+        def fake_validate(latex: str, preamble: str) -> None:
+            return None
+
+        def fake_render_usetex(
+            latex: str,
+            config: LatexConfig,
+            preamble: str = "",
+            tag: int | None = None,
+        ) -> str:
+            seen["latex"] = latex
+            return "data:image/png;base64," + base64.b64encode(b"ok").decode("ascii")
+
+        monkeypatch.setattr(lr, "_validate_usetex_inputs", fake_validate)
+        monkeypatch.setattr(lr, "_render_usetex", fake_render_usetex)
+
+        source = r"\begin{align}x &= 1 \\ y &= 2\end{align}"
+        result = render_latex_block(source, minimal_config.latex)
+        assert result.startswith("data:image/png;base64,")
+        assert seen["latex"] == source
+
     def test_render_mathtext_auto_shrinks_wide_formula(self, minimal_config, monkeypatch):
         """Over-wide formulas should retry rendering with a smaller font size."""
         font_sizes: list[int] = []
@@ -461,6 +522,42 @@ class TestUseTexRendering:
         preamble = r"\definecolor{customcolor}{RGB}{100,200,50}"
         result = render_latex_block(latex, minimal_config.latex, preamble=preamble)
         assert result.startswith("data:image/png;base64,")
+
+    def test_render_usetex_wraps_aligned_in_display_math(
+        self,
+        minimal_config,
+        monkeypatch,
+    ):
+        """``aligned`` snippets are wrapped in ``\\[...\\]`` before compilation."""
+        captured_tex: list[str] = []
+
+        def fake_run(cmd, **kwargs):
+            if cmd[0] == "latex":
+                tex_path = Path(cmd[-1])
+                captured_tex.append(tex_path.read_text(encoding="utf-8"))
+                output_idx = cmd.index("-output-directory") + 1
+                output_dir = Path(cmd[output_idx])
+                (output_dir / "formula.dvi").write_bytes(b"FAKE_DVI")
+            elif cmd[0] == "dvipng":
+                png_idx = cmd.index("-o") + 1
+                png_path = Path(cmd[png_idx])
+                png_data = (
+                    b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01"
+                    b"\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89"
+                    b"\x00\x00\x00\nIDATx\x9cc\xf8\xcf\xc0\x00\x00\x00\x03"
+                    b"\x00\x01\x8e\xea\xfe\x0e\x00\x00\x00\x00IEND\xaeB`\x82"
+                )
+                png_path.write_bytes(png_data)
+            return subprocess.CompletedProcess(cmd, 0, stdout=b"", stderr=b"")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        minimal_config.latex.try_usetex = True
+        minimal_config.latex.cache_size = 0
+
+        render_latex_block(r"x = 1 \\ y = 2", minimal_config.latex)
+        assert captured_tex
+        assert r"\[\begin{aligned}" in captured_tex[0]
+        assert r"\end{aligned}\]" in captured_tex[0]
 
     def test_render_usetex_fallback_on_error(self, minimal_config, mock_latex_unavailable):
         """Falls back to mathtext when LaTeX unavailable."""

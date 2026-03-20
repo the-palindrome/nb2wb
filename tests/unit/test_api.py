@@ -62,8 +62,9 @@ class TestPublicApi:
         pipeline = lambda request: {"type": "figure", "payload": ""}
 
         class FakeReverter:
-            def __init__(self, *, source_dir=None, ocr_pipeline=None):
+            def __init__(self, *, source_dir=None, source_origin=None, ocr_pipeline=None):
                 seen["source_dir"] = source_dir
+                seen["source_origin"] = source_origin
                 seen["ocr_pipeline"] = ocr_pipeline
 
             def revert_html(self, document):
@@ -78,6 +79,7 @@ class TestPublicApi:
         assert seen["document"] == "<p>Hello</p>"
         assert seen["ocr_pipeline"] is pipeline
         assert seen["source_dir"] is None
+        assert seen["source_origin"] is None
 
     def test_convert_verbose_logs_to_stderr(self, caplog):
         caplog.set_level(logging.DEBUG, logger="nb2wb")
@@ -105,7 +107,7 @@ class TestPublicApi:
         seen: dict[str, object] = {}
 
         class FakeReverter:
-            def __init__(self, *, source_dir=None, ocr_pipeline=None):
+            def __init__(self, *, source_dir=None, source_origin=None, ocr_pipeline=None):
                 seen["ocr_pipeline"] = ocr_pipeline
 
             def revert_html(self, document):
@@ -121,8 +123,9 @@ class TestPublicApi:
         seen: dict[str, object] = {}
 
         class FakeReverter:
-            def __init__(self, *, source_dir=None, ocr_pipeline=None):
+            def __init__(self, *, source_dir=None, source_origin=None, ocr_pipeline=None):
                 seen["source_dir"] = source_dir
+                seen["source_origin"] = source_origin
 
             def revert_html(self, document):
                 return nbformat.v4.new_notebook()
@@ -138,6 +141,29 @@ class TestPublicApi:
         )
 
         assert seen["source_dir"] == tmp_path.resolve()
+        assert seen["source_origin"] is None
+
+    def test_revert_forwards_source_origin_from_html_payload(self, monkeypatch):
+        seen: dict[str, object] = {}
+
+        class FakeReverter:
+            def __init__(self, *, source_dir=None, source_origin=None, ocr_pipeline=None):
+                seen["source_origin"] = source_origin
+
+            def revert_html(self, document):
+                return nbformat.v4.new_notebook()
+
+        monkeypatch.setattr(api, "Reverter", FakeReverter)
+
+        nb2wb.revert(
+            {
+                "format": "html",
+                "content": "<p>Hello</p>",
+                "source_origin": "example.substack.com/path/ignored",
+            }
+        )
+
+        assert seen["source_origin"] == "example.substack.com/path/ignored"
 
     def test_convert_accepts_notebook_payload_dict(self):
         notebook_dict = {
